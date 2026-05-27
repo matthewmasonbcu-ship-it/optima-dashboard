@@ -331,6 +331,56 @@ async function saveScanToSupabase(scan: ScanResult) {
   }
 }
 
+async function saveTradeToSupabase(trade: PaperTrade) {
+  try {
+    const response = await fetch("/api/trades", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(trade),
+    });
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.error ?? "Failed to save paper trade");
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Supabase trade save error:", error);
+    return false;
+  }
+}
+
+async function updateTradeInSupabase(trade: PaperTrade) {
+  try {
+    const response = await fetch("/api/trades", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        id: trade.id,
+        status: trade.status,
+        pnl: trade.pnl,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.error ?? "Failed to update paper trade");
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Supabase trade update error:", error);
+    return false;
+  }
+}
+
 function getSecondsUntilNextAutoScan(lastAutoScanAt: string | null) {
   if (!lastAutoScanAt) return 0;
 
@@ -569,7 +619,7 @@ export default function Home() {
     setWatchlist(DEFAULT_WATCHLIST);
   }
 
-  function handleCreatePaperTrade() {
+  async function handleCreatePaperTrade() {
     if (!bestBuySetup) {
       setTradeMessage("No A/B grade tradable setup available right now.");
       return;
@@ -587,14 +637,19 @@ export default function Home() {
     }
 
     const newTrade = createPaperTrade(bestBuySetup, currentBalance);
+    const savedOnline = await saveTradeToSupabase(newTrade);
 
     setPaperTrades((currentTrades) => [newTrade, ...currentTrades]);
     setTradeMessage(
-      `Logged ${bestBuySetup.symbol} paper trade with Grade ${bestBuySetup.grade}.`
+      `Logged ${bestBuySetup.symbol} paper trade with Grade ${bestBuySetup.grade}. ${
+        savedOnline ? "Saved to Supabase." : "Saved locally only."
+      }`
     );
   }
 
-  function handleUpdateTradeStatus(id: string, status: TradeStatus) {
+  async function handleUpdateTradeStatus(id: string, status: TradeStatus) {
+    let updatedTradeForSupabase: PaperTrade | null = null;
+
     setPaperTrades((currentTrades) =>
       currentTrades.map((trade) => {
         if (trade.id !== id) return trade;
@@ -604,18 +659,32 @@ export default function Home() {
         if (status === "WIN") pnl = trade.potentialProfit;
         else if (status === "LOSS") pnl = -trade.riskAmount;
 
-        return {
+        const updatedTrade = {
           ...trade,
           status,
           pnl,
         };
+
+        updatedTradeForSupabase = updatedTrade;
+
+        return updatedTrade;
       })
     );
+
+    if (updatedTradeForSupabase) {
+      const savedOnline = await updateTradeInSupabase(updatedTradeForSupabase);
+
+      setTradeMessage(
+        `Updated trade status to ${status}. ${
+          savedOnline ? "Saved to Supabase." : "Saved locally only."
+        }`
+      );
+    }
   }
 
   function handleClearTrades() {
     setPaperTrades([]);
-    setTradeMessage("Paper trade log cleared.");
+    setTradeMessage("Paper trade log cleared locally.");
   }
 
   return (
