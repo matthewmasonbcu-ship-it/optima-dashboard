@@ -18,6 +18,16 @@ type Asset = MarketAsset & {
   confidence: number;
 };
 
+type PaperTrade = {
+  symbol: string;
+  entry: number;
+  stopLoss: number;
+  takeProfit: number;
+  riskReward: string;
+  confidence: number;
+  createdAt: string;
+};
+
 function scoreAsset(asset: MarketAsset): Asset {
   let signal: Signal = "HOLD";
   let trend: Asset["trend"] = "Neutral";
@@ -47,11 +57,40 @@ function formatVolume(volume: number) {
   return volume.toString();
 }
 
+function createPaperTrade(asset: Asset): PaperTrade {
+  const entry = asset.price;
+  const stopLoss = entry * 0.985;
+  const takeProfit = entry * 1.03;
+
+  return {
+    symbol: asset.symbol,
+    entry,
+    stopLoss,
+    takeProfit,
+    riskReward: "1:2",
+    confidence: asset.confidence,
+    createdAt: new Date().toLocaleString(),
+  };
+}
+
 export default function Home() {
   const [selectedSignal, setSelectedSignal] = useState<Signal | "ALL">("ALL");
   const [assets, setAssets] = useState<Asset[]>([]);
   const [updatedAt, setUpdatedAt] = useState<string>("Loading...");
   const [isLoading, setIsLoading] = useState(true);
+  const [paperTrades, setPaperTrades] = useState<PaperTrade[]>([]);
+
+  useEffect(() => {
+    const savedTrades = localStorage.getItem("optima-paper-trades");
+
+    if (savedTrades) {
+      setPaperTrades(JSON.parse(savedTrades));
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("optima-paper-trades", JSON.stringify(paperTrades));
+  }, [paperTrades]);
 
   useEffect(() => {
     async function loadMarketData() {
@@ -95,7 +134,25 @@ export default function Home() {
     return [...assets].sort((a, b) => b.confidence - a.confidence)[0];
   }, [assets]);
 
+  const bestBuySetup = useMemo(() => {
+    const buySignals = assets.filter((asset) => asset.signal === "BUY");
+    if (buySignals.length === 0) return null;
+    return [...buySignals].sort((a, b) => b.confidence - a.confidence)[0];
+  }, [assets]);
+
   const buySignals = assets.filter((asset) => asset.signal === "BUY").length;
+
+  function handleCreatePaperTrade() {
+    if (!bestBuySetup) return;
+
+    const newTrade = createPaperTrade(bestBuySetup);
+
+    setPaperTrades((currentTrades) => [newTrade, ...currentTrades]);
+  }
+
+  function handleClearTrades() {
+    setPaperTrades([]);
+  }
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -124,7 +181,9 @@ export default function Home() {
                 {strongestAsset ? strongestAsset.symbol : "---"}
               </p>
               <p className="text-sm text-slate-300">
-                {strongestAsset ? `${strongestAsset.confidence}% confidence` : "Loading"}
+                {strongestAsset
+                  ? `${strongestAsset.confidence}% confidence`
+                  : "Loading"}
               </p>
             </div>
           </div>
@@ -135,6 +194,119 @@ export default function Home() {
           <StatCard label="Buy Signals" value={buySignals.toString()} />
           <StatCard label="Risk Mode" value="Paper" />
           <StatCard label="Automation" value="Offline" />
+        </section>
+
+        <section className="mb-8 grid gap-6 lg:grid-cols-2">
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+            <h2 className="text-2xl font-bold">Paper Trading Engine</h2>
+            <p className="mt-2 text-sm text-slate-400">
+              Generates a fake trade idea from the highest-confidence BUY setup.
+            </p>
+
+            <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/60 p-5">
+              {bestBuySetup ? (
+                <>
+                  <p className="text-sm text-slate-400">Best setup right now</p>
+                  <div className="mt-2 flex items-end justify-between gap-4">
+                    <div>
+                      <p className="text-4xl font-bold text-cyan-300">
+                        {bestBuySetup.symbol}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-300">
+                        {bestBuySetup.name}
+                      </p>
+                    </div>
+                    <SignalBadge signal={bestBuySetup.signal} />
+                  </div>
+
+                  <div className="mt-6 grid gap-3 md:grid-cols-3">
+                    <TradeMetric
+                      label="Entry"
+                      value={`$${bestBuySetup.price.toFixed(2)}`}
+                    />
+                    <TradeMetric
+                      label="Stop Loss"
+                      value={`$${(bestBuySetup.price * 0.985).toFixed(2)}`}
+                    />
+                    <TradeMetric
+                      label="Take Profit"
+                      value={`$${(bestBuySetup.price * 1.03).toFixed(2)}`}
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleCreatePaperTrade}
+                    className="mt-6 w-full rounded-2xl bg-cyan-300 px-5 py-3 font-bold text-slate-950 transition hover:bg-cyan-200"
+                  >
+                    Log Paper Trade
+                  </button>
+                </>
+              ) : (
+                <p className="text-slate-300">
+                  No BUY setup available right now. Waiting for better market
+                  conditions.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-bold">Paper Trade Log</h2>
+                <p className="mt-2 text-sm text-slate-400">
+                  Saved locally in your browser for now.
+                </p>
+              </div>
+
+              <button
+                onClick={handleClearTrades}
+                className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/20"
+              >
+                Clear
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-3">
+              {paperTrades.length === 0 ? (
+                <p className="rounded-2xl border border-white/10 bg-slate-950/60 p-5 text-slate-400">
+                  No paper trades logged yet.
+                </p>
+              ) : (
+                paperTrades.map((trade, index) => (
+                  <div
+                    key={`${trade.symbol}-${trade.createdAt}-${index}`}
+                    className="rounded-2xl border border-white/10 bg-slate-950/60 p-5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="text-2xl font-bold text-cyan-300">
+                        {trade.symbol}
+                      </p>
+                      <p className="text-sm text-slate-400">
+                        {trade.createdAt}
+                      </p>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 md:grid-cols-4">
+                      <TradeMetric
+                        label="Entry"
+                        value={`$${trade.entry.toFixed(2)}`}
+                      />
+                      <TradeMetric
+                        label="Stop"
+                        value={`$${trade.stopLoss.toFixed(2)}`}
+                      />
+                      <TradeMetric
+                        label="Target"
+                        value={`$${trade.takeProfit.toFixed(2)}`}
+                      />
+                      <TradeMetric label="R/R" value={trade.riskReward} />
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </section>
 
         <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
@@ -243,6 +415,15 @@ function StatCard({ label, value }: { label: string; value: string }) {
     <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
       <p className="text-sm text-slate-400">{label}</p>
       <p className="mt-2 text-3xl font-bold">{value}</p>
+    </div>
+  );
+}
+
+function TradeMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-white/5 p-3">
+      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 font-bold">{value}</p>
     </div>
   );
 }
