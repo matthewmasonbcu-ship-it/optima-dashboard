@@ -308,6 +308,29 @@ function createScanResult(
   };
 }
 
+async function saveScanToSupabase(scan: ScanResult) {
+  try {
+    const response = await fetch("/api/scans", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(scan),
+    });
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.error ?? "Failed to save scan");
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Supabase scan save error:", error);
+    return false;
+  }
+}
+
 function getSecondsUntilNextAutoScan(lastAutoScanAt: string | null) {
   if (!lastAutoScanAt) return 0;
 
@@ -419,22 +442,29 @@ export default function Home() {
     if (!automationArmed) return;
 
     const automationInterval = setInterval(() => {
-      if (assets.length === 0) return;
+      async function runAutoScan() {
+        if (assets.length === 0) return;
 
-      const remainingSeconds = getSecondsUntilNextAutoScan(lastAutoScanAt);
+        const remainingSeconds = getSecondsUntilNextAutoScan(lastAutoScanAt);
 
-      if (remainingSeconds > 0) return;
+        if (remainingSeconds > 0) return;
 
-      const newAutoScan = createScanResult(assets, "Auto Sim Scan");
-      const nowString = new Date().toISOString();
+        const newAutoScan = createScanResult(assets, "Auto Sim Scan");
+        const nowString = new Date().toISOString();
+        const savedOnline = await saveScanToSupabase(newAutoScan);
 
-      setScanHistory((currentHistory) =>
-        [newAutoScan, ...currentHistory].slice(0, 20)
-      );
-      setLastAutoScanAt(nowString);
-      setScanMessage(
-        `Auto Sim Scan complete: best setup ${newAutoScan.bestSymbol}, Grade ${newAutoScan.bestGrade}, Score ${newAutoScan.bestScore}/100.`
-      );
+        setScanHistory((currentHistory) =>
+          [newAutoScan, ...currentHistory].slice(0, 20)
+        );
+        setLastAutoScanAt(nowString);
+        setScanMessage(
+          `Auto Sim Scan complete: best setup ${newAutoScan.bestSymbol}, Grade ${newAutoScan.bestGrade}, Score ${newAutoScan.bestScore}/100. ${
+            savedOnline ? "Saved to Supabase." : "Saved locally only."
+          }`
+        );
+      }
+
+      runAutoScan();
     }, 1000);
 
     return () => clearInterval(automationInterval);
@@ -458,11 +488,6 @@ export default function Home() {
     if (selectedSignal === "ALL") return assets;
     return assets.filter((asset) => asset.signal === selectedSignal);
   }, [assets, selectedSignal]);
-
-  const strongestAsset = useMemo(() => {
-    if (assets.length === 0) return null;
-    return [...assets].sort((a, b) => b.finalScore - a.finalScore)[0];
-  }, [assets]);
 
   const bestBuySetup = useMemo(() => {
     const buySignals = assets.filter(
@@ -492,17 +517,21 @@ export default function Home() {
     }
   }
 
-  function handleRunScan() {
+  async function handleRunScan() {
     if (assets.length === 0) {
       setScanMessage("No market data available yet. Wait for quotes to load.");
       return;
     }
 
     const newScan = createScanResult(assets);
+    const savedOnline = await saveScanToSupabase(newScan);
 
     setScanHistory((currentHistory) => [newScan, ...currentHistory].slice(0, 20));
+
     setScanMessage(
-      `${newScan.label} complete: best setup ${newScan.bestSymbol}, Grade ${newScan.bestGrade}, Score ${newScan.bestScore}/100.`
+      `${newScan.label} complete: best setup ${newScan.bestSymbol}, Grade ${newScan.bestGrade}, Score ${newScan.bestScore}/100. ${
+        savedOnline ? "Saved to Supabase." : "Saved locally only."
+      }`
     );
   }
 
@@ -603,7 +632,7 @@ export default function Home() {
               </h1>
               <p className="mt-4 max-w-2xl text-slate-300">
                 Live quote data, custom watchlists, strategy scoring, paper
-                trades, scan history, and local automation simulation.
+                trades, scan history, local automation, and Supabase storage.
               </p>
               <p className="mt-3 text-sm text-slate-400">
                 Last updated: {updatedAt}
@@ -641,8 +670,7 @@ export default function Home() {
             <div>
               <h2 className="text-2xl font-bold">Local Automation v1</h2>
               <p className="mt-2 text-sm text-slate-400">
-                This simulates scheduled scans locally. It only runs while your
-                computer is on, the server is running, and this browser tab is open.
+                Manual scans and auto-sim scans now attempt to save to Supabase.
               </p>
             </div>
 
@@ -721,16 +749,12 @@ export default function Home() {
           </div>
 
           <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/60 p-5">
-            <div className="mb-4 flex items-center justify-between gap-4">
-              <div>
-                <h3 className="text-xl font-bold">Scan History</h3>
-                <p className="text-sm text-slate-400">
-                  Last 20 scans saved locally in your browser.
-                </p>
-              </div>
-            </div>
+            <h3 className="text-xl font-bold">Scan History</h3>
+            <p className="text-sm text-slate-400">
+              Last 20 scans saved locally. Successful scans are also saved to Supabase.
+            </p>
 
-            <div className="space-y-3">
+            <div className="mt-4 space-y-3">
               {scanHistory.length === 0 ? (
                 <p className="rounded-xl bg-white/5 p-4 text-slate-400">
                   No scans logged yet. Click Run Scan Now or Arm Automation.
