@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 type Signal = "BUY" | "HOLD" | "AVOID";
 type TradeStatus = "OPEN" | "WIN" | "LOSS";
 type Bias = "LONG" | "NEUTRAL" | "RISK-OFF";
+type ScanLabel = "Morning Scan" | "Midday Scan" | "Power Hour Scan" | "Manual Scan";
 
 type MarketAsset = {
   symbol: string;
@@ -53,6 +54,19 @@ type ScanPlan = {
   time: string;
   purpose: string;
   status: "Planned" | "Ready Soon";
+};
+
+type ScanResult = {
+  id: string;
+  label: ScanLabel;
+  bestSymbol: string;
+  bestGrade: string;
+  bestScore: number;
+  tradableSetups: number;
+  buySignals: number;
+  totalAssets: number;
+  reason: string;
+  createdAt: string;
 };
 
 const STARTING_BALANCE = 10000;
@@ -232,6 +246,17 @@ function createPaperTrade(asset: Asset, currentBalance: number): PaperTrade {
   };
 }
 
+function getScanLabel(): ScanLabel {
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+  if (currentMinutes < 11 * 60) return "Morning Scan";
+  if (currentMinutes < 14 * 60) return "Midday Scan";
+  if (currentMinutes < 16 * 60) return "Power Hour Scan";
+
+  return "Manual Scan";
+}
+
 function getNextScan() {
   const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
@@ -249,6 +274,31 @@ function getNextScan() {
   return "Morning Scan tomorrow";
 }
 
+function createScanResult(assets: Asset[]): ScanResult {
+  const bestAsset =
+    assets.length > 0
+      ? [...assets].sort((a, b) => b.finalScore - a.finalScore)[0]
+      : null;
+
+  const tradableSetups = assets.filter((asset) => asset.isTradable).length;
+  const buySignals = assets.filter((asset) => asset.signal === "BUY").length;
+
+  return {
+    id: crypto.randomUUID(),
+    label: getScanLabel(),
+    bestSymbol: bestAsset ? bestAsset.symbol : "NONE",
+    bestGrade: bestAsset ? bestAsset.grade : "-",
+    bestScore: bestAsset ? bestAsset.finalScore : 0,
+    tradableSetups,
+    buySignals,
+    totalAssets: assets.length,
+    reason: bestAsset
+      ? bestAsset.reason
+      : "No assets were available during this scan.",
+    createdAt: new Date().toLocaleString(),
+  };
+}
+
 export default function Home() {
   const [selectedSignal, setSelectedSignal] = useState<Signal | "ALL">("ALL");
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -257,14 +307,18 @@ export default function Home() {
   const [updatedAt, setUpdatedAt] = useState<string>("Loading...");
   const [isLoading, setIsLoading] = useState(true);
   const [paperTrades, setPaperTrades] = useState<PaperTrade[]>([]);
+  const [scanHistory, setScanHistory] = useState<ScanResult[]>([]);
   const [tradeMessage, setTradeMessage] = useState("");
+  const [scanMessage, setScanMessage] = useState("");
 
   useEffect(() => {
     const savedTrades = localStorage.getItem("optima-paper-trades-v4");
     const savedWatchlist = localStorage.getItem("optima-watchlist-v2");
+    const savedScans = localStorage.getItem("optima-scan-history-v1");
 
     if (savedTrades) setPaperTrades(JSON.parse(savedTrades));
     if (savedWatchlist) setWatchlist(JSON.parse(savedWatchlist));
+    if (savedScans) setScanHistory(JSON.parse(savedScans));
   }, []);
 
   useEffect(() => {
@@ -274,6 +328,10 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem("optima-watchlist-v2", JSON.stringify(watchlist));
   }, [watchlist]);
+
+  useEffect(() => {
+    localStorage.setItem("optima-scan-history-v1", JSON.stringify(scanHistory));
+  }, [scanHistory]);
 
   useEffect(() => {
     async function loadMarketData() {
@@ -345,6 +403,26 @@ export default function Home() {
   const buySignals = assets.filter((asset) => asset.signal === "BUY").length;
   const tradableSetups = assets.filter((asset) => asset.isTradable).length;
   const nextScan = getNextScan();
+  const latestScan = scanHistory[0];
+
+  function handleRunScan() {
+    if (assets.length === 0) {
+      setScanMessage("No market data available yet. Wait for quotes to load.");
+      return;
+    }
+
+    const newScan = createScanResult(assets);
+
+    setScanHistory((currentHistory) => [newScan, ...currentHistory].slice(0, 20));
+    setScanMessage(
+      `${newScan.label} complete: best setup ${newScan.bestSymbol}, Grade ${newScan.bestGrade}, Score ${newScan.bestScore}/100.`
+    );
+  }
+
+  function handleClearScanHistory() {
+    setScanHistory([]);
+    setScanMessage("Scan history cleared.");
+  }
 
   function handleAddSymbol() {
     const symbol = cleanSymbol(newSymbol);
@@ -438,7 +516,7 @@ export default function Home() {
               </h1>
               <p className="mt-4 max-w-2xl text-slate-300">
                 Live quote data, custom watchlists, strategy scoring, duplicate
-                trade protection, paper trades, and automation planning.
+                trade protection, paper trades, scan history, and automation planning.
               </p>
               <p className="mt-3 text-sm text-slate-400">
                 Last updated: {updatedAt}
@@ -451,7 +529,7 @@ export default function Home() {
                 {nextScan}
               </p>
               <p className="text-sm text-slate-300">
-                Automation: planner mode
+                Latest scan: {latestScan ? latestScan.bestSymbol : "None yet"}
               </p>
             </div>
           </div>
@@ -468,17 +546,40 @@ export default function Home() {
           <StatCard label="Tracked Assets" value={assets.length.toString()} />
           <StatCard label="Buy Signals" value={buySignals.toString()} />
           <StatCard label="Tradable Setups" value={tradableSetups.toString()} />
-          <StatCard label="Automation" value="3x/day plan" />
+          <StatCard label="Scans Logged" value={scanHistory.length.toString()} />
         </section>
 
         <section className="mb-8 rounded-3xl border border-white/10 bg-white/5 p-6">
-          <div>
-            <h2 className="text-2xl font-bold">Automation Planner v1</h2>
-            <p className="mt-2 text-sm text-slate-400">
-              This maps the exact scan schedule we will later automate. For now,
-              it is a visible control plan.
-            </p>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h2 className="text-2xl font-bold">Auto Scan v1</h2>
+              <p className="mt-2 text-sm text-slate-400">
+                Run a manual scan now and save the best setup into scan history.
+                This prepares the app for true 3-times-per-day automation.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                onClick={handleRunScan}
+                className="rounded-2xl bg-cyan-300 px-5 py-3 font-bold text-slate-950 transition hover:bg-cyan-200"
+              >
+                Run Scan Now
+              </button>
+              <button
+                onClick={handleClearScanHistory}
+                className="rounded-2xl bg-white/10 px-5 py-3 font-bold text-slate-300 transition hover:bg-white/20"
+              >
+                Clear Scans
+              </button>
+            </div>
           </div>
+
+          {scanMessage && (
+            <p className="mt-5 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 text-sm text-cyan-200">
+              {scanMessage}
+            </p>
+          )}
 
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             {SCAN_PLAN.map((scan) => (
@@ -496,6 +597,59 @@ export default function Home() {
                 <p className="mt-3 text-sm text-slate-400">{scan.purpose}</p>
               </div>
             ))}
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/60 p-5">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-bold">Scan History</h3>
+                <p className="text-sm text-slate-400">
+                  Last 20 scans saved locally in your browser.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {scanHistory.length === 0 ? (
+                <p className="rounded-xl bg-white/5 p-4 text-slate-400">
+                  No scans logged yet. Click Run Scan Now.
+                </p>
+              ) : (
+                scanHistory.map((scan) => (
+                  <div
+                    key={scan.id}
+                    className="rounded-xl border border-white/10 bg-white/5 p-4"
+                  >
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <p className="font-bold text-cyan-300">
+                          {scan.label} · {scan.bestSymbol}
+                        </p>
+                        <p className="text-sm text-slate-400">{scan.createdAt}</p>
+                      </div>
+
+                      <div className="grid gap-2 sm:grid-cols-4">
+                        <TradeMetric label="Grade" value={scan.bestGrade} />
+                        <TradeMetric
+                          label="Score"
+                          value={`${scan.bestScore}/100`}
+                        />
+                        <TradeMetric
+                          label="Tradable"
+                          value={scan.tradableSetups.toString()}
+                        />
+                        <TradeMetric
+                          label="Buys"
+                          value={scan.buySignals.toString()}
+                        />
+                      </div>
+                    </div>
+
+                    <p className="mt-3 text-sm text-slate-300">{scan.reason}</p>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </section>
 
