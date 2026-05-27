@@ -48,9 +48,37 @@ type PaperTrade = {
   createdAt: string;
 };
 
+type ScanPlan = {
+  name: string;
+  time: string;
+  purpose: string;
+  status: "Planned" | "Ready Soon";
+};
+
 const STARTING_BALANCE = 10000;
 const RISK_PERCENT = 1;
 const DEFAULT_WATCHLIST = ["SPY", "QQQ", "IWM", "SMR"];
+
+const SCAN_PLAN: ScanPlan[] = [
+  {
+    name: "Morning Scan",
+    time: "8:45 AM",
+    purpose: "Check pre-market direction and build the first watchlist.",
+    status: "Ready Soon",
+  },
+  {
+    name: "Midday Scan",
+    time: "12:00 PM",
+    purpose: "Avoid chasing; only log strong setups still holding trend.",
+    status: "Planned",
+  },
+  {
+    name: "Power Hour Scan",
+    time: "2:30 PM",
+    purpose: "Find late-day momentum and decide what stays open.",
+    status: "Planned",
+  },
+];
 
 function clampScore(score: number) {
   return Math.max(0, Math.min(100, Math.round(score)));
@@ -66,21 +94,10 @@ function getGrade(score: number): Asset["grade"] {
 function getTradeReason(asset: MarketAsset, finalScore: number, grade: string) {
   const reasons = [];
 
-  if (asset.changePercent > 1) {
-    reasons.push("positive momentum");
-  }
-
-  if (asset.volume >= 10_000_000) {
-    reasons.push("strong liquidity");
-  }
-
-  if (Math.abs(asset.changePercent) <= 3) {
-    reasons.push("controlled volatility");
-  }
-
-  if (grade === "A" || grade === "B") {
-    reasons.push("acceptable strategy grade");
-  }
+  if (asset.changePercent > 1) reasons.push("positive momentum");
+  if (asset.volume >= 10_000_000) reasons.push("strong liquidity");
+  if (Math.abs(asset.changePercent) <= 3) reasons.push("controlled volatility");
+  if (grade === "A" || grade === "B") reasons.push("acceptable strategy grade");
 
   if (reasons.length === 0) {
     return "Setup does not meet enough strategy requirements.";
@@ -111,7 +128,13 @@ function scoreAsset(asset: MarketAsset): Asset {
   );
 
   const trendScore = clampScore(
-    asset.changePercent > 1 ? 85 : asset.changePercent > 0.25 ? 65 : asset.changePercent < -1 ? 30 : 50
+    asset.changePercent > 1
+      ? 85
+      : asset.changePercent > 0.25
+      ? 65
+      : asset.changePercent < -1
+      ? 30
+      : 50
   );
 
   const finalScore = clampScore(
@@ -131,7 +154,8 @@ function scoreAsset(asset: MarketAsset): Asset {
   const hasPositiveMomentum = asset.changePercent > 0;
   const hasEnoughVolume = asset.volume >= 1_000_000;
   const riskIsAcceptable = riskScore >= 60;
-  const isTradable = isStrongEnough && hasPositiveMomentum && hasEnoughVolume && riskIsAcceptable;
+  const isTradable =
+    isStrongEnough && hasPositiveMomentum && hasEnoughVolume && riskIsAcceptable;
 
   if (isTradable) {
     signal = "BUY";
@@ -208,6 +232,23 @@ function createPaperTrade(asset: Asset, currentBalance: number): PaperTrade {
   };
 }
 
+function getNextScan() {
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+  const scans = [
+    { label: "Morning Scan", minutes: 8 * 60 + 45 },
+    { label: "Midday Scan", minutes: 12 * 60 },
+    { label: "Power Hour Scan", minutes: 14 * 60 + 30 },
+  ];
+
+  const nextToday = scans.find((scan) => scan.minutes > currentMinutes);
+
+  if (nextToday) return nextToday.label;
+
+  return "Morning Scan tomorrow";
+}
+
 export default function Home() {
   const [selectedSignal, setSelectedSignal] = useState<Signal | "ALL">("ALL");
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -222,20 +263,12 @@ export default function Home() {
     const savedTrades = localStorage.getItem("optima-paper-trades-v4");
     const savedWatchlist = localStorage.getItem("optima-watchlist-v2");
 
-    if (savedTrades) {
-      setPaperTrades(JSON.parse(savedTrades));
-    }
-
-    if (savedWatchlist) {
-      setWatchlist(JSON.parse(savedWatchlist));
-    }
+    if (savedTrades) setPaperTrades(JSON.parse(savedTrades));
+    if (savedWatchlist) setWatchlist(JSON.parse(savedWatchlist));
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(
-      "optima-paper-trades-v4",
-      JSON.stringify(paperTrades)
-    );
+    localStorage.setItem("optima-paper-trades-v4", JSON.stringify(paperTrades));
   }, [paperTrades]);
 
   useEffect(() => {
@@ -282,7 +315,6 @@ export default function Home() {
   }, [paperTrades]);
 
   const currentBalance = STARTING_BALANCE + totalPnl;
-
   const closedTrades = paperTrades.filter((trade) => trade.status !== "OPEN");
   const winningTrades = paperTrades.filter((trade) => trade.status === "WIN");
   const openTrades = paperTrades.filter((trade) => trade.status === "OPEN");
@@ -303,13 +335,16 @@ export default function Home() {
   }, [assets]);
 
   const bestBuySetup = useMemo(() => {
-    const buySignals = assets.filter((asset) => asset.signal === "BUY" && asset.isTradable);
+    const buySignals = assets.filter(
+      (asset) => asset.signal === "BUY" && asset.isTradable
+    );
     if (buySignals.length === 0) return null;
     return [...buySignals].sort((a, b) => b.finalScore - a.finalScore)[0];
   }, [assets]);
 
   const buySignals = assets.filter((asset) => asset.signal === "BUY").length;
   const tradableSetups = assets.filter((asset) => asset.isTradable).length;
+  const nextScan = getNextScan();
 
   function handleAddSymbol() {
     const symbol = cleanSymbol(newSymbol);
@@ -351,14 +386,18 @@ export default function Home() {
     );
 
     if (alreadyOpen) {
-      setTradeMessage(`Blocked duplicate trade: ${bestBuySetup.symbol} is already open.`);
+      setTradeMessage(
+        `Blocked duplicate trade: ${bestBuySetup.symbol} is already open.`
+      );
       return;
     }
 
     const newTrade = createPaperTrade(bestBuySetup, currentBalance);
 
     setPaperTrades((currentTrades) => [newTrade, ...currentTrades]);
-    setTradeMessage(`Logged ${bestBuySetup.symbol} paper trade with Grade ${bestBuySetup.grade}.`);
+    setTradeMessage(
+      `Logged ${bestBuySetup.symbol} paper trade with Grade ${bestBuySetup.grade}.`
+    );
   }
 
   function handleUpdateTradeStatus(id: string, status: TradeStatus) {
@@ -368,11 +407,8 @@ export default function Home() {
 
         let pnl = 0;
 
-        if (status === "WIN") {
-          pnl = trade.potentialProfit;
-        } else if (status === "LOSS") {
-          pnl = -trade.riskAmount;
-        }
+        if (status === "WIN") pnl = trade.potentialProfit;
+        else if (status === "LOSS") pnl = -trade.riskAmount;
 
         return {
           ...trade,
@@ -402,7 +438,7 @@ export default function Home() {
               </h1>
               <p className="mt-4 max-w-2xl text-slate-300">
                 Live quote data, custom watchlists, strategy scoring, duplicate
-                trade protection, paper trades, and performance tracking.
+                trade protection, paper trades, and automation planning.
               </p>
               <p className="mt-3 text-sm text-slate-400">
                 Last updated: {updatedAt}
@@ -410,14 +446,12 @@ export default function Home() {
             </div>
 
             <div className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 p-5">
-              <p className="text-sm text-slate-300">Top strategy setup</p>
+              <p className="text-sm text-slate-300">Next planned scan</p>
               <p className="mt-1 text-3xl font-bold text-cyan-300">
-                {strongestAsset ? strongestAsset.symbol : "---"}
+                {nextScan}
               </p>
               <p className="text-sm text-slate-300">
-                {strongestAsset
-                  ? `${strongestAsset.finalScore}/100 · Grade ${strongestAsset.grade}`
-                  : "Loading"}
+                Automation: planner mode
               </p>
             </div>
           </div>
@@ -434,7 +468,35 @@ export default function Home() {
           <StatCard label="Tracked Assets" value={assets.length.toString()} />
           <StatCard label="Buy Signals" value={buySignals.toString()} />
           <StatCard label="Tradable Setups" value={tradableSetups.toString()} />
-          <StatCard label="Strategy Engine" value="v2" />
+          <StatCard label="Automation" value="3x/day plan" />
+        </section>
+
+        <section className="mb-8 rounded-3xl border border-white/10 bg-white/5 p-6">
+          <div>
+            <h2 className="text-2xl font-bold">Automation Planner v1</h2>
+            <p className="mt-2 text-sm text-slate-400">
+              This maps the exact scan schedule we will later automate. For now,
+              it is a visible control plan.
+            </p>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            {SCAN_PLAN.map((scan) => (
+              <div
+                key={scan.name}
+                className="rounded-2xl border border-white/10 bg-slate-950/60 p-5"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-bold text-cyan-300">{scan.name}</p>
+                  <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-bold text-cyan-200">
+                    {scan.status}
+                  </span>
+                </div>
+                <p className="mt-3 text-3xl font-bold">{scan.time}</p>
+                <p className="mt-3 text-sm text-slate-400">{scan.purpose}</p>
+              </div>
+            ))}
+          </div>
         </section>
 
         <section className="mb-8 rounded-3xl border border-white/10 bg-white/5 p-6">
@@ -515,15 +577,27 @@ export default function Home() {
 
                   <div className="mt-6 grid gap-3 md:grid-cols-4">
                     <ScoreMetric label="Trend" value={bestBuySetup.trendScore} />
-                    <ScoreMetric label="Momentum" value={bestBuySetup.momentumScore} />
+                    <ScoreMetric
+                      label="Momentum"
+                      value={bestBuySetup.momentumScore}
+                    />
                     <ScoreMetric label="Volume" value={bestBuySetup.volumeScore} />
                     <ScoreMetric label="Risk" value={bestBuySetup.riskScore} />
                   </div>
 
                   <div className="mt-4 grid gap-3 md:grid-cols-3">
-                    <TradeMetric label="Entry" value={formatMoney(bestBuySetup.price)} />
-                    <TradeMetric label="Stop Loss" value={formatMoney(bestBuySetup.price * 0.985)} />
-                    <TradeMetric label="Take Profit" value={formatMoney(bestBuySetup.price * 1.03)} />
+                    <TradeMetric
+                      label="Entry"
+                      value={formatMoney(bestBuySetup.price)}
+                    />
+                    <TradeMetric
+                      label="Stop Loss"
+                      value={formatMoney(bestBuySetup.price * 0.985)}
+                    />
+                    <TradeMetric
+                      label="Take Profit"
+                      value={formatMoney(bestBuySetup.price * 1.03)}
+                    />
                   </div>
 
                   <button
@@ -594,14 +668,23 @@ export default function Home() {
                     <div className="mt-4 grid gap-3 md:grid-cols-4">
                       <TradeMetric label="Entry" value={formatMoney(trade.entry)} />
                       <TradeMetric label="Shares" value={trade.shares.toString()} />
-                      <TradeMetric label="Risk" value={formatMoney(trade.riskAmount)} />
+                      <TradeMetric
+                        label="Risk"
+                        value={formatMoney(trade.riskAmount)}
+                      />
                       <TradeMetric label="P/L" value={formatMoney(trade.pnl)} />
                     </div>
 
                     <div className="mt-4 grid gap-3 md:grid-cols-4">
                       <TradeMetric label="Stop" value={formatMoney(trade.stopLoss)} />
-                      <TradeMetric label="Target" value={formatMoney(trade.takeProfit)} />
-                      <TradeMetric label="Score" value={`${trade.finalScore}/100`} />
+                      <TradeMetric
+                        label="Target"
+                        value={formatMoney(trade.takeProfit)}
+                      />
+                      <TradeMetric
+                        label="Score"
+                        value={`${trade.finalScore}/100`}
+                      />
                       <TradeMetric label="Grade" value={trade.grade} />
                     </div>
 
