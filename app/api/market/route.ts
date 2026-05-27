@@ -5,12 +5,24 @@ export const dynamic = "force-dynamic";
 
 const yahooFinance = new YahooFinance();
 
-const symbols = ["SPY", "QQQ", "IWM", "SMR"];
+const defaultSymbols = ["SPY", "QQQ", "IWM", "SMR"];
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const symbolsParam = searchParams.get("symbols");
+
+    const symbols = symbolsParam
+      ? symbolsParam
+          .split(",")
+          .map((symbol) => symbol.trim().toUpperCase())
+          .filter(Boolean)
+      : defaultSymbols;
+
+    const limitedSymbols = symbols.slice(0, 12);
+
     const quotes = await Promise.all(
-      symbols.map((symbol) => yahooFinance.quote(symbol))
+      limitedSymbols.map((symbol) => yahooFinance.quote(symbol))
     );
 
     const data = quotes.map((quote) => ({

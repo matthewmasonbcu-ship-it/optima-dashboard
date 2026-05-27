@@ -45,6 +45,7 @@ type PaperTrade = {
 
 const STARTING_BALANCE = 10000;
 const RISK_PERCENT = 1;
+const DEFAULT_WATCHLIST = ["SPY", "QQQ", "IWM", "SMR"];
 
 function clampScore(score: number) {
   return Math.max(0, Math.min(100, Math.round(score)));
@@ -129,6 +130,10 @@ function formatMoney(value: number) {
   }).format(value);
 }
 
+function cleanSymbol(symbol: string) {
+  return symbol.trim().toUpperCase().replace(/[^A-Z.-]/g, "");
+}
+
 function createPaperTrade(asset: Asset, currentBalance: number): PaperTrade {
   const entry = asset.price;
   const stopLoss = entry * 0.985;
@@ -162,15 +167,22 @@ function createPaperTrade(asset: Asset, currentBalance: number): PaperTrade {
 export default function Home() {
   const [selectedSignal, setSelectedSignal] = useState<Signal | "ALL">("ALL");
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [watchlist, setWatchlist] = useState<string[]>(DEFAULT_WATCHLIST);
+  const [newSymbol, setNewSymbol] = useState("");
   const [updatedAt, setUpdatedAt] = useState<string>("Loading...");
   const [isLoading, setIsLoading] = useState(true);
   const [paperTrades, setPaperTrades] = useState<PaperTrade[]>([]);
 
   useEffect(() => {
     const savedTrades = localStorage.getItem("optima-paper-trades-v3");
+    const savedWatchlist = localStorage.getItem("optima-watchlist-v2");
 
     if (savedTrades) {
       setPaperTrades(JSON.parse(savedTrades));
+    }
+
+    if (savedWatchlist) {
+      setWatchlist(JSON.parse(savedWatchlist));
     }
   }, []);
 
@@ -182,9 +194,16 @@ export default function Home() {
   }, [paperTrades]);
 
   useEffect(() => {
+    localStorage.setItem("optima-watchlist-v2", JSON.stringify(watchlist));
+  }, [watchlist]);
+
+  useEffect(() => {
     async function loadMarketData() {
       try {
-        const response = await fetch("/api/market", {
+        setIsLoading(true);
+
+        const symbols = watchlist.join(",");
+        const response = await fetch(`/api/market?symbols=${symbols}`, {
           cache: "no-store",
         });
 
@@ -211,7 +230,7 @@ export default function Home() {
     const interval = setInterval(loadMarketData, 60_000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [watchlist]);
 
   const totalPnl = useMemo(() => {
     return paperTrades.reduce((sum, trade) => sum + trade.pnl, 0);
@@ -245,6 +264,34 @@ export default function Home() {
   }, [assets]);
 
   const buySignals = assets.filter((asset) => asset.signal === "BUY").length;
+
+  function handleAddSymbol() {
+    const symbol = cleanSymbol(newSymbol);
+
+    if (!symbol) return;
+    if (watchlist.includes(symbol)) {
+      setNewSymbol("");
+      return;
+    }
+
+    if (watchlist.length >= 12) {
+      alert("Watchlist limit is 12 symbols for now.");
+      return;
+    }
+
+    setWatchlist((currentWatchlist) => [...currentWatchlist, symbol]);
+    setNewSymbol("");
+  }
+
+  function handleRemoveSymbol(symbol: string) {
+    setWatchlist((currentWatchlist) =>
+      currentWatchlist.filter((item) => item !== symbol)
+    );
+  }
+
+  function handleResetWatchlist() {
+    setWatchlist(DEFAULT_WATCHLIST);
+  }
 
   function handleCreatePaperTrade() {
     if (!bestBuySetup) return;
@@ -293,8 +340,8 @@ export default function Home() {
                 Strategy Command Center
               </h1>
               <p className="mt-4 max-w-2xl text-slate-300">
-                Live quote data, strategy scoring, risk-based paper trading,
-                and performance tracking in one dashboard.
+                Live quote data, custom watchlists, strategy scoring, paper
+                trades, and performance tracking.
               </p>
               <p className="mt-3 text-sm text-slate-400">
                 Last updated: {updatedAt}
@@ -327,6 +374,54 @@ export default function Home() {
           <StatCard label="Buy Signals" value={buySignals.toString()} />
           <StatCard label="Risk Per Trade" value={`${RISK_PERCENT}%`} />
           <StatCard label="Strategy Engine" value="v1" />
+        </section>
+
+        <section className="mb-8 rounded-3xl border border-white/10 bg-white/5 p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h2 className="text-2xl font-bold">Watchlist v2</h2>
+              <p className="mt-2 text-sm text-slate-400">
+                Add up to 12 tickers. Saved in your browser.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <input
+                value={newSymbol}
+                onChange={(event) => setNewSymbol(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") handleAddSymbol();
+                }}
+                placeholder="Add ticker: NVDA"
+                className="rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 font-semibold text-white outline-none placeholder:text-slate-500 focus:border-cyan-300"
+              />
+              <button
+                onClick={handleAddSymbol}
+                className="rounded-2xl bg-cyan-300 px-5 py-3 font-bold text-slate-950 transition hover:bg-cyan-200"
+              >
+                Add Ticker
+              </button>
+              <button
+                onClick={handleResetWatchlist}
+                className="rounded-2xl bg-white/10 px-5 py-3 font-bold text-slate-300 transition hover:bg-white/20"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            {watchlist.map((symbol) => (
+              <button
+                key={symbol}
+                onClick={() => handleRemoveSymbol(symbol)}
+                className="rounded-full border border-white/10 bg-slate-950 px-4 py-2 text-sm font-bold text-slate-200 hover:border-red-300/50 hover:text-red-300"
+                title="Click to remove"
+              >
+                {symbol} ×
+              </button>
+            ))}
+          </div>
         </section>
 
         <section className="mb-8 grid gap-6 lg:grid-cols-2">
@@ -592,7 +687,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function TradeMetric({ label, value }: { label: string; value: string }) {
+function TradeMetric({ label, value }: { label: string }) {
   return (
     <div className="rounded-xl bg-white/5 p-3">
       <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
@@ -614,7 +709,7 @@ function SignalBadge({ signal }: { signal: Signal }) {
   const styles = {
     BUY: "bg-emerald-400/15 text-emerald-300 border-emerald-400/30",
     HOLD: "bg-yellow-400/15 text-yellow-300 border-yellow-400/30",
-    AVOID: "bg-red-400/15 text-red-300 border-red-300/30",
+    AVOID: "bg-red-400/15 text-red-300 border-red-400/30",
   };
 
   return (
