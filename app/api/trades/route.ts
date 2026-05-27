@@ -1,7 +1,18 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
 
+function notConfiguredResponse() {
+  return NextResponse.json(
+    { success: false, error: "Supabase is not configured" },
+    { status: 500 }
+  );
+}
+
 export async function GET() {
+  if (!supabase) {
+    return notConfiguredResponse();
+  }
+
   const { data, error } = await supabase
     .from("paper_trades")
     .select("*")
@@ -19,6 +30,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!supabase) {
+    return notConfiguredResponse();
+  }
+
   const body = await request.json();
 
   const { data, error } = await supabase
@@ -54,6 +69,10 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  if (!supabase) {
+    return notConfiguredResponse();
+  }
+
   const body = await request.json();
 
   const { data, error } = await supabase
