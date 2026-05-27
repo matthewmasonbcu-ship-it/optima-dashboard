@@ -5,7 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 type Signal = "BUY" | "HOLD" | "AVOID";
 type TradeStatus = "OPEN" | "WIN" | "LOSS";
 type Bias = "LONG" | "NEUTRAL" | "RISK-OFF";
-type ScanLabel = "Morning Scan" | "Midday Scan" | "Power Hour Scan" | "Manual Scan";
+type ScanLabel =
+  | "Morning Scan"
+  | "Midday Scan"
+  | "Power Hour Scan"
+  | "Manual Scan"
+  | "Auto Sim Scan";
 
 type MarketAsset = {
   symbol: string;
@@ -72,6 +77,7 @@ type ScanResult = {
 const STARTING_BALANCE = 10000;
 const RISK_PERCENT = 1;
 const DEFAULT_WATCHLIST = ["SPY", "QQQ", "IWM", "SMR"];
+const AUTO_SCAN_INTERVAL_SECONDS = 120;
 
 const SCAN_PLAN: ScanPlan[] = [
   {
@@ -274,7 +280,10 @@ function getNextScan() {
   return "Morning Scan tomorrow";
 }
 
-function createScanResult(assets: Asset[]): ScanResult {
+function createScanResult(
+  assets: Asset[],
+  labelOverride?: ScanLabel
+): ScanResult {
   const bestAsset =
     assets.length > 0
       ? [...assets].sort((a, b) => b.finalScore - a.finalScore)[0]
@@ -285,7 +294,7 @@ function createScanResult(assets: Asset[]): ScanResult {
 
   return {
     id: crypto.randomUUID(),
-    label: getScanLabel(),
+    label: labelOverride ?? getScanLabel(),
     bestSymbol: bestAsset ? bestAsset.symbol : "NONE",
     bestGrade: bestAsset ? bestAsset.grade : "-",
     bestScore: bestAsset ? bestAsset.finalScore : 0,
@@ -299,6 +308,16 @@ function createScanResult(assets: Asset[]): ScanResult {
   };
 }
 
+function getSecondsUntilNextAutoScan(lastAutoScanAt: string | null) {
+  if (!lastAutoScanAt) return 0;
+
+  const lastScanTime = new Date(lastAutoScanAt).getTime();
+  const nextScanTime = lastScanTime + AUTO_SCAN_INTERVAL_SECONDS * 1000;
+  const remainingMs = nextScanTime - Date.now();
+
+  return Math.max(0, Math.ceil(remainingMs / 1000));
+}
+
 export default function Home() {
   const [selectedSignal, setSelectedSignal] = useState<Signal | "ALL">("ALL");
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -310,15 +329,22 @@ export default function Home() {
   const [scanHistory, setScanHistory] = useState<ScanResult[]>([]);
   const [tradeMessage, setTradeMessage] = useState("");
   const [scanMessage, setScanMessage] = useState("");
+  const [automationArmed, setAutomationArmed] = useState(false);
+  const [lastAutoScanAt, setLastAutoScanAt] = useState<string | null>(null);
+  const [autoScanCountdown, setAutoScanCountdown] = useState(0);
 
   useEffect(() => {
     const savedTrades = localStorage.getItem("optima-paper-trades-v4");
     const savedWatchlist = localStorage.getItem("optima-watchlist-v2");
     const savedScans = localStorage.getItem("optima-scan-history-v1");
+    const savedAutomation = localStorage.getItem("optima-automation-armed-v1");
+    const savedLastAutoScan = localStorage.getItem("optima-last-auto-scan-v1");
 
     if (savedTrades) setPaperTrades(JSON.parse(savedTrades));
     if (savedWatchlist) setWatchlist(JSON.parse(savedWatchlist));
     if (savedScans) setScanHistory(JSON.parse(savedScans));
+    if (savedAutomation) setAutomationArmed(JSON.parse(savedAutomation));
+    if (savedLastAutoScan) setLastAutoScanAt(savedLastAutoScan);
   }, []);
 
   useEffect(() => {
@@ -332,6 +358,19 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem("optima-scan-history-v1", JSON.stringify(scanHistory));
   }, [scanHistory]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "optima-automation-armed-v1",
+      JSON.stringify(automationArmed)
+    );
+  }, [automationArmed]);
+
+  useEffect(() => {
+    if (lastAutoScanAt) {
+      localStorage.setItem("optima-last-auto-scan-v1", lastAutoScanAt);
+    }
+  }, [lastAutoScanAt]);
 
   useEffect(() => {
     async function loadMarketData() {
@@ -367,6 +406,39 @@ export default function Home() {
 
     return () => clearInterval(interval);
   }, [watchlist]);
+
+  useEffect(() => {
+    const countdownInterval = setInterval(() => {
+      setAutoScanCountdown(getSecondsUntilNextAutoScan(lastAutoScanAt));
+    }, 1000);
+
+    return () => clearInterval(countdownInterval);
+  }, [lastAutoScanAt]);
+
+  useEffect(() => {
+    if (!automationArmed) return;
+
+    const automationInterval = setInterval(() => {
+      if (assets.length === 0) return;
+
+      const remainingSeconds = getSecondsUntilNextAutoScan(lastAutoScanAt);
+
+      if (remainingSeconds > 0) return;
+
+      const newAutoScan = createScanResult(assets, "Auto Sim Scan");
+      const nowString = new Date().toISOString();
+
+      setScanHistory((currentHistory) =>
+        [newAutoScan, ...currentHistory].slice(0, 20)
+      );
+      setLastAutoScanAt(nowString);
+      setScanMessage(
+        `Auto Sim Scan complete: best setup ${newAutoScan.bestSymbol}, Grade ${newAutoScan.bestGrade}, Score ${newAutoScan.bestScore}/100.`
+      );
+    }, 1000);
+
+    return () => clearInterval(automationInterval);
+  }, [automationArmed, assets, lastAutoScanAt]);
 
   const totalPnl = useMemo(() => {
     return paperTrades.reduce((sum, trade) => sum + trade.pnl, 0);
@@ -404,6 +476,21 @@ export default function Home() {
   const tradableSetups = assets.filter((asset) => asset.isTradable).length;
   const nextScan = getNextScan();
   const latestScan = scanHistory[0];
+
+  function handleToggleAutomation() {
+    const nextValue = !automationArmed;
+
+    setAutomationArmed(nextValue);
+
+    if (nextValue) {
+      setLastAutoScanAt(null);
+      setScanMessage(
+        "Local automation armed. The simulator will run a scan every 2 minutes while this browser tab is open."
+      );
+    } else {
+      setScanMessage("Local automation paused.");
+    }
+  }
 
   function handleRunScan() {
     if (assets.length === 0) {
@@ -515,8 +602,8 @@ export default function Home() {
                 Strategy Command Center
               </h1>
               <p className="mt-4 max-w-2xl text-slate-300">
-                Live quote data, custom watchlists, strategy scoring, duplicate
-                trade protection, paper trades, scan history, and automation planning.
+                Live quote data, custom watchlists, strategy scoring, paper
+                trades, scan history, and local automation simulation.
               </p>
               <p className="mt-3 text-sm text-slate-400">
                 Last updated: {updatedAt}
@@ -524,9 +611,9 @@ export default function Home() {
             </div>
 
             <div className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 p-5">
-              <p className="text-sm text-slate-300">Next planned scan</p>
+              <p className="text-sm text-slate-300">Automation status</p>
               <p className="mt-1 text-3xl font-bold text-cyan-300">
-                {nextScan}
+                {automationArmed ? "ARMED" : "PAUSED"}
               </p>
               <p className="text-sm text-slate-300">
                 Latest scan: {latestScan ? latestScan.bestSymbol : "None yet"}
@@ -552,17 +639,27 @@ export default function Home() {
         <section className="mb-8 rounded-3xl border border-white/10 bg-white/5 p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h2 className="text-2xl font-bold">Auto Scan v1</h2>
+              <h2 className="text-2xl font-bold">Local Automation v1</h2>
               <p className="mt-2 text-sm text-slate-400">
-                Run a manual scan now and save the best setup into scan history.
-                This prepares the app for true 3-times-per-day automation.
+                This simulates scheduled scans locally. It only runs while your
+                computer is on, the server is running, and this browser tab is open.
               </p>
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row">
               <button
+                onClick={handleToggleAutomation}
+                className={`rounded-2xl px-5 py-3 font-bold transition ${
+                  automationArmed
+                    ? "bg-red-400/20 text-red-300 hover:bg-red-400/30"
+                    : "bg-cyan-300 text-slate-950 hover:bg-cyan-200"
+                }`}
+              >
+                {automationArmed ? "Pause Automation" : "Arm Automation"}
+              </button>
+              <button
                 onClick={handleRunScan}
-                className="rounded-2xl bg-cyan-300 px-5 py-3 font-bold text-slate-950 transition hover:bg-cyan-200"
+                className="rounded-2xl bg-white/10 px-5 py-3 font-bold text-slate-300 transition hover:bg-white/20"
               >
                 Run Scan Now
               </button>
@@ -573,6 +670,30 @@ export default function Home() {
                 Clear Scans
               </button>
             </div>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-4">
+            <StatCard
+              label="Local Automation"
+              value={automationArmed ? "Armed" : "Paused"}
+            />
+            <StatCard label="Next Real Scan" value={nextScan} />
+            <StatCard
+              label="Next Sim Scan"
+              value={
+                automationArmed
+                  ? `${autoScanCountdown}s`
+                  : `${AUTO_SCAN_INTERVAL_SECONDS}s`
+              }
+            />
+            <StatCard
+              label="Last Auto Scan"
+              value={
+                lastAutoScanAt
+                  ? new Date(lastAutoScanAt).toLocaleTimeString()
+                  : "None"
+              }
+            />
           </div>
 
           {scanMessage && (
@@ -612,7 +733,7 @@ export default function Home() {
             <div className="space-y-3">
               {scanHistory.length === 0 ? (
                 <p className="rounded-xl bg-white/5 p-4 text-slate-400">
-                  No scans logged yet. Click Run Scan Now.
+                  No scans logged yet. Click Run Scan Now or Arm Automation.
                 </p>
               ) : (
                 scanHistory.map((scan) => (
