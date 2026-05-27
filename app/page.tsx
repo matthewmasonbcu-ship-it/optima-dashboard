@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 type Signal = "BUY" | "HOLD" | "AVOID";
 type TradeStatus = "OPEN" | "WIN" | "LOSS";
+type Bias = "LONG" | "NEUTRAL" | "RISK-OFF";
 
 type MarketAsset = {
   symbol: string;
@@ -16,6 +17,7 @@ type MarketAsset = {
 type Asset = MarketAsset & {
   trend: "Bullish" | "Neutral" | "Bearish";
   signal: Signal;
+  bias: Bias;
   confidence: number;
   trendScore: number;
   momentumScore: number;
@@ -23,6 +25,8 @@ type Asset = MarketAsset & {
   riskScore: number;
   finalScore: number;
   grade: "A" | "B" | "C" | "D";
+  reason: string;
+  isTradable: boolean;
 };
 
 type PaperTrade = {
@@ -38,6 +42,7 @@ type PaperTrade = {
   confidence: number;
   finalScore: number;
   grade: string;
+  reason: string;
   status: TradeStatus;
   pnl: number;
   createdAt: string;
@@ -58,6 +63,32 @@ function getGrade(score: number): Asset["grade"] {
   return "D";
 }
 
+function getTradeReason(asset: MarketAsset, finalScore: number, grade: string) {
+  const reasons = [];
+
+  if (asset.changePercent > 1) {
+    reasons.push("positive momentum");
+  }
+
+  if (asset.volume >= 10_000_000) {
+    reasons.push("strong liquidity");
+  }
+
+  if (Math.abs(asset.changePercent) <= 3) {
+    reasons.push("controlled volatility");
+  }
+
+  if (grade === "A" || grade === "B") {
+    reasons.push("acceptable strategy grade");
+  }
+
+  if (reasons.length === 0) {
+    return "Setup does not meet enough strategy requirements.";
+  }
+
+  return `Score ${finalScore}/100 because of ${reasons.join(", ")}.`;
+}
+
 function scoreAsset(asset: MarketAsset): Asset {
   const momentumScore = clampScore(50 + asset.changePercent * 12);
 
@@ -76,11 +107,11 @@ function scoreAsset(asset: MarketAsset): Asset {
       ? 85
       : Math.abs(asset.changePercent) <= 3
       ? 65
-      : 45
+      : 40
   );
 
   const trendScore = clampScore(
-    asset.changePercent > 0.75 ? 80 : asset.changePercent < -0.75 ? 35 : 55
+    asset.changePercent > 1 ? 85 : asset.changePercent > 0.25 ? 65 : asset.changePercent < -1 ? 30 : 50
   );
 
   const finalScore = clampScore(
@@ -94,19 +125,29 @@ function scoreAsset(asset: MarketAsset): Asset {
 
   let signal: Signal = "HOLD";
   let trend: Asset["trend"] = "Neutral";
+  let bias: Bias = "NEUTRAL";
 
-  if (finalScore >= 72 && asset.changePercent > 0) {
+  const isStrongEnough = finalScore >= 70;
+  const hasPositiveMomentum = asset.changePercent > 0;
+  const hasEnoughVolume = asset.volume >= 1_000_000;
+  const riskIsAcceptable = riskScore >= 60;
+  const isTradable = isStrongEnough && hasPositiveMomentum && hasEnoughVolume && riskIsAcceptable;
+
+  if (isTradable) {
     signal = "BUY";
     trend = "Bullish";
+    bias = "LONG";
   } else if (finalScore <= 45 || asset.changePercent < -1.5) {
     signal = "AVOID";
     trend = "Bearish";
+    bias = "RISK-OFF";
   }
 
   return {
     ...asset,
     signal,
     trend,
+    bias,
     confidence: finalScore,
     trendScore,
     momentumScore,
@@ -114,6 +155,8 @@ function scoreAsset(asset: MarketAsset): Asset {
     riskScore,
     finalScore,
     grade,
+    reason: getTradeReason(asset, finalScore, grade),
+    isTradable,
   };
 }
 
@@ -158,6 +201,7 @@ function createPaperTrade(asset: Asset, currentBalance: number): PaperTrade {
     confidence: asset.confidence,
     finalScore: asset.finalScore,
     grade: asset.grade,
+    reason: asset.reason,
     status: "OPEN",
     pnl: 0,
     createdAt: new Date().toLocaleString(),
@@ -172,9 +216,10 @@ export default function Home() {
   const [updatedAt, setUpdatedAt] = useState<string>("Loading...");
   const [isLoading, setIsLoading] = useState(true);
   const [paperTrades, setPaperTrades] = useState<PaperTrade[]>([]);
+  const [tradeMessage, setTradeMessage] = useState("");
 
   useEffect(() => {
-    const savedTrades = localStorage.getItem("optima-paper-trades-v3");
+    const savedTrades = localStorage.getItem("optima-paper-trades-v4");
     const savedWatchlist = localStorage.getItem("optima-watchlist-v2");
 
     if (savedTrades) {
@@ -188,7 +233,7 @@ export default function Home() {
 
   useEffect(() => {
     localStorage.setItem(
-      "optima-paper-trades-v3",
+      "optima-paper-trades-v4",
       JSON.stringify(paperTrades)
     );
   }, [paperTrades]);
@@ -258,17 +303,19 @@ export default function Home() {
   }, [assets]);
 
   const bestBuySetup = useMemo(() => {
-    const buySignals = assets.filter((asset) => asset.signal === "BUY");
+    const buySignals = assets.filter((asset) => asset.signal === "BUY" && asset.isTradable);
     if (buySignals.length === 0) return null;
     return [...buySignals].sort((a, b) => b.finalScore - a.finalScore)[0];
   }, [assets]);
 
   const buySignals = assets.filter((asset) => asset.signal === "BUY").length;
+  const tradableSetups = assets.filter((asset) => asset.isTradable).length;
 
   function handleAddSymbol() {
     const symbol = cleanSymbol(newSymbol);
 
     if (!symbol) return;
+
     if (watchlist.includes(symbol)) {
       setNewSymbol("");
       return;
@@ -294,11 +341,24 @@ export default function Home() {
   }
 
   function handleCreatePaperTrade() {
-    if (!bestBuySetup) return;
+    if (!bestBuySetup) {
+      setTradeMessage("No A/B grade tradable setup available right now.");
+      return;
+    }
+
+    const alreadyOpen = paperTrades.some(
+      (trade) => trade.symbol === bestBuySetup.symbol && trade.status === "OPEN"
+    );
+
+    if (alreadyOpen) {
+      setTradeMessage(`Blocked duplicate trade: ${bestBuySetup.symbol} is already open.`);
+      return;
+    }
 
     const newTrade = createPaperTrade(bestBuySetup, currentBalance);
 
     setPaperTrades((currentTrades) => [newTrade, ...currentTrades]);
+    setTradeMessage(`Logged ${bestBuySetup.symbol} paper trade with Grade ${bestBuySetup.grade}.`);
   }
 
   function handleUpdateTradeStatus(id: string, status: TradeStatus) {
@@ -325,6 +385,7 @@ export default function Home() {
 
   function handleClearTrades() {
     setPaperTrades([]);
+    setTradeMessage("Paper trade log cleared.");
   }
 
   return (
@@ -340,8 +401,8 @@ export default function Home() {
                 Strategy Command Center
               </h1>
               <p className="mt-4 max-w-2xl text-slate-300">
-                Live quote data, custom watchlists, strategy scoring, paper
-                trades, and performance tracking.
+                Live quote data, custom watchlists, strategy scoring, duplicate
+                trade protection, paper trades, and performance tracking.
               </p>
               <p className="mt-3 text-sm text-slate-400">
                 Last updated: {updatedAt}
@@ -372,8 +433,8 @@ export default function Home() {
         <section className="mb-8 grid gap-4 md:grid-cols-4">
           <StatCard label="Tracked Assets" value={assets.length.toString()} />
           <StatCard label="Buy Signals" value={buySignals.toString()} />
-          <StatCard label="Risk Per Trade" value={`${RISK_PERCENT}%`} />
-          <StatCard label="Strategy Engine" value="v1" />
+          <StatCard label="Tradable Setups" value={tradableSetups.toString()} />
+          <StatCard label="Strategy Engine" value="v2" />
         </section>
 
         <section className="mb-8 rounded-3xl border border-white/10 bg-white/5 p-6">
@@ -426,15 +487,16 @@ export default function Home() {
 
         <section className="mb-8 grid gap-6 lg:grid-cols-2">
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-            <h2 className="text-2xl font-bold">Strategy Engine v1</h2>
+            <h2 className="text-2xl font-bold">Strategy Engine v2</h2>
             <p className="mt-2 text-sm text-slate-400">
-              Scores every asset by trend, momentum, volume, and risk.
+              Only A/B grade setups with positive momentum, enough volume, and
+              acceptable risk can be logged.
             </p>
 
             <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/60 p-5">
               {bestBuySetup ? (
                 <>
-                  <p className="text-sm text-slate-400">Best trade setup</p>
+                  <p className="text-sm text-slate-400">Best tradable setup</p>
                   <div className="mt-2 flex items-end justify-between gap-4">
                     <div>
                       <p className="text-4xl font-bold text-cyan-300">
@@ -447,29 +509,21 @@ export default function Home() {
                     <GradeBadge grade={bestBuySetup.grade} />
                   </div>
 
+                  <p className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+                    {bestBuySetup.reason}
+                  </p>
+
                   <div className="mt-6 grid gap-3 md:grid-cols-4">
                     <ScoreMetric label="Trend" value={bestBuySetup.trendScore} />
-                    <ScoreMetric
-                      label="Momentum"
-                      value={bestBuySetup.momentumScore}
-                    />
+                    <ScoreMetric label="Momentum" value={bestBuySetup.momentumScore} />
                     <ScoreMetric label="Volume" value={bestBuySetup.volumeScore} />
                     <ScoreMetric label="Risk" value={bestBuySetup.riskScore} />
                   </div>
 
                   <div className="mt-4 grid gap-3 md:grid-cols-3">
-                    <TradeMetric
-                      label="Entry"
-                      value={formatMoney(bestBuySetup.price)}
-                    />
-                    <TradeMetric
-                      label="Stop Loss"
-                      value={formatMoney(bestBuySetup.price * 0.985)}
-                    />
-                    <TradeMetric
-                      label="Take Profit"
-                      value={formatMoney(bestBuySetup.price * 1.03)}
-                    />
+                    <TradeMetric label="Entry" value={formatMoney(bestBuySetup.price)} />
+                    <TradeMetric label="Stop Loss" value={formatMoney(bestBuySetup.price * 0.985)} />
+                    <TradeMetric label="Take Profit" value={formatMoney(bestBuySetup.price * 1.03)} />
                   </div>
 
                   <button
@@ -481,8 +535,13 @@ export default function Home() {
                 </>
               ) : (
                 <p className="text-slate-300">
-                  No BUY setup available right now. Waiting for a stronger
-                  strategy score.
+                  No A/B grade tradable setup available right now.
+                </p>
+              )}
+
+              {tradeMessage && (
+                <p className="mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 text-sm text-cyan-200">
+                  {tradeMessage}
                 </p>
               )}
             </div>
@@ -528,6 +587,10 @@ export default function Home() {
                       <StatusBadge status={trade.status} />
                     </div>
 
+                    <p className="mt-4 rounded-xl bg-white/5 p-3 text-sm text-slate-300">
+                      {trade.reason}
+                    </p>
+
                     <div className="mt-4 grid gap-3 md:grid-cols-4">
                       <TradeMetric label="Entry" value={formatMoney(trade.entry)} />
                       <TradeMetric label="Shares" value={trade.shares.toString()} />
@@ -537,14 +600,8 @@ export default function Home() {
 
                     <div className="mt-4 grid gap-3 md:grid-cols-4">
                       <TradeMetric label="Stop" value={formatMoney(trade.stopLoss)} />
-                      <TradeMetric
-                        label="Target"
-                        value={formatMoney(trade.takeProfit)}
-                      />
-                      <TradeMetric
-                        label="Score"
-                        value={`${trade.finalScore}/100`}
-                      />
+                      <TradeMetric label="Target" value={formatMoney(trade.takeProfit)} />
+                      <TradeMetric label="Score" value={`${trade.finalScore}/100`} />
                       <TradeMetric label="Grade" value={trade.grade} />
                     </div>
 
@@ -608,6 +665,7 @@ export default function Home() {
                   <th className="p-4">Asset</th>
                   <th className="p-4">Price</th>
                   <th className="p-4">Change</th>
+                  <th className="p-4">Bias</th>
                   <th className="p-4">Signal</th>
                   <th className="p-4">Grade</th>
                   <th className="p-4">Final Score</th>
@@ -617,7 +675,7 @@ export default function Home() {
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td className="p-4 text-slate-300" colSpan={7}>
+                    <td className="p-4 text-slate-300" colSpan={8}>
                       Loading live market data...
                     </td>
                   </tr>
@@ -644,6 +702,7 @@ export default function Home() {
                         {asset.changePercent >= 0 ? "+" : ""}
                         {asset.changePercent.toFixed(2)}%
                       </td>
+                      <td className="p-4">{asset.bias}</td>
                       <td className="p-4">
                         <SignalBadge signal={asset.signal} />
                       </td>
@@ -687,7 +746,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function TradeMetric({ label, value }: { label: string }) {
+function TradeMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl bg-white/5 p-3">
       <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
