@@ -1,75 +1,39 @@
-import { ScoreBar } from "@/components/ScoreBar";
-import type { Scan } from "@/lib/types";
+import { MarketScan } from "@/lib/mockScans";
+import { formatDecision, getDecisionStyle } from "@/lib/dashboardFormatters";
 
 type BestSetupCardProps = {
-  scan: Scan | null;
+  bestSetup: MarketScan;
 };
 
-function getDecisionStyle(decision: string | null | undefined) {
-  const cleanDecision = decision?.toUpperCase() || "";
-
-  if (cleanDecision.includes("TAKE")) {
-    return "border-green-500 bg-green-950 text-green-300";
-  }
-
-  if (cleanDecision.includes("WATCH")) {
-    return "border-yellow-600 bg-yellow-950 text-yellow-300";
-  }
-
-  if (cleanDecision.includes("SKIP")) {
-    return "border-red-700 bg-red-950 text-red-300";
-  }
-
-  return "border-gray-700 bg-gray-900 text-gray-300";
-}
-
-export function BestSetupCard({ scan }: BestSetupCardProps) {
-  if (!scan) return null;
-
+export default function BestSetupCard({ bestSetup }: BestSetupCardProps) {
   return (
-    <section className="mb-8 rounded-2xl border border-green-900 bg-gradient-to-br from-green-950 to-gray-950 p-6 shadow-lg">
-      <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+    <section className="mb-8 rounded-3xl border border-green-500/20 bg-gradient-to-br from-green-500/10 to-slate-950 p-6 shadow-2xl">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-sm uppercase tracking-[0.3em] text-green-300">
-            Highest Confidence Setup
+          <p className="mb-2 text-sm font-medium uppercase tracking-[0.25em] text-green-400">
+            Best Setup Right Now
           </p>
 
-          <h2 className="mt-3 text-3xl font-bold">
-            {scan.ticker} — {scan.signal}
+          <h2 className="text-3xl font-bold">
+            {bestSetup.ticker}{" "}
+            <span className="text-slate-400">— {bestSetup.company}</span>
           </h2>
 
-          <div className="mt-3 flex flex-wrap gap-3">
-            <span className="inline-flex rounded-full border border-green-700 bg-green-950 px-4 py-2 text-sm font-bold text-green-300">
-              {scan.trade_grade || "Ungraded"}
-            </span>
-
-            <span
-              className={`inline-flex rounded-full border px-4 py-2 text-sm font-bold ${getDecisionStyle(
-                scan.trade_decision
-              )}`}
-            >
-              {scan.trade_decision || "No Decision"}
-            </span>
-          </div>
-
-          <p className="mt-3 max-w-3xl text-gray-300">
-            {scan.reason || "No reason provided yet."}
+          <p className="mt-3 max-w-3xl text-sm text-slate-300">
+            {bestSetup.reason}
           </p>
         </div>
 
-        <div className="rounded-2xl border border-green-800 bg-black/40 p-5 text-center">
-          <p className="text-sm text-gray-400">Confidence</p>
-          <p className="mt-2 text-5xl font-bold text-green-400">
-            {scan.confidence}%
+        <div className="rounded-2xl border border-green-500/30 bg-black/30 px-6 py-4 text-center">
+          <p className="text-sm text-slate-400">Decision</p>
+          <p
+            className={`mt-1 text-2xl font-bold ${getDecisionStyle(
+              bestSetup.decision
+            )}`}
+          >
+            {formatDecision(bestSetup.decision)}
           </p>
         </div>
-      </div>
-
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <ScoreBar label="Trend" value={scan.trend_score} />
-        <ScoreBar label="Volume" value={scan.volume_score} />
-        <ScoreBar label="Momentum" value={scan.momentum_score} />
-        <ScoreBar label="Risk" value={scan.risk_score} />
       </div>
     </section>
   );
