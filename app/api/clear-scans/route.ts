@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
 
-export async function GET() {
+export async function DELETE() {
   if (!supabase) {
     return NextResponse.json(
       { success: false, error: "Supabase is not configured" },
@@ -9,11 +9,10 @@ export async function GET() {
     );
   }
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("scans")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(25);
+    .delete()
+    .neq("id", "00000000-0000-0000-0000-000000000000");
 
   if (error) {
     return NextResponse.json(
@@ -24,6 +23,6 @@ export async function GET() {
 
   return NextResponse.json({
     success: true,
-    scans: data ?? [],
+    message: "All scans cleared",
   });
 }

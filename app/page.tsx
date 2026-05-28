@@ -1,1180 +1,436 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { mockScans, type MarketScan } from "@/lib/mockScans";
+import { gradeScan } from "@/lib/gradeScan";
 
-type Signal = "BUY" | "HOLD" | "AVOID";
-type TradeStatus = "OPEN" | "WIN" | "LOSS";
-type Bias = "LONG" | "NEUTRAL" | "RISK-OFF";
-type ScanLabel =
-  | "Morning Scan"
-  | "Midday Scan"
-  | "Power Hour Scan"
-  | "Manual Scan"
-  | "Auto Sim Scan";
-
-type MarketAsset = {
-  symbol: string;
-  name: string;
-  price: number;
-  changePercent: number;
-  volume: number;
-};
-
-type Asset = MarketAsset & {
-  trend: "Bullish" | "Neutral" | "Bearish";
-  signal: Signal;
-  bias: Bias;
-  confidence: number;
-  trendScore: number;
-  momentumScore: number;
-  volumeScore: number;
-  riskScore: number;
-  finalScore: number;
-  grade: "A" | "B" | "C" | "D";
-  reason: string;
-  isTradable: boolean;
-};
-
-type PaperTrade = {
+type SavedScan = {
   id: string;
-  symbol: string;
-  entry: number;
-  stopLoss: number;
-  takeProfit: number;
-  shares: number;
-  riskAmount: number;
-  potentialProfit: number;
-  riskReward: string;
-  confidence: number;
-  finalScore: number;
-  grade: string;
-  reason: string;
-  status: TradeStatus;
-  pnl: number;
-  createdAt: string;
+  ticker: string;
+  company: string | null;
+  price: number | null;
+  change_percent: number | null;
+  trend: string | null;
+  volume_score: number | null;
+  rsi: number | null;
+  setup_grade: string | null;
+  decision: string | null;
+  reason: string | null;
+  created_at: string;
 };
 
-type ScanPlan = {
-  name: string;
-  time: string;
-  purpose: string;
-  status: "Planned" | "Ready Soon";
-};
-
-type ScanResult = {
-  id: string;
-  label: ScanLabel;
-  bestSymbol: string;
-  bestGrade: string;
-  bestScore: number;
-  tradableSetups: number;
-  buySignals: number;
-  totalAssets: number;
-  reason: string;
-  createdAt: string;
-};
-
-const STARTING_BALANCE = 10000;
-const RISK_PERCENT = 1;
-const DEFAULT_WATCHLIST = ["SPY", "QQQ", "IWM", "SMR"];
-const AUTO_SCAN_INTERVAL_SECONDS = 120;
-
-const SCAN_PLAN: ScanPlan[] = [
-  {
-    name: "Morning Scan",
-    time: "8:45 AM",
-    purpose: "Check pre-market direction and build the first watchlist.",
-    status: "Ready Soon",
-  },
-  {
-    name: "Midday Scan",
-    time: "12:00 PM",
-    purpose: "Avoid chasing; only log strong setups still holding trend.",
-    status: "Planned",
-  },
-  {
-    name: "Power Hour Scan",
-    time: "2:30 PM",
-    purpose: "Find late-day momentum and decide what stays open.",
-    status: "Planned",
-  },
-];
-
-function clampScore(score: number) {
-  return Math.max(0, Math.min(100, Math.round(score)));
+function formatDecision(decision: string | null | undefined) {
+  if (decision === "TAKE_TRADE") return "Take Trade";
+  if (decision === "WATCH_CLOSELY") return "Watch Closely";
+  if (decision === "WAIT") return "Wait";
+  if (decision === "SKIP") return "Skip";
+  return "No Decision";
 }
 
-function getGrade(score: number): Asset["grade"] {
-  if (score >= 85) return "A";
-  if (score >= 70) return "B";
-  if (score >= 55) return "C";
-  return "D";
+function getGradeStyle(grade: string | null | undefined) {
+  if (grade === "A") return "bg-green-500/15 text-green-400 border-green-500/30";
+  if (grade === "B") return "bg-blue-500/15 text-blue-400 border-blue-500/30";
+  if (grade === "C") return "bg-yellow-500/15 text-yellow-400 border-yellow-500/30";
+  if (grade === "AVOID") return "bg-red-500/15 text-red-400 border-red-500/30";
+  return "bg-slate-500/15 text-slate-400 border-slate-500/30";
 }
 
-function getTradeReason(asset: MarketAsset, finalScore: number, grade: string) {
-  const reasons = [];
-
-  if (asset.changePercent > 1) reasons.push("positive momentum");
-  if (asset.volume >= 10_000_000) reasons.push("strong liquidity");
-  if (Math.abs(asset.changePercent) <= 3) reasons.push("controlled volatility");
-  if (grade === "A" || grade === "B") reasons.push("acceptable strategy grade");
-
-  if (reasons.length === 0) {
-    return "Setup does not meet enough strategy requirements.";
-  }
-
-  return `Score ${finalScore}/100 because of ${reasons.join(", ")}.`;
+function getDecisionStyle(decision: string | null | undefined) {
+  if (decision === "TAKE_TRADE") return "text-green-400";
+  if (decision === "WATCH_CLOSELY") return "text-blue-400";
+  if (decision === "WAIT") return "text-yellow-400";
+  if (decision === "SKIP") return "text-red-400";
+  return "text-slate-400";
 }
 
-function scoreAsset(asset: MarketAsset): Asset {
-  const momentumScore = clampScore(50 + asset.changePercent * 12);
-
-  const volumeScore = clampScore(
-    asset.volume >= 50_000_000
-      ? 90
-      : asset.volume >= 10_000_000
-      ? 75
-      : asset.volume >= 1_000_000
-      ? 60
-      : 40
-  );
-
-  const riskScore = clampScore(
-    Math.abs(asset.changePercent) <= 1.5
-      ? 85
-      : Math.abs(asset.changePercent) <= 3
-      ? 65
-      : 40
-  );
-
-  const trendScore = clampScore(
-    asset.changePercent > 1
-      ? 85
-      : asset.changePercent > 0.25
-      ? 65
-      : asset.changePercent < -1
-      ? 30
-      : 50
-  );
-
-  const finalScore = clampScore(
-    trendScore * 0.3 +
-      momentumScore * 0.3 +
-      volumeScore * 0.2 +
-      riskScore * 0.2
-  );
-
-  const grade = getGrade(finalScore);
-
-  let signal: Signal = "HOLD";
-  let trend: Asset["trend"] = "Neutral";
-  let bias: Bias = "NEUTRAL";
-
-  const isStrongEnough = finalScore >= 70;
-  const hasPositiveMomentum = asset.changePercent > 0;
-  const hasEnoughVolume = asset.volume >= 1_000_000;
-  const riskIsAcceptable = riskScore >= 60;
-  const isTradable =
-    isStrongEnough && hasPositiveMomentum && hasEnoughVolume && riskIsAcceptable;
-
-  if (isTradable) {
-    signal = "BUY";
-    trend = "Bullish";
-    bias = "LONG";
-  } else if (finalScore <= 45 || asset.changePercent < -1.5) {
-    signal = "AVOID";
-    trend = "Bearish";
-    bias = "RISK-OFF";
-  }
-
-  return {
-    ...asset,
-    signal,
-    trend,
-    bias,
-    confidence: finalScore,
-    trendScore,
-    momentumScore,
-    volumeScore,
-    riskScore,
-    finalScore,
-    grade,
-    reason: getTradeReason(asset, finalScore, grade),
-    isTradable,
-  };
+function formatGrade(grade: string | null | undefined) {
+  if (grade === "AVOID") return "Avoid";
+  if (grade === "A" || grade === "B" || grade === "C") return `${grade} Setup`;
+  return "No Grade";
 }
 
-function formatVolume(volume: number) {
-  if (volume >= 1_000_000) return `${(volume / 1_000_000).toFixed(1)}M`;
-  if (volume >= 1_000) return `${(volume / 1_000).toFixed(1)}K`;
-  return volume.toString();
-}
+function slightlyRandomizeScans(scans: MarketScan[]) {
+  return scans.map((scan) => {
+    const priceMove = Number((Math.random() * 4 - 2).toFixed(2));
+    const volumeMove = Math.floor(Math.random() * 15 - 7);
+    const rsiMove = Math.floor(Math.random() * 10 - 5);
+    const percentMove = Number((Math.random() * 2 - 1).toFixed(2));
 
-function formatMoney(value: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(value);
-}
-
-function cleanSymbol(symbol: string) {
-  return symbol.trim().toUpperCase().replace(/[^A-Z.-]/g, "");
-}
-
-function createPaperTrade(asset: Asset, currentBalance: number): PaperTrade {
-  const entry = asset.price;
-  const stopLoss = entry * 0.985;
-  const takeProfit = entry * 1.03;
-
-  const riskAmount = currentBalance * (RISK_PERCENT / 100);
-  const riskPerShare = entry - stopLoss;
-  const shares = Math.max(1, Math.floor(riskAmount / riskPerShare));
-  const actualRiskAmount = shares * riskPerShare;
-  const potentialProfit = shares * (takeProfit - entry);
-
-  return {
-    id: crypto.randomUUID(),
-    symbol: asset.symbol,
-    entry,
-    stopLoss,
-    takeProfit,
-    shares,
-    riskAmount: actualRiskAmount,
-    potentialProfit,
-    riskReward: "1:2",
-    confidence: asset.confidence,
-    finalScore: asset.finalScore,
-    grade: asset.grade,
-    reason: asset.reason,
-    status: "OPEN",
-    pnl: 0,
-    createdAt: new Date().toLocaleString(),
-  };
-}
-
-function getScanLabel(): ScanLabel {
-  const now = new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-  if (currentMinutes < 11 * 60) return "Morning Scan";
-  if (currentMinutes < 14 * 60) return "Midday Scan";
-  if (currentMinutes < 16 * 60) return "Power Hour Scan";
-
-  return "Manual Scan";
-}
-
-function getNextScan() {
-  const now = new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-  const scans = [
-    { label: "Morning Scan", minutes: 8 * 60 + 45 },
-    { label: "Midday Scan", minutes: 12 * 60 },
-    { label: "Power Hour Scan", minutes: 14 * 60 + 30 },
-  ];
-
-  const nextToday = scans.find((scan) => scan.minutes > currentMinutes);
-
-  if (nextToday) return nextToday.label;
-
-  return "Morning Scan tomorrow";
-}
-
-function createScanResult(
-  assets: Asset[],
-  labelOverride?: ScanLabel
-): ScanResult {
-  const bestAsset =
-    assets.length > 0
-      ? [...assets].sort((a, b) => b.finalScore - a.finalScore)[0]
-      : null;
-
-  const tradableSetups = assets.filter((asset) => asset.isTradable).length;
-  const buySignals = assets.filter((asset) => asset.signal === "BUY").length;
-
-  return {
-    id: crypto.randomUUID(),
-    label: labelOverride ?? getScanLabel(),
-    bestSymbol: bestAsset ? bestAsset.symbol : "NONE",
-    bestGrade: bestAsset ? bestAsset.grade : "-",
-    bestScore: bestAsset ? bestAsset.finalScore : 0,
-    tradableSetups,
-    buySignals,
-    totalAssets: assets.length,
-    reason: bestAsset
-      ? bestAsset.reason
-      : "No assets were available during this scan.",
-    createdAt: new Date().toLocaleString(),
-  };
-}
-
-async function saveScanToSupabase(scan: ScanResult) {
-  try {
-    const response = await fetch("/api/scans", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(scan),
-    });
-
-    const result = await response.json();
-
-    if (!result.success) {
-      throw new Error(result.error ?? "Failed to save scan");
-    }
-
-    return true;
-  } catch (error) {
-    console.error("Supabase scan save error:", error);
-    return false;
-  }
-}
-
-async function saveTradeToSupabase(trade: PaperTrade) {
-  try {
-    const response = await fetch("/api/trades", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(trade),
-    });
-
-    const result = await response.json();
-
-    if (!result.success) {
-      throw new Error(result.error ?? "Failed to save paper trade");
-    }
-
-    return true;
-  } catch (error) {
-    console.error("Supabase trade save error:", error);
-    return false;
-  }
-}
-
-async function updateTradeInSupabase(trade: PaperTrade) {
-  try {
-    const response = await fetch("/api/trades", {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        id: trade.id,
-        status: trade.status,
-        pnl: trade.pnl,
-      }),
-    });
-
-    const result = await response.json();
-
-    if (!result.success) {
-      throw new Error(result.error ?? "Failed to update paper trade");
-    }
-
-    return true;
-  } catch (error) {
-    console.error("Supabase trade update error:", error);
-    return false;
-  }
-}
-
-function getSecondsUntilNextAutoScan(lastAutoScanAt: string | null) {
-  if (!lastAutoScanAt) return 0;
-
-  const lastScanTime = new Date(lastAutoScanAt).getTime();
-  const nextScanTime = lastScanTime + AUTO_SCAN_INTERVAL_SECONDS * 1000;
-  const remainingMs = nextScanTime - Date.now();
-
-  return Math.max(0, Math.ceil(remainingMs / 1000));
+    return {
+      ...scan,
+      price: Math.max(1, Number((scan.price + priceMove).toFixed(2))),
+      changePercent: Number((scan.changePercent + percentMove).toFixed(2)),
+      volumeScore: Math.max(1, Math.min(100, scan.volumeScore + volumeMove)),
+      rsi: Math.max(1, Math.min(100, scan.rsi + rsiMove)),
+    };
+  });
 }
 
 export default function Home() {
-  const [selectedSignal, setSelectedSignal] = useState<Signal | "ALL">("ALL");
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [watchlist, setWatchlist] = useState<string[]>(DEFAULT_WATCHLIST);
-  const [newSymbol, setNewSymbol] = useState("");
-  const [updatedAt, setUpdatedAt] = useState<string>("Loading...");
-  const [isLoading, setIsLoading] = useState(true);
-  const [paperTrades, setPaperTrades] = useState<PaperTrade[]>([]);
-  const [scanHistory, setScanHistory] = useState<ScanResult[]>([]);
-  const [tradeMessage, setTradeMessage] = useState("");
-  const [scanMessage, setScanMessage] = useState("");
-  const [automationArmed, setAutomationArmed] = useState(false);
-  const [lastAutoScanAt, setLastAutoScanAt] = useState<string | null>(null);
-  const [autoScanCountdown, setAutoScanCountdown] = useState(0);
+  const [scans, setScans] = useState<MarketScan[]>(mockScans.map(gradeScan));
+  const [scanHistory, setScanHistory] = useState<SavedScan[]>([]);
+  const [isScanning, setIsScanning] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [lastScanTime, setLastScanTime] = useState<string>("Not scanned yet");
+  const [saveStatus, setSaveStatus] = useState<string>("No scans saved yet");
+
+  async function saveScansToSupabase(scansToSave: MarketScan[]) {
+    const response = await fetch("/api/save-scans", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ scans: scansToSave }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || "Failed to save scans");
+    }
+
+    return result;
+  }
+
+  async function loadScanHistory() {
+    setIsLoadingHistory(true);
+
+    try {
+      const response = await fetch("/api/get-scans");
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Failed to load scan history");
+      }
+
+      setScanHistory(result.scans);
+    } catch (error) {
+      console.error("Load scan history failed:", error);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }
+
+  async function handleGenerateScan() {
+    setIsScanning(true);
+    setSaveStatus("Generating scan...");
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 900));
+
+      const updatedScans = slightlyRandomizeScans(mockScans).map(gradeScan);
+
+      setScans(updatedScans);
+      setLastScanTime(new Date().toLocaleTimeString());
+      setSaveStatus("Saving scan to Supabase...");
+
+      const result = await saveScansToSupabase(updatedScans);
+
+      setSaveStatus(`Saved ${result.savedCount} scan rows to Supabase`);
+      await loadScanHistory();
+    } catch (error) {
+      console.error("Scan failed:", error);
+      setSaveStatus(
+        error instanceof Error ? `Save failed: ${error.message}` : "Save failed"
+      );
+    } finally {
+      setIsScanning(false);
+    }
+  }
 
   useEffect(() => {
-    const savedTrades = localStorage.getItem("optima-paper-trades-v4");
-    const savedWatchlist = localStorage.getItem("optima-watchlist-v2");
-    const savedScans = localStorage.getItem("optima-scan-history-v1");
-    const savedAutomation = localStorage.getItem("optima-automation-armed-v1");
-    const savedLastAutoScan = localStorage.getItem("optima-last-auto-scan-v1");
-
-    if (savedTrades) setPaperTrades(JSON.parse(savedTrades));
-    if (savedWatchlist) setWatchlist(JSON.parse(savedWatchlist));
-    if (savedScans) setScanHistory(JSON.parse(savedScans));
-    if (savedAutomation) setAutomationArmed(JSON.parse(savedAutomation));
-    if (savedLastAutoScan) setLastAutoScanAt(savedLastAutoScan);
+    loadScanHistory();
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem("optima-paper-trades-v4", JSON.stringify(paperTrades));
-  }, [paperTrades]);
+  const aSetups = scans.filter((scan) => scan.setupGrade === "A").length;
+  const watchList = scans.filter((scan) => scan.decision === "WATCH_CLOSELY").length;
+  const avoidList = scans.filter((scan) => scan.setupGrade === "AVOID").length;
 
-  useEffect(() => {
-    localStorage.setItem("optima-watchlist-v2", JSON.stringify(watchlist));
-  }, [watchlist]);
-
-  useEffect(() => {
-    localStorage.setItem("optima-scan-history-v1", JSON.stringify(scanHistory));
-  }, [scanHistory]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      "optima-automation-armed-v1",
-      JSON.stringify(automationArmed)
-    );
-  }, [automationArmed]);
-
-  useEffect(() => {
-    if (lastAutoScanAt) {
-      localStorage.setItem("optima-last-auto-scan-v1", lastAutoScanAt);
-    }
-  }, [lastAutoScanAt]);
-
-  useEffect(() => {
-    async function loadMarketData() {
-      try {
-        setIsLoading(true);
-
-        const symbols = watchlist.join(",");
-        const response = await fetch(`/api/market?symbols=${symbols}`, {
-          cache: "no-store",
-        });
-
-        const result = await response.json();
-
-        if (!result.success) {
-          throw new Error(result.error ?? "Failed to load market data");
-        }
-
-        const scoredAssets = result.data.map(scoreAsset);
-
-        setAssets(scoredAssets);
-        setUpdatedAt(new Date(result.updatedAt).toLocaleString());
-      } catch (error) {
-        console.error(error);
-        setUpdatedAt("Market data failed to load");
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    loadMarketData();
-
-    const interval = setInterval(loadMarketData, 60_000);
-
-    return () => clearInterval(interval);
-  }, [watchlist]);
-
-  useEffect(() => {
-    const countdownInterval = setInterval(() => {
-      setAutoScanCountdown(getSecondsUntilNextAutoScan(lastAutoScanAt));
-    }, 1000);
-
-    return () => clearInterval(countdownInterval);
-  }, [lastAutoScanAt]);
-
-  useEffect(() => {
-    if (!automationArmed) return;
-
-    const automationInterval = setInterval(() => {
-      async function runAutoScan() {
-        if (assets.length === 0) return;
-
-        const remainingSeconds = getSecondsUntilNextAutoScan(lastAutoScanAt);
-
-        if (remainingSeconds > 0) return;
-
-        const newAutoScan = createScanResult(assets, "Auto Sim Scan");
-        const nowString = new Date().toISOString();
-        const savedOnline = await saveScanToSupabase(newAutoScan);
-
-        setScanHistory((currentHistory) =>
-          [newAutoScan, ...currentHistory].slice(0, 20)
-        );
-        setLastAutoScanAt(nowString);
-        setScanMessage(
-          `Auto Sim Scan complete: best setup ${newAutoScan.bestSymbol}, Grade ${newAutoScan.bestGrade}, Score ${newAutoScan.bestScore}/100. ${
-            savedOnline ? "Saved to Supabase." : "Saved locally only."
-          }`
-        );
-      }
-
-      runAutoScan();
-    }, 1000);
-
-    return () => clearInterval(automationInterval);
-  }, [automationArmed, assets, lastAutoScanAt]);
-
-  const totalPnl = useMemo(() => {
-    return paperTrades.reduce((sum, trade) => sum + trade.pnl, 0);
-  }, [paperTrades]);
-
-  const currentBalance = STARTING_BALANCE + totalPnl;
-  const closedTrades = paperTrades.filter((trade) => trade.status !== "OPEN");
-  const winningTrades = paperTrades.filter((trade) => trade.status === "WIN");
-  const openTrades = paperTrades.filter((trade) => trade.status === "OPEN");
-
-  const winRate =
-    closedTrades.length === 0
-      ? 0
-      : Math.round((winningTrades.length / closedTrades.length) * 100);
-
-  const filteredAssets = useMemo(() => {
-    if (selectedSignal === "ALL") return assets;
-    return assets.filter((asset) => asset.signal === selectedSignal);
-  }, [assets, selectedSignal]);
-
-  const bestBuySetup = useMemo(() => {
-    const buySignals = assets.filter(
-      (asset) => asset.signal === "BUY" && asset.isTradable
-    );
-    if (buySignals.length === 0) return null;
-    return [...buySignals].sort((a, b) => b.finalScore - a.finalScore)[0];
-  }, [assets]);
-
-  const buySignals = assets.filter((asset) => asset.signal === "BUY").length;
-  const tradableSetups = assets.filter((asset) => asset.isTradable).length;
-  const nextScan = getNextScan();
-  const latestScan = scanHistory[0];
-
-  function handleToggleAutomation() {
-    const nextValue = !automationArmed;
-
-    setAutomationArmed(nextValue);
-
-    if (nextValue) {
-      setLastAutoScanAt(null);
-      setScanMessage(
-        "Local automation armed. The simulator will run a scan every 2 minutes while this browser tab is open."
-      );
-    } else {
-      setScanMessage("Local automation paused.");
-    }
-  }
-
-  async function handleRunScan() {
-    if (assets.length === 0) {
-      setScanMessage("No market data available yet. Wait for quotes to load.");
-      return;
-    }
-
-    const newScan = createScanResult(assets);
-    const savedOnline = await saveScanToSupabase(newScan);
-
-    setScanHistory((currentHistory) => [newScan, ...currentHistory].slice(0, 20));
-
-    setScanMessage(
-      `${newScan.label} complete: best setup ${newScan.bestSymbol}, Grade ${newScan.bestGrade}, Score ${newScan.bestScore}/100. ${
-        savedOnline ? "Saved to Supabase." : "Saved locally only."
-      }`
-    );
-  }
-
-  function handleClearScanHistory() {
-    setScanHistory([]);
-    setScanMessage("Scan history cleared.");
-  }
-
-  function handleAddSymbol() {
-    const symbol = cleanSymbol(newSymbol);
-
-    if (!symbol) return;
-
-    if (watchlist.includes(symbol)) {
-      setNewSymbol("");
-      return;
-    }
-
-    if (watchlist.length >= 12) {
-      alert("Watchlist limit is 12 symbols for now.");
-      return;
-    }
-
-    setWatchlist((currentWatchlist) => [...currentWatchlist, symbol]);
-    setNewSymbol("");
-  }
-
-  function handleRemoveSymbol(symbol: string) {
-    setWatchlist((currentWatchlist) =>
-      currentWatchlist.filter((item) => item !== symbol)
-    );
-  }
-
-  function handleResetWatchlist() {
-    setWatchlist(DEFAULT_WATCHLIST);
-  }
-
-  async function handleCreatePaperTrade() {
-    if (!bestBuySetup) {
-      setTradeMessage("No A/B grade tradable setup available right now.");
-      return;
-    }
-
-    const alreadyOpen = paperTrades.some(
-      (trade) => trade.symbol === bestBuySetup.symbol && trade.status === "OPEN"
-    );
-
-    if (alreadyOpen) {
-      setTradeMessage(
-        `Blocked duplicate trade: ${bestBuySetup.symbol} is already open.`
-      );
-      return;
-    }
-
-    const newTrade = createPaperTrade(bestBuySetup, currentBalance);
-    const savedOnline = await saveTradeToSupabase(newTrade);
-
-    setPaperTrades((currentTrades) => [newTrade, ...currentTrades]);
-    setTradeMessage(
-      `Logged ${bestBuySetup.symbol} paper trade with Grade ${bestBuySetup.grade}. ${
-        savedOnline ? "Saved to Supabase." : "Saved locally only."
-      }`
-    );
-  }
-
-  async function handleUpdateTradeStatus(id: string, status: TradeStatus) {
-    let updatedTradeForSupabase: PaperTrade | null = null;
-
-    setPaperTrades((currentTrades) =>
-      currentTrades.map((trade) => {
-        if (trade.id !== id) return trade;
-
-        let pnl = 0;
-
-        if (status === "WIN") pnl = trade.potentialProfit;
-        else if (status === "LOSS") pnl = -trade.riskAmount;
-
-        const updatedTrade = {
-          ...trade,
-          status,
-          pnl,
-        };
-
-        updatedTradeForSupabase = updatedTrade;
-
-        return updatedTrade;
-      })
-    );
-
-    if (updatedTradeForSupabase) {
-      const savedOnline = await updateTradeInSupabase(updatedTradeForSupabase);
-
-      setTradeMessage(
-        `Updated trade status to ${status}. ${
-          savedOnline ? "Saved to Supabase." : "Saved locally only."
-        }`
-      );
-    }
-  }
-
-  function handleClearTrades() {
-    setPaperTrades([]);
-    setTradeMessage("Paper trade log cleared locally.");
-  }
+  const bestSetup =
+    scans.find((scan) => scan.setupGrade === "A") ||
+    scans.find((scan) => scan.setupGrade === "B") ||
+    scans[0];
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen bg-[#070A12] text-white">
       <div className="mx-auto max-w-7xl px-6 py-8">
-        <section className="mb-8 rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="mb-2 text-sm font-semibold uppercase tracking-[0.3em] text-cyan-300">
-                OPTIMA AUTO TRADER
-              </p>
-              <h1 className="text-4xl font-bold tracking-tight md:text-6xl">
-                Strategy Command Center
-              </h1>
-              <p className="mt-4 max-w-2xl text-slate-300">
-                Live quote data, custom watchlists, strategy scoring, paper
-                trades, scan history, local automation, and Supabase storage.
-              </p>
-              <p className="mt-3 text-sm text-slate-400">
-                Last updated: {updatedAt}
-              </p>
-            </div>
+        <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="mb-2 text-sm font-medium uppercase tracking-[0.3em] text-blue-400">
+              Road to Funded Account
+            </p>
 
-            <div className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 p-5">
-              <p className="text-sm text-slate-300">Automation status</p>
-              <p className="mt-1 text-3xl font-bold text-cyan-300">
-                {automationArmed ? "ARMED" : "PAUSED"}
-              </p>
-              <p className="text-sm text-slate-300">
-                Latest scan: {latestScan ? latestScan.bestSymbol : "None yet"}
-              </p>
-            </div>
+            <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
+              Trading Scanner Dashboard
+            </h1>
+
+            <p className="mt-3 max-w-2xl text-sm text-slate-400">
+              A disciplined scanner built to grade setups, filter weak trades,
+              and protect capital before risking real money.
+            </p>
           </div>
-        </section>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-5 py-4 shadow-xl">
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+              Current Mode
+            </p>
+            <p className="mt-1 text-lg font-semibold text-blue-400">
+              Paper Trading
+            </p>
+          </div>
+        </header>
 
         <section className="mb-8 grid gap-4 md:grid-cols-4">
-          <StatCard label="Paper Balance" value={formatMoney(currentBalance)} />
-          <StatCard label="Total P/L" value={formatMoney(totalPnl)} />
-          <StatCard label="Open Trades" value={openTrades.length.toString()} />
-          <StatCard label="Win Rate" value={`${winRate}%`} />
-        </section>
-
-        <section className="mb-8 grid gap-4 md:grid-cols-4">
-          <StatCard label="Tracked Assets" value={assets.length.toString()} />
-          <StatCard label="Buy Signals" value={buySignals.toString()} />
-          <StatCard label="Tradable Setups" value={tradableSetups.toString()} />
-          <StatCard label="Scans Logged" value={scanHistory.length.toString()} />
-        </section>
-
-        <section className="mb-8 rounded-3xl border border-white/10 bg-white/5 p-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <h2 className="text-2xl font-bold">Local Automation v1</h2>
-              <p className="mt-2 text-sm text-slate-400">
-                Manual scans and auto-sim scans now attempt to save to Supabase.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <button
-                onClick={handleToggleAutomation}
-                className={`rounded-2xl px-5 py-3 font-bold transition ${
-                  automationArmed
-                    ? "bg-red-400/20 text-red-300 hover:bg-red-400/30"
-                    : "bg-cyan-300 text-slate-950 hover:bg-cyan-200"
-                }`}
-              >
-                {automationArmed ? "Pause Automation" : "Arm Automation"}
-              </button>
-              <button
-                onClick={handleRunScan}
-                className="rounded-2xl bg-white/10 px-5 py-3 font-bold text-slate-300 transition hover:bg-white/20"
-              >
-                Run Scan Now
-              </button>
-              <button
-                onClick={handleClearScanHistory}
-                className="rounded-2xl bg-white/10 px-5 py-3 font-bold text-slate-300 transition hover:bg-white/20"
-              >
-                Clear Scans
-              </button>
-            </div>
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-5 shadow-xl">
+            <p className="text-sm text-slate-400">Total Scans</p>
+            <p className="mt-2 text-3xl font-bold">{scans.length}</p>
           </div>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-4">
-            <StatCard
-              label="Local Automation"
-              value={automationArmed ? "Armed" : "Paused"}
-            />
-            <StatCard label="Next Real Scan" value={nextScan} />
-            <StatCard
-              label="Next Sim Scan"
-              value={
-                automationArmed
-                  ? `${autoScanCountdown}s`
-                  : `${AUTO_SCAN_INTERVAL_SECONDS}s`
-              }
-            />
-            <StatCard
-              label="Last Auto Scan"
-              value={
-                lastAutoScanAt
-                  ? new Date(lastAutoScanAt).toLocaleTimeString()
-                  : "None"
-              }
-            />
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-5 shadow-xl">
+            <p className="text-sm text-slate-400">A Setups</p>
+            <p className="mt-2 text-3xl font-bold text-green-400">{aSetups}</p>
           </div>
 
-          {scanMessage && (
-            <p className="mt-5 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 text-sm text-cyan-200">
-              {scanMessage}
-            </p>
-          )}
-
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            {SCAN_PLAN.map((scan) => (
-              <div
-                key={scan.name}
-                className="rounded-2xl border border-white/10 bg-slate-950/60 p-5"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-bold text-cyan-300">{scan.name}</p>
-                  <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-bold text-cyan-200">
-                    {scan.status}
-                  </span>
-                </div>
-                <p className="mt-3 text-3xl font-bold">{scan.time}</p>
-                <p className="mt-3 text-sm text-slate-400">{scan.purpose}</p>
-              </div>
-            ))}
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-5 shadow-xl">
+            <p className="text-sm text-slate-400">Watch Closely</p>
+            <p className="mt-2 text-3xl font-bold text-blue-400">{watchList}</p>
           </div>
 
-          <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/60 p-5">
-            <h3 className="text-xl font-bold">Scan History</h3>
-            <p className="text-sm text-slate-400">
-              Last 20 scans saved locally. Successful scans are also saved to Supabase.
-            </p>
-
-            <div className="mt-4 space-y-3">
-              {scanHistory.length === 0 ? (
-                <p className="rounded-xl bg-white/5 p-4 text-slate-400">
-                  No scans logged yet. Click Run Scan Now or Arm Automation.
-                </p>
-              ) : (
-                scanHistory.map((scan) => (
-                  <div
-                    key={scan.id}
-                    className="rounded-xl border border-white/10 bg-white/5 p-4"
-                  >
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <p className="font-bold text-cyan-300">
-                          {scan.label} · {scan.bestSymbol}
-                        </p>
-                        <p className="text-sm text-slate-400">{scan.createdAt}</p>
-                      </div>
-
-                      <div className="grid gap-2 sm:grid-cols-4">
-                        <TradeMetric label="Grade" value={scan.bestGrade} />
-                        <TradeMetric
-                          label="Score"
-                          value={`${scan.bestScore}/100`}
-                        />
-                        <TradeMetric
-                          label="Tradable"
-                          value={scan.tradableSetups.toString()}
-                        />
-                        <TradeMetric
-                          label="Buys"
-                          value={scan.buySignals.toString()}
-                        />
-                      </div>
-                    </div>
-
-                    <p className="mt-3 text-sm text-slate-300">{scan.reason}</p>
-                  </div>
-                ))
-              )}
-            </div>
+          <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-5 shadow-xl">
+            <p className="text-sm text-slate-400">Avoid / Skip</p>
+            <p className="mt-2 text-3xl font-bold text-red-400">{avoidList}</p>
           </div>
         </section>
 
-        <section className="mb-8 rounded-3xl border border-white/10 bg-white/5 p-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <h2 className="text-2xl font-bold">Watchlist v2</h2>
-              <p className="mt-2 text-sm text-slate-400">
-                Add up to 12 tickers. Saved in your browser.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <input
-                value={newSymbol}
-                onChange={(event) => setNewSymbol(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") handleAddSymbol();
-                }}
-                placeholder="Add ticker: NVDA"
-                className="rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 font-semibold text-white outline-none placeholder:text-slate-500 focus:border-cyan-300"
-              />
-              <button
-                onClick={handleAddSymbol}
-                className="rounded-2xl bg-cyan-300 px-5 py-3 font-bold text-slate-950 transition hover:bg-cyan-200"
-              >
-                Add Ticker
-              </button>
-              <button
-                onClick={handleResetWatchlist}
-                className="rounded-2xl bg-white/10 px-5 py-3 font-bold text-slate-300 transition hover:bg-white/20"
-              >
-                Reset
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-5 flex flex-wrap gap-2">
-            {watchlist.map((symbol) => (
-              <button
-                key={symbol}
-                onClick={() => handleRemoveSymbol(symbol)}
-                className="rounded-full border border-white/10 bg-slate-950 px-4 py-2 text-sm font-bold text-slate-200 hover:border-red-300/50 hover:text-red-300"
-                title="Click to remove"
-              >
-                {symbol} ×
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="mb-8 grid gap-6 lg:grid-cols-2">
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-            <h2 className="text-2xl font-bold">Strategy Engine v2</h2>
-            <p className="mt-2 text-sm text-slate-400">
-              Only A/B grade setups with positive momentum, enough volume, and
-              acceptable risk can be logged.
-            </p>
-
-            <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/60 p-5">
-              {bestBuySetup ? (
-                <>
-                  <p className="text-sm text-slate-400">Best tradable setup</p>
-                  <div className="mt-2 flex items-end justify-between gap-4">
-                    <div>
-                      <p className="text-4xl font-bold text-cyan-300">
-                        {bestBuySetup.symbol}
-                      </p>
-                      <p className="mt-1 text-sm text-slate-300">
-                        {bestBuySetup.name}
-                      </p>
-                    </div>
-                    <GradeBadge grade={bestBuySetup.grade} />
-                  </div>
-
-                  <p className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
-                    {bestBuySetup.reason}
-                  </p>
-
-                  <div className="mt-6 grid gap-3 md:grid-cols-4">
-                    <ScoreMetric label="Trend" value={bestBuySetup.trendScore} />
-                    <ScoreMetric
-                      label="Momentum"
-                      value={bestBuySetup.momentumScore}
-                    />
-                    <ScoreMetric label="Volume" value={bestBuySetup.volumeScore} />
-                    <ScoreMetric label="Risk" value={bestBuySetup.riskScore} />
-                  </div>
-
-                  <div className="mt-4 grid gap-3 md:grid-cols-3">
-                    <TradeMetric
-                      label="Entry"
-                      value={formatMoney(bestBuySetup.price)}
-                    />
-                    <TradeMetric
-                      label="Stop Loss"
-                      value={formatMoney(bestBuySetup.price * 0.985)}
-                    />
-                    <TradeMetric
-                      label="Take Profit"
-                      value={formatMoney(bestBuySetup.price * 1.03)}
-                    />
-                  </div>
-
-                  <button
-                    onClick={handleCreatePaperTrade}
-                    className="mt-6 w-full rounded-2xl bg-cyan-300 px-5 py-3 font-bold text-slate-950 transition hover:bg-cyan-200"
-                  >
-                    Log Strategy Paper Trade
-                  </button>
-                </>
-              ) : (
-                <p className="text-slate-300">
-                  No A/B grade tradable setup available right now.
-                </p>
-              )}
-
-              {tradeMessage && (
-                <p className="mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 p-4 text-sm text-cyan-200">
-                  {tradeMessage}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-            <div className="flex items-center justify-between gap-4">
+        {bestSetup && (
+          <section className="mb-8 rounded-3xl border border-green-500/20 bg-gradient-to-br from-green-500/10 to-slate-950 p-6 shadow-2xl">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <h2 className="text-2xl font-bold">Paper Trade Log</h2>
-                <p className="mt-2 text-sm text-slate-400">
-                  Mark trades as wins or losses to track performance.
+                <p className="mb-2 text-sm font-medium uppercase tracking-[0.25em] text-green-400">
+                  Best Setup Right Now
+                </p>
+
+                <h2 className="text-3xl font-bold">
+                  {bestSetup.ticker}{" "}
+                  <span className="text-slate-400">— {bestSetup.company}</span>
+                </h2>
+
+                <p className="mt-3 max-w-3xl text-sm text-slate-300">
+                  {bestSetup.reason}
                 </p>
               </div>
 
-              <button
-                onClick={handleClearTrades}
-                className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/20"
-              >
-                Clear
-              </button>
-            </div>
-
-            <div className="mt-6 max-h-[560px] space-y-3 overflow-y-auto pr-2">
-              {paperTrades.length === 0 ? (
-                <p className="rounded-2xl border border-white/10 bg-slate-950/60 p-5 text-slate-400">
-                  No paper trades logged yet.
+              <div className="rounded-2xl border border-green-500/30 bg-black/30 px-6 py-4 text-center">
+                <p className="text-sm text-slate-400">Decision</p>
+                <p
+                  className={`mt-1 text-2xl font-bold ${getDecisionStyle(
+                    bestSetup.decision
+                  )}`}
+                >
+                  {formatDecision(bestSetup.decision)}
                 </p>
-              ) : (
-                paperTrades.map((trade) => (
-                  <div
-                    key={trade.id}
-                    className="rounded-2xl border border-white/10 bg-slate-950/60 p-5"
-                  >
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="text-2xl font-bold text-cyan-300">
-                          {trade.symbol}
-                        </p>
-                        <p className="text-sm text-slate-400">
-                          {trade.createdAt}
-                        </p>
-                      </div>
-                      <StatusBadge status={trade.status} />
-                    </div>
-
-                    <p className="mt-4 rounded-xl bg-white/5 p-3 text-sm text-slate-300">
-                      {trade.reason}
-                    </p>
-
-                    <div className="mt-4 grid gap-3 md:grid-cols-4">
-                      <TradeMetric label="Entry" value={formatMoney(trade.entry)} />
-                      <TradeMetric label="Shares" value={trade.shares.toString()} />
-                      <TradeMetric
-                        label="Risk"
-                        value={formatMoney(trade.riskAmount)}
-                      />
-                      <TradeMetric label="P/L" value={formatMoney(trade.pnl)} />
-                    </div>
-
-                    <div className="mt-4 grid gap-3 md:grid-cols-4">
-                      <TradeMetric label="Stop" value={formatMoney(trade.stopLoss)} />
-                      <TradeMetric
-                        label="Target"
-                        value={formatMoney(trade.takeProfit)}
-                      />
-                      <TradeMetric
-                        label="Score"
-                        value={`${trade.finalScore}/100`}
-                      />
-                      <TradeMetric label="Grade" value={trade.grade} />
-                    </div>
-
-                    <div className="mt-4 flex gap-2">
-                      <button
-                        onClick={() => handleUpdateTradeStatus(trade.id, "OPEN")}
-                        className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold hover:bg-white/20"
-                      >
-                        Open
-                      </button>
-                      <button
-                        onClick={() => handleUpdateTradeStatus(trade.id, "WIN")}
-                        className="rounded-full bg-emerald-400/15 px-4 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-400/25"
-                      >
-                        Win
-                      </button>
-                      <button
-                        onClick={() => handleUpdateTradeStatus(trade.id, "LOSS")}
-                        className="rounded-full bg-red-400/15 px-4 py-2 text-sm font-semibold text-red-300 hover:bg-red-400/25"
-                      >
-                        Loss
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
-        <section className="rounded-3xl border border-white/10 bg-white/5 p-6">
-          <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <section className="mb-8 rounded-3xl border border-slate-800 bg-slate-950/70 p-5 shadow-2xl">
+          <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <h2 className="text-2xl font-bold">Live Strategy Watchlist</h2>
+              <h2 className="text-2xl font-bold">Market Scan Results</h2>
               <p className="text-sm text-slate-400">
-                Real quote data ranked by strategy score.
+                Last scan:{" "}
+                <span className="text-slate-300">{lastScanTime}</span>
+              </p>
+              <p className="mt-1 text-sm text-slate-400">
+                Save status:{" "}
+                <span
+                  className={
+                    saveStatus.startsWith("Saved")
+                      ? "text-green-400"
+                      : saveStatus.startsWith("Save failed")
+                      ? "text-red-400"
+                      : "text-slate-300"
+                  }
+                >
+                  {saveStatus}
+                </span>
               </p>
             </div>
 
-            <div className="flex gap-2">
-              {(["ALL", "BUY", "HOLD", "AVOID"] as const).map((signal) => (
-                <button
-                  key={signal}
-                  onClick={() => setSelectedSignal(signal)}
-                  className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                    selectedSignal === signal
-                      ? "bg-cyan-300 text-slate-950"
-                      : "bg-white/10 text-slate-300 hover:bg-white/20"
-                  }`}
-                >
-                  {signal}
-                </button>
-              ))}
-            </div>
+            <button
+              onClick={handleGenerateScan}
+              disabled={isScanning}
+              className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-400 transition hover:bg-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isScanning ? "Scanning Market..." : "Generate Scan"}
+            </button>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-white/10">
-            <table className="w-full border-collapse text-left">
-              <thead className="bg-white/10 text-sm uppercase tracking-wide text-slate-300">
+          <div className="overflow-hidden rounded-2xl border border-slate-800">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead className="bg-slate-900 text-xs uppercase tracking-[0.18em] text-slate-500">
                 <tr>
-                  <th className="p-4">Asset</th>
-                  <th className="p-4">Price</th>
-                  <th className="p-4">Change</th>
-                  <th className="p-4">Bias</th>
-                  <th className="p-4">Signal</th>
-                  <th className="p-4">Grade</th>
-                  <th className="p-4">Final Score</th>
-                  <th className="p-4">Volume</th>
+                  <th className="px-4 py-4">Ticker</th>
+                  <th className="px-4 py-4">Price</th>
+                  <th className="px-4 py-4">Change</th>
+                  <th className="px-4 py-4">Trend</th>
+                  <th className="px-4 py-4">Volume</th>
+                  <th className="px-4 py-4">RSI</th>
+                  <th className="px-4 py-4">Grade</th>
+                  <th className="px-4 py-4">Decision</th>
                 </tr>
               </thead>
+
               <tbody>
-                {isLoading ? (
+                {scans.map((scan) => (
+                  <tr
+                    key={scan.id}
+                    className="border-t border-slate-800 transition hover:bg-slate-900/70"
+                  >
+                    <td className="px-4 py-4">
+                      <div>
+                        <p className="font-bold text-white">{scan.ticker}</p>
+                        <p className="text-xs text-slate-500">{scan.company}</p>
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-4 font-medium">
+                      ${scan.price.toFixed(2)}
+                    </td>
+
+                    <td
+                      className={`px-4 py-4 font-semibold ${
+                        scan.changePercent >= 0
+                          ? "text-green-400"
+                          : "text-red-400"
+                      }`}
+                    >
+                      {scan.changePercent >= 0 ? "+" : ""}
+                      {scan.changePercent.toFixed(2)}%
+                    </td>
+
+                    <td className="px-4 py-4 text-slate-300">{scan.trend}</td>
+
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-2 w-20 overflow-hidden rounded-full bg-slate-800">
+                          <div
+                            className="h-full rounded-full bg-blue-500"
+                            style={{ width: `${scan.volumeScore}%` }}
+                          />
+                        </div>
+                        <span className="text-slate-300">
+                          {scan.volumeScore}
+                        </span>
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-4 text-slate-300">{scan.rsi}</td>
+
+                    <td className="px-4 py-4">
+                      <span
+                        className={`rounded-full border px-3 py-1 text-xs font-bold ${getGradeStyle(
+                          scan.setupGrade
+                        )}`}
+                      >
+                        {formatGrade(scan.setupGrade)}
+                      </span>
+                    </td>
+
+                    <td
+                      className={`px-4 py-4 font-bold ${getDecisionStyle(
+                        scan.decision
+                      )}`}
+                    >
+                      {formatDecision(scan.decision)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 shadow-2xl">
+          <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-2xl font-bold">Scan History</h2>
+              <p className="text-sm text-slate-400">
+                Newest saved rows pulled directly from Supabase.
+              </p>
+            </div>
+
+            <button
+              onClick={loadScanHistory}
+              disabled={isLoadingHistory}
+              className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isLoadingHistory ? "Loading..." : "Refresh History"}
+            </button>
+          </div>
+
+          <div className="overflow-hidden rounded-2xl border border-slate-800">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead className="bg-slate-900 text-xs uppercase tracking-[0.18em] text-slate-500">
+                <tr>
+                  <th className="px-4 py-4">Time</th>
+                  <th className="px-4 py-4">Ticker</th>
+                  <th className="px-4 py-4">Price</th>
+                  <th className="px-4 py-4">Grade</th>
+                  <th className="px-4 py-4">Decision</th>
+                  <th className="px-4 py-4">Reason</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {scanHistory.length === 0 ? (
                   <tr>
-                    <td className="p-4 text-slate-300" colSpan={8}>
-                      Loading live market data...
+                    <td className="px-4 py-6 text-slate-400" colSpan={6}>
+                      No saved scan history loaded yet.
                     </td>
                   </tr>
                 ) : (
-                  filteredAssets.map((asset) => (
+                  scanHistory.map((scan) => (
                     <tr
-                      key={asset.symbol}
-                      className="border-t border-white/10 hover:bg-white/5"
+                      key={scan.id}
+                      className="border-t border-slate-800 transition hover:bg-slate-900/70"
                     >
-                      <td className="p-4">
-                        <p className="font-bold">{asset.symbol}</p>
-                        <p className="text-sm text-slate-400">{asset.name}</p>
+                      <td className="px-4 py-4 text-slate-400">
+                        {new Date(scan.created_at).toLocaleTimeString()}
                       </td>
-                      <td className="p-4 font-semibold">
-                        {formatMoney(asset.price)}
+
+                      <td className="px-4 py-4">
+                        <p className="font-bold text-white">{scan.ticker}</p>
+                        <p className="text-xs text-slate-500">
+                          {scan.company || "Unknown company"}
+                        </p>
                       </td>
+
+                      <td className="px-4 py-4 font-medium">
+                        {scan.price !== null ? `$${Number(scan.price).toFixed(2)}` : "—"}
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <span
+                          className={`rounded-full border px-3 py-1 text-xs font-bold ${getGradeStyle(
+                            scan.setup_grade
+                          )}`}
+                        >
+                          {formatGrade(scan.setup_grade)}
+                        </span>
+                      </td>
+
                       <td
-                        className={`p-4 font-semibold ${
-                          asset.changePercent >= 0
-                            ? "text-emerald-300"
-                            : "text-red-300"
-                        }`}
+                        className={`px-4 py-4 font-bold ${getDecisionStyle(
+                          scan.decision
+                        )}`}
                       >
-                        {asset.changePercent >= 0 ? "+" : ""}
-                        {asset.changePercent.toFixed(2)}%
+                        {formatDecision(scan.decision)}
                       </td>
-                      <td className="p-4">{asset.bias}</td>
-                      <td className="p-4">
-                        <SignalBadge signal={asset.signal} />
-                      </td>
-                      <td className="p-4">
-                        <GradeBadge grade={asset.grade} />
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="h-2 w-24 rounded-full bg-white/10">
-                            <div
-                              className="h-2 rounded-full bg-cyan-300"
-                              style={{ width: `${asset.finalScore}%` }}
-                            />
-                          </div>
-                          <span className="text-sm text-slate-300">
-                            {asset.finalScore}/100
-                          </span>
-                        </div>
-                      </td>
-                      <td className="p-4 text-slate-300">
-                        {formatVolume(asset.volume)}
+
+                      <td className="max-w-md px-4 py-4 text-xs text-slate-400">
+                        {scan.reason || "No reason saved."}
                       </td>
                     </tr>
                   ))
@@ -1185,83 +441,5 @@ export default function Home() {
         </section>
       </div>
     </main>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-      <p className="text-sm text-slate-400">{label}</p>
-      <p className="mt-2 text-3xl font-bold">{value}</p>
-    </div>
-  );
-}
-
-function TradeMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl bg-white/5 p-3">
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 font-bold">{value}</p>
-    </div>
-  );
-}
-
-function ScoreMetric({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-xl bg-white/5 p-3">
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-xl font-bold">{value}/100</p>
-    </div>
-  );
-}
-
-function SignalBadge({ signal }: { signal: Signal }) {
-  const styles = {
-    BUY: "bg-emerald-400/15 text-emerald-300 border-emerald-400/30",
-    HOLD: "bg-yellow-400/15 text-yellow-300 border-yellow-400/30",
-    AVOID: "bg-red-400/15 text-red-300 border-red-400/30",
-  };
-
-  return (
-    <span
-      className={`rounded-full border px-3 py-1 text-xs font-bold ${styles[signal]}`}
-    >
-      {signal}
-    </span>
-  );
-}
-
-function StatusBadge({ status }: { status: TradeStatus }) {
-  const styles = {
-    OPEN: "bg-cyan-400/15 text-cyan-300 border-cyan-400/30",
-    WIN: "bg-emerald-400/15 text-emerald-300 border-emerald-400/30",
-    LOSS: "bg-red-400/15 text-red-300 border-red-400/30",
-  };
-
-  return (
-    <span
-      className={`rounded-full border px-3 py-1 text-xs font-bold ${styles[status]}`}
-    >
-      {status}
-    </span>
-  );
-}
-
-function GradeBadge({ grade }: { grade: Asset["grade"] | string }) {
-  const styles = {
-    A: "bg-emerald-400/15 text-emerald-300 border-emerald-400/30",
-    B: "bg-cyan-400/15 text-cyan-300 border-cyan-400/30",
-    C: "bg-yellow-400/15 text-yellow-300 border-yellow-400/30",
-    D: "bg-red-400/15 text-red-300 border-red-400/30",
-  };
-
-  const gradeStyle = styles[grade as keyof typeof styles] ?? styles.D;
-
-  return (
-    <span
-      className={`rounded-full border px-3 py-1 text-xs font-bold ${gradeStyle}`}
-    >
-      Grade {grade}
-    </span>
   );
 }
