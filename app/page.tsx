@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { mockScans, type MarketScan } from "@/lib/mockScans";
 import { gradeScan } from "@/lib/gradeScan";
+import { createTradePlan } from "@/lib/createTradePlan";
 
 type SavedScan = {
   id: string;
@@ -18,6 +19,27 @@ type SavedScan = {
   reason: string | null;
   created_at: string;
 };
+
+type PaperTrade = {
+  id: string;
+  ticker: string | null;
+  company: string | null;
+  entry_price: number | null;
+  setup_grade: string | null;
+  decision: string | null;
+  trade_plan_action: string | null;
+  bias: string | null;
+  risk_level: string | null;
+  notes: string | null;
+  status: string | null;
+  result?: string | null;
+  exit_price?: number | null;
+  closed_at?: string | null;
+  created_at: string;
+};
+
+type HistoryFilter = "ALL" | "A" | "WATCH" | "SKIP";
+type TradeResult = "WIN" | "LOSS" | "BREAKEVEN";
 
 function formatDecision(decision: string | null | undefined) {
   if (decision === "TAKE_TRADE") return "Take Trade";
@@ -41,6 +63,38 @@ function getDecisionStyle(decision: string | null | undefined) {
   if (decision === "WAIT") return "text-yellow-400";
   if (decision === "SKIP") return "text-red-400";
   return "text-slate-400";
+}
+
+function getRiskStyle(riskLevel: string | null | undefined) {
+  if (riskLevel === "Low") {
+    return "text-green-400 border-green-500/30 bg-green-500/10";
+  }
+
+  if (riskLevel === "Medium") {
+    return "text-yellow-400 border-yellow-500/30 bg-yellow-500/10";
+  }
+
+  if (riskLevel === "High") {
+    return "text-red-400 border-red-500/30 bg-red-500/10";
+  }
+
+  return "text-slate-400 border-slate-500/30 bg-slate-500/10";
+}
+
+function getResultStyle(result: string | null | undefined) {
+  if (result === "WIN") {
+    return "text-green-400 border-green-500/30 bg-green-500/10";
+  }
+
+  if (result === "LOSS") {
+    return "text-red-400 border-red-500/30 bg-red-500/10";
+  }
+
+  if (result === "BREAKEVEN") {
+    return "text-yellow-400 border-yellow-500/30 bg-yellow-500/10";
+  }
+
+  return "text-slate-400 border-slate-500/30 bg-slate-500/10";
 }
 
 function formatGrade(grade: string | null | undefined) {
@@ -69,10 +123,21 @@ function slightlyRandomizeScans(scans: MarketScan[]) {
 export default function Home() {
   const [scans, setScans] = useState<MarketScan[]>(mockScans.map(gradeScan));
   const [scanHistory, setScanHistory] = useState<SavedScan[]>([]);
+  const [paperTrades, setPaperTrades] = useState<PaperTrade[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isLoadingPaperTrades, setIsLoadingPaperTrades] = useState(false);
   const [lastScanTime, setLastScanTime] = useState<string>("Not scanned yet");
   const [saveStatus, setSaveStatus] = useState<string>("No scans saved yet");
+  const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("ALL");
+  const [paperTradeStatus, setPaperTradeStatus] = useState<string>(
+    "No paper trade saved yet"
+  );
+  const [isSavingPaperTrade, setIsSavingPaperTrade] = useState(false);
+  const [closingTradeId, setClosingTradeId] = useState<string | null>(null);
+  const [closeTradeStatus, setCloseTradeStatus] = useState<string>(
+    "No paper trades closed yet"
+  );
 
   async function saveScansToSupabase(scansToSave: MarketScan[]) {
     const response = await fetch("/api/save-scans", {
@@ -111,6 +176,92 @@ export default function Home() {
     }
   }
 
+  async function loadPaperTrades() {
+    setIsLoadingPaperTrades(true);
+
+    try {
+      const response = await fetch("/api/get-paper-trades");
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Failed to load paper trades");
+      }
+
+      setPaperTrades(result.paperTrades);
+    } catch (error) {
+      console.error("Load paper trades failed:", error);
+    } finally {
+      setIsLoadingPaperTrades(false);
+    }
+  }
+
+  async function savePaperTradeFromScan(scan: MarketScan, statusPrefix?: string) {
+    const tradePlanForScan = createTradePlan(scan);
+
+    if (statusPrefix) {
+      setPaperTradeStatus(statusPrefix);
+    }
+
+    const response = await fetch("/api/save-paper-trade", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        scan,
+        tradePlan: tradePlanForScan,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || "Failed to save paper trade");
+    }
+
+    setPaperTradeStatus(result.message || `Saved ${scan.ticker} to paper trades`);
+    await loadPaperTrades();
+
+    return result;
+  }
+
+  async function closePaperTrade(tradeId: string, result: TradeResult) {
+    setClosingTradeId(tradeId);
+    setCloseTradeStatus(`Closing trade as ${result}...`);
+
+    try {
+      const response = await fetch("/api/close-paper-trade", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: tradeId,
+          result,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to close paper trade");
+      }
+
+      setCloseTradeStatus(data.message || `Paper trade closed as ${result}`);
+      await loadPaperTrades();
+    } catch (error) {
+      console.error("Close paper trade failed:", error);
+
+      setCloseTradeStatus(
+        error instanceof Error
+          ? `Close failed: ${error.message}`
+          : "Close failed"
+      );
+    } finally {
+      setClosingTradeId(null);
+    }
+  }
+
   async function handleGenerateScan() {
     setIsScanning(true);
     setSaveStatus("Generating scan...");
@@ -128,11 +279,25 @@ export default function Home() {
 
       setSaveStatus(`Saved ${result.savedCount} scan rows to Supabase`);
       await loadScanHistory();
+
+      const bestASetup = updatedScans.find((scan) => scan.setupGrade === "A");
+
+      if (bestASetup) {
+        await savePaperTradeFromScan(
+          bestASetup,
+          `Auto-checking ${bestASetup.ticker} for paper trade...`
+        );
+      } else {
+        setPaperTradeStatus("No A Setup found for auto paper trade");
+      }
     } catch (error) {
       console.error("Scan failed:", error);
-      setSaveStatus(
-        error instanceof Error ? `Save failed: ${error.message}` : "Save failed"
-      );
+
+      const errorMessage =
+        error instanceof Error ? error.message : "Something went wrong";
+
+      setSaveStatus(`Scan failed: ${errorMessage}`);
+      setPaperTradeStatus(`Auto paper trade failed: ${errorMessage}`);
     } finally {
       setIsScanning(false);
     }
@@ -140,16 +305,82 @@ export default function Home() {
 
   useEffect(() => {
     loadScanHistory();
+    loadPaperTrades();
   }, []);
 
   const aSetups = scans.filter((scan) => scan.setupGrade === "A").length;
-  const watchList = scans.filter((scan) => scan.decision === "WATCH_CLOSELY").length;
+  const watchList = scans.filter(
+    (scan) => scan.decision === "WATCH_CLOSELY"
+  ).length;
   const avoidList = scans.filter((scan) => scan.setupGrade === "AVOID").length;
 
   const bestSetup =
     scans.find((scan) => scan.setupGrade === "A") ||
     scans.find((scan) => scan.setupGrade === "B") ||
     scans[0];
+
+  const tradePlan = bestSetup ? createTradePlan(bestSetup) : null;
+
+  async function savePaperTrade() {
+    if (!bestSetup) return;
+
+    setIsSavingPaperTrade(true);
+    setPaperTradeStatus("Saving paper trade...");
+
+    try {
+      await savePaperTradeFromScan(bestSetup);
+    } catch (error) {
+      console.error("Save paper trade failed:", error);
+
+      setPaperTradeStatus(
+        error instanceof Error
+          ? `Paper trade save failed: ${error.message}`
+          : "Paper trade save failed"
+      );
+    } finally {
+      setIsSavingPaperTrade(false);
+    }
+  }
+
+  const validPaperTrades = paperTrades.filter(
+    (trade) => trade.status !== "DUPLICATE_CLOSED"
+  );
+
+  const openPaperTrades = validPaperTrades.filter(
+    (trade) => trade.status === "OPEN"
+  ).length;
+
+  const closedPaperTrades = validPaperTrades.filter(
+    (trade) => trade.status === "CLOSED"
+  );
+
+  const winningTrades = closedPaperTrades.filter(
+    (trade) => trade.result === "WIN"
+  ).length;
+
+  const losingTrades = closedPaperTrades.filter(
+    (trade) => trade.result === "LOSS"
+  ).length;
+
+  const breakevenTrades = closedPaperTrades.filter(
+    (trade) => trade.result === "BREAKEVEN"
+  ).length;
+
+  const winRate =
+    closedPaperTrades.length > 0
+      ? Math.round((winningTrades / closedPaperTrades.length) * 100)
+      : 0;
+
+  const filteredScanHistory = scanHistory.filter((scan) => {
+    if (historyFilter === "ALL") return true;
+    if (historyFilter === "A") return scan.setup_grade === "A";
+    if (historyFilter === "WATCH") return scan.decision === "WATCH_CLOSELY";
+    if (historyFilter === "SKIP") {
+      return scan.decision === "SKIP" || scan.setup_grade === "AVOID";
+    }
+
+    return true;
+  });
 
   return (
     <main className="min-h-screen bg-[#070A12] text-white">
@@ -234,13 +465,316 @@ export default function Home() {
           </section>
         )}
 
+        {tradePlan && (
+          <section className="mb-8 rounded-3xl border border-blue-500/20 bg-slate-950/70 p-6 shadow-2xl">
+            <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="mb-2 text-sm font-medium uppercase tracking-[0.25em] text-blue-400">
+                  Trade Plan Preview
+                </p>
+                <h2 className="text-2xl font-bold">{tradePlan.ticker} Plan</h2>
+                <p className="mt-2 text-sm text-slate-400">
+                  This is a paper-trading plan generated from the current best
+                  setup.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2 md:items-end">
+                <div
+                  className={`rounded-full border px-4 py-2 text-sm font-bold ${getRiskStyle(
+                    tradePlan.riskLevel
+                  )}`}
+                >
+                  {tradePlan.riskLevel} Risk
+                </div>
+
+                <button
+                  onClick={savePaperTrade}
+                  disabled={isSavingPaperTrade}
+                  className="rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-2 text-sm font-semibold text-green-400 transition hover:bg-green-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isSavingPaperTrade ? "Saving..." : "Add to Paper Trades"}
+                </button>
+
+                <p
+                  className={`text-xs ${
+                    paperTradeStatus.startsWith("Saved") ||
+                    paperTradeStatus.includes("already in open paper trades") ||
+                    paperTradeStatus.startsWith("Auto-checking")
+                      ? "text-green-400"
+                      : paperTradeStatus.startsWith("Paper trade save failed") ||
+                        paperTradeStatus.startsWith("Auto paper trade failed")
+                      ? "text-red-400"
+                      : "text-slate-400"
+                  }`}
+                >
+                  {paperTradeStatus}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-2xl border border-slate-800 bg-black/20 p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                  Bias
+                </p>
+                <p className="mt-2 text-lg font-bold text-white">
+                  {tradePlan.bias}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-black/20 p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                  Action
+                </p>
+                <p className="mt-2 text-lg font-bold text-blue-400">
+                  {tradePlan.action}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-black/20 p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                  Entry Zone
+                </p>
+                <p className="mt-2 text-sm font-semibold text-slate-200">
+                  {tradePlan.entryZone}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-black/20 p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                  Stop Rule
+                </p>
+                <p className="mt-2 text-sm font-semibold text-slate-200">
+                  {tradePlan.stopRule}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-black/20 p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                  Profit Rule
+                </p>
+                <p className="mt-2 text-sm font-semibold text-slate-200">
+                  {tradePlan.profitRule}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-black/20 p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                  Notes
+                </p>
+                <p className="mt-2 text-sm font-semibold text-slate-200">
+                  {tradePlan.notes}
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
+
+        <section className="mb-8 rounded-3xl border border-purple-500/20 bg-slate-950/70 p-5 shadow-2xl">
+          <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="mb-2 text-sm font-medium uppercase tracking-[0.25em] text-purple-400">
+                Paper Trade Tracker
+              </p>
+              <h2 className="text-2xl font-bold">Open Paper Trades</h2>
+              <p className="text-sm text-slate-400">
+                Saved trade ideas pulled directly from Supabase.
+              </p>
+              <p
+                className={`mt-1 text-sm ${
+                  closeTradeStatus.startsWith("Paper trade closed")
+                    ? "text-green-400"
+                    : closeTradeStatus.startsWith("Close failed")
+                    ? "text-red-400"
+                    : "text-slate-400"
+                }`}
+              >
+                {closeTradeStatus}
+              </p>
+            </div>
+
+            <button
+              onClick={loadPaperTrades}
+              disabled={isLoadingPaperTrades}
+              className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isLoadingPaperTrades ? "Loading..." : "Refresh Paper Trades"}
+            </button>
+          </div>
+
+          <div className="mb-5 grid gap-4 md:grid-cols-6">
+            <div className="rounded-2xl border border-slate-800 bg-black/20 p-4">
+              <p className="text-sm text-slate-400">Total Trades</p>
+              <p className="mt-2 text-2xl font-bold text-white">
+                {validPaperTrades.length}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-black/20 p-4">
+              <p className="text-sm text-slate-400">Open Trades</p>
+              <p className="mt-2 text-2xl font-bold text-purple-400">
+                {openPaperTrades}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-black/20 p-4">
+              <p className="text-sm text-slate-400">Wins</p>
+              <p className="mt-2 text-2xl font-bold text-green-400">
+                {winningTrades}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-black/20 p-4">
+              <p className="text-sm text-slate-400">Losses</p>
+              <p className="mt-2 text-2xl font-bold text-red-400">
+                {losingTrades}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-black/20 p-4">
+              <p className="text-sm text-slate-400">Breakeven</p>
+              <p className="mt-2 text-2xl font-bold text-yellow-400">
+                {breakevenTrades}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-black/20 p-4">
+              <p className="text-sm text-slate-400">Win Rate</p>
+              <p className="mt-2 text-2xl font-bold text-blue-400">
+                {winRate}%
+              </p>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-2xl border border-slate-800">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead className="bg-slate-900 text-xs uppercase tracking-[0.18em] text-slate-500">
+                <tr>
+                  <th className="px-4 py-4">Time</th>
+                  <th className="px-4 py-4">Ticker</th>
+                  <th className="px-4 py-4">Entry</th>
+                  <th className="px-4 py-4">Grade</th>
+                  <th className="px-4 py-4">Risk</th>
+                  <th className="px-4 py-4">Status</th>
+                  <th className="px-4 py-4">Result</th>
+                  <th className="px-4 py-4">Actions</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {validPaperTrades.length === 0 ? (
+                  <tr>
+                    <td className="px-4 py-6 text-slate-400" colSpan={8}>
+                      No paper trades saved yet.
+                    </td>
+                  </tr>
+                ) : (
+                  validPaperTrades.map((trade) => (
+                    <tr
+                      key={trade.id}
+                      className="border-t border-slate-800 transition hover:bg-slate-900/70"
+                    >
+                      <td className="px-4 py-4 text-slate-400">
+                        {new Date(trade.created_at).toLocaleTimeString()}
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <p className="font-bold text-white">
+                          {trade.ticker || "Unknown"}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {trade.company || "Unknown company"}
+                        </p>
+                      </td>
+
+                      <td className="px-4 py-4 font-medium">
+                        {trade.entry_price !== null
+                          ? `$${Number(trade.entry_price).toFixed(2)}`
+                          : "—"}
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <span
+                          className={`rounded-full border px-3 py-1 text-xs font-bold ${getGradeStyle(
+                            trade.setup_grade
+                          )}`}
+                        >
+                          {formatGrade(trade.setup_grade)}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <span
+                          className={`rounded-full border px-3 py-1 text-xs font-bold ${getRiskStyle(
+                            trade.risk_level
+                          )}`}
+                        >
+                          {trade.risk_level || "Unknown"}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-4 font-bold text-purple-400">
+                        {trade.status || "OPEN"}
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <span
+                          className={`rounded-full border px-3 py-1 text-xs font-bold ${getResultStyle(
+                            trade.result
+                          )}`}
+                        >
+                          {trade.result || "Pending"}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-4">
+                        {trade.status === "OPEN" ? (
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              onClick={() => closePaperTrade(trade.id, "WIN")}
+                              disabled={closingTradeId === trade.id}
+                              className="rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-1 text-xs font-bold text-green-400 hover:bg-green-500/20 disabled:opacity-50"
+                            >
+                              Win
+                            </button>
+
+                            <button
+                              onClick={() => closePaperTrade(trade.id, "LOSS")}
+                              disabled={closingTradeId === trade.id}
+                              className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs font-bold text-red-400 hover:bg-red-500/20 disabled:opacity-50"
+                            >
+                              Loss
+                            </button>
+
+                            <button
+                              onClick={() =>
+                                closePaperTrade(trade.id, "BREAKEVEN")
+                              }
+                              disabled={closingTradeId === trade.id}
+                              className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-1 text-xs font-bold text-yellow-400 hover:bg-yellow-500/20 disabled:opacity-50"
+                            >
+                              BE
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-500">Closed</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
         <section className="mb-8 rounded-3xl border border-slate-800 bg-slate-950/70 p-5 shadow-2xl">
           <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-2xl font-bold">Market Scan Results</h2>
               <p className="text-sm text-slate-400">
-                Last scan:{" "}
-                <span className="text-slate-300">{lastScanTime}</span>
+                Last scan: <span className="text-slate-300">{lastScanTime}</span>
               </p>
               <p className="mt-1 text-sm text-slate-400">
                 Save status:{" "}
@@ -248,7 +782,8 @@ export default function Home() {
                   className={
                     saveStatus.startsWith("Saved")
                       ? "text-green-400"
-                      : saveStatus.startsWith("Save failed")
+                      : saveStatus.startsWith("Save failed") ||
+                        saveStatus.startsWith("Scan failed")
                       ? "text-red-400"
                       : "text-slate-300"
                   }
@@ -320,9 +855,7 @@ export default function Home() {
                             style={{ width: `${scan.volumeScore}%` }}
                           />
                         </div>
-                        <span className="text-slate-300">
-                          {scan.volumeScore}
-                        </span>
+                        <span className="text-slate-300">{scan.volumeScore}</span>
                       </div>
                     </td>
 
@@ -353,7 +886,7 @@ export default function Home() {
         </section>
 
         <section className="rounded-3xl border border-slate-800 bg-slate-950/70 p-5 shadow-2xl">
-          <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-2xl font-bold">Scan History</h2>
               <p className="text-sm text-slate-400">
@@ -361,13 +894,59 @@ export default function Home() {
               </p>
             </div>
 
-            <button
-              onClick={loadScanHistory}
-              disabled={isLoadingHistory}
-              className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isLoadingHistory ? "Loading..." : "Refresh History"}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setHistoryFilter("ALL")}
+                className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${
+                  historyFilter === "ALL"
+                    ? "border-blue-500/40 bg-blue-500/15 text-blue-400"
+                    : "border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
+                }`}
+              >
+                All
+              </button>
+
+              <button
+                onClick={() => setHistoryFilter("A")}
+                className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${
+                  historyFilter === "A"
+                    ? "border-green-500/40 bg-green-500/15 text-green-400"
+                    : "border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
+                }`}
+              >
+                A Setups
+              </button>
+
+              <button
+                onClick={() => setHistoryFilter("WATCH")}
+                className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${
+                  historyFilter === "WATCH"
+                    ? "border-blue-500/40 bg-blue-500/15 text-blue-400"
+                    : "border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
+                }`}
+              >
+                Watch Closely
+              </button>
+
+              <button
+                onClick={() => setHistoryFilter("SKIP")}
+                className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${
+                  historyFilter === "SKIP"
+                    ? "border-red-500/40 bg-red-500/15 text-red-400"
+                    : "border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
+                }`}
+              >
+                Skip / Avoid
+              </button>
+
+              <button
+                onClick={loadScanHistory}
+                disabled={isLoadingHistory}
+                className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isLoadingHistory ? "Loading..." : "Refresh"}
+              </button>
+            </div>
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-slate-800">
@@ -384,14 +963,14 @@ export default function Home() {
               </thead>
 
               <tbody>
-                {scanHistory.length === 0 ? (
+                {filteredScanHistory.length === 0 ? (
                   <tr>
                     <td className="px-4 py-6 text-slate-400" colSpan={6}>
-                      No saved scan history loaded yet.
+                      No saved scan history matches this filter yet.
                     </td>
                   </tr>
                 ) : (
-                  scanHistory.map((scan) => (
+                  filteredScanHistory.map((scan) => (
                     <tr
                       key={scan.id}
                       className="border-t border-slate-800 transition hover:bg-slate-900/70"
@@ -408,7 +987,9 @@ export default function Home() {
                       </td>
 
                       <td className="px-4 py-4 font-medium">
-                        {scan.price !== null ? `$${Number(scan.price).toFixed(2)}` : "—"}
+                        {scan.price !== null
+                          ? `$${Number(scan.price).toFixed(2)}`
+                          : "—"}
                       </td>
 
                       <td className="px-4 py-4">

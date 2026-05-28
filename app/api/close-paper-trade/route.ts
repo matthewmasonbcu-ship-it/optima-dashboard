@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import type { MarketScan } from "@/lib/mockScans";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+type ClosePaperTradeBody = {
+  id: string;
+  result: "WIN" | "LOSS" | "BREAKEVEN";
+  exitPrice?: number;
+};
 
 export async function POST(request: Request) {
   try {
@@ -14,35 +19,29 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = await request.json();
-    const scans = body.scans as MarketScan[];
+    const body = (await request.json()) as ClosePaperTradeBody;
+    const { id, result, exitPrice } = body;
 
-    if (!Array.isArray(scans) || scans.length === 0) {
+    if (!id || !result) {
       return NextResponse.json(
-        { success: false, error: "No scans provided" },
+        { success: false, error: "Missing trade id or result" },
         { status: 400 }
       );
     }
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-    const rowsToInsert = scans.map((scan) => ({
-      ticker: scan.ticker,
-      company: scan.company,
-      price: scan.price,
-      change_percent: scan.changePercent,
-      trend: scan.trend,
-      volume_score: scan.volumeScore,
-      rsi: scan.rsi,
-      setup_grade: scan.setupGrade,
-      decision: scan.decision,
-      reason: scan.reason,
-    }));
-
     const { data, error } = await supabase
-      .from("market_scans")
-      .insert(rowsToInsert)
-      .select();
+      .from("paper_trades")
+      .update({
+        status: "CLOSED",
+        result,
+        exit_price: exitPrice ?? null,
+        closed_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select()
+      .single();
 
     if (error) {
       return NextResponse.json(
@@ -53,14 +52,14 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      savedCount: data.length,
-      scans: data,
+      message: `Paper trade closed as ${result}`,
+      paperTrade: data,
     });
   } catch (error) {
-    console.error("Save scans error:", error);
+    console.error("Close paper trade error:", error);
 
     return NextResponse.json(
-      { success: false, error: "Something went wrong while saving scans" },
+      { success: false, error: "Something went wrong while closing paper trade" },
       { status: 500 }
     );
   }

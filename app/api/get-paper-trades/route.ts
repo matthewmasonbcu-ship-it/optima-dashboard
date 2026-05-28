@@ -16,12 +16,12 @@ export async function GET() {
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
     const { data, error } = await supabase
-      .from("market_scans")
+      .from("paper_trades")
       .select(
-        "id, ticker, company, price, change_percent, trend, volume_score, rsi, setup_grade, decision, reason, created_at"
+        "id, ticker, company, entry_price, setup_grade, decision, trade_plan_action, bias, risk_level, notes, status, result, exit_price, closed_at, created_at"
       )
       .order("created_at", { ascending: false })
-      .limit(10);
+      .limit(20);
 
     if (error) {
       return NextResponse.json(
@@ -32,13 +32,13 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      scans: data,
+      paperTrades: data,
     });
   } catch (error) {
-    console.error("Get scans error:", error);
+    console.error("Get paper trades error:", error);
 
     return NextResponse.json(
-      { success: false, error: "Something went wrong while loading scans" },
+      { success: false, error: "Something went wrong while loading paper trades" },
       { status: 500 }
     );
   }
