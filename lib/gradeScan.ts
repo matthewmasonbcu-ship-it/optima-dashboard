@@ -1,62 +1,21 @@
-import type { MarketScan, SetupGrade, TradeDecision } from "@/lib/mockScans";
+import type { Decision, Grade } from "@/lib/dashboardTypes";
 
-function getSetupGrade(scan: MarketScan): SetupGrade {
-  const isBullish = scan.trend === "Bullish";
-  const isBearish = scan.trend === "Bearish";
-  const strongVolume = scan.volumeScore >= 85;
-  const goodVolume = scan.volumeScore >= 70;
-  const healthyRsi = scan.rsi >= 50 && scan.rsi <= 68;
-  const overheatedRsi = scan.rsi > 72;
-  const weakRsi = scan.rsi < 45;
-  const positiveMove = scan.changePercent > 0;
-
-  if (isBearish || weakRsi) {
-    return "AVOID";
-  }
-
-  if (isBullish && strongVolume && healthyRsi && positiveMove) {
-    return "A";
-  }
-
-  if (isBullish && goodVolume && scan.rsi >= 48 && !overheatedRsi) {
-    return "B";
-  }
-
-  return "C";
+export function getGrade(score: number): Grade {
+  if (score >= 85) return "A";
+  if (score >= 70) return "B";
+  if (score >= 55) return "C";
+  return "AVOID";
 }
 
-function getTradeDecision(grade: SetupGrade): TradeDecision {
-  if (grade === "A") return "TAKE_TRADE";
-  if (grade === "B") return "WATCH_CLOSELY";
-  if (grade === "C") return "WAIT";
+export function getDecision(grade: Grade): Decision {
+  if (grade === "A") return "TAKE TRADE";
+  if (grade === "B") return "WATCH CLOSELY";
   return "SKIP";
 }
 
-function getReason(scan: MarketScan, grade: SetupGrade): string {
-  if (grade === "A") {
-    return "Strong bullish setup with high volume, healthy RSI, and positive price action.";
-  }
-
-  if (grade === "B") {
-    return "Decent bullish structure, but it needs stronger confirmation before becoming an A setup.";
-  }
-
-  if (grade === "C") {
-    return "Mixed conditions. There is not enough edge yet to justify forcing a trade.";
-  }
-
-  return "Weak or risky conditions. The setup should be skipped until strength returns.";
-}
-
-export function gradeScan(scan: MarketScan): MarketScan {
-  const setupGrade = getSetupGrade(scan);
-  const decision = getTradeDecision(setupGrade);
-  const reason = getReason(scan, setupGrade);
-
-  return {
-    ...scan,
-    setupGrade,
-    decision,
-    reason,
-  };
+export function getStrategy(grade: Grade) {
+  if (grade === "A") return "High-conviction momentum breakout";
+  if (grade === "B") return "Possible continuation setup";
+  if (grade === "C") return "Weak setup, needs confirmation";
+  return "Avoid - low-quality setup";
 }
