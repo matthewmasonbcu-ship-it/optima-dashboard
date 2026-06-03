@@ -1,5 +1,7 @@
 "use client";
 
+// ─── UI ONLY — all Supabase, calculations, and stat logic untouched ───────────
+
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 
@@ -9,7 +11,6 @@ type OptionTradeDetail = {
   stock_symbol?: string | null;
   trade_direction?: string | null;
   option_symbol?: string | null;
-
   expiration_date?: string | null;
   strike_price?: number | null;
   bid_price?: number | null;
@@ -18,14 +19,11 @@ type OptionTradeDetail = {
   contracts?: number | null;
   estimated_cost?: number | null;
   max_risk?: number | null;
-
   risk_guard_status?: string | null;
   risk_guard_reason?: string | null;
-
   option_status?: string | null;
   exit_option_price?: number | null;
   option_pnl?: number | null;
-
   contract_quality?: string | null;
   liquidity_score?: number | null;
   spread_percent?: number | null;
@@ -33,7 +31,6 @@ type OptionTradeDetail = {
   open_interest?: number | null;
   implied_volatility?: number | null;
   delta?: number | null;
-
   created_at?: string | null;
 };
 
@@ -49,184 +46,149 @@ type QualityStats = {
   winRate: number;
 };
 
+// ─── All helper functions — untouched ────────────────────────────────────────
 function formatMoney(value: number | null | undefined) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) {
-    return "$0.00";
-  }
-
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "$0.00";
   return `$${Number(value).toFixed(2)}`;
 }
 
 function formatPercent(value: number | null | undefined) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) {
-    return "0.0%";
-  }
-
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "0.0%";
   return `${Number(value).toFixed(1)}%`;
 }
 
 function getPnlClass(value: number | null | undefined) {
-  const safeValue = Number(value || 0);
-
-  if (safeValue > 0) return "text-emerald-300";
-  if (safeValue < 0) return "text-red-300";
-  return "text-slate-300";
+  const v = Number(value || 0);
+  if (v > 0) return "text-emerald-300";
+  if (v < 0) return "text-red-400";
+  return "text-slate-400";
 }
 
-function getQualityClass(quality: string | null | undefined) {
-  const safeQuality = quality || "N/A";
-
-  if (safeQuality === "IDEAL") {
-    return "border-emerald-500/50 bg-emerald-500/15 text-emerald-300";
-  }
-
-  if (safeQuality === "GOOD") {
-    return "border-blue-500/50 bg-blue-500/15 text-blue-300";
-  }
-
-  if (safeQuality === "ACCEPTABLE") {
-    return "border-yellow-500/50 bg-yellow-500/15 text-yellow-300";
-  }
-
-  if (safeQuality === "AVOID") {
-    return "border-red-500/50 bg-red-500/15 text-red-300";
-  }
-
-  return "border-slate-600 bg-slate-800 text-slate-300";
+function getPnlBar(value: number | null | undefined) {
+  const v = Number(value || 0);
+  if (v > 0) return "bg-emerald-500";
+  if (v < 0) return "bg-red-500";
+  return "bg-slate-600";
 }
 
-function getRiskGuardClass(status: string | null | undefined) {
-  const safeStatus = status || "UNKNOWN";
-
-  if (safeStatus === "APPROVED") {
-    return "border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
-  }
-
-  if (safeStatus === "CAUTION") {
-    return "border-yellow-500/40 bg-yellow-500/10 text-yellow-300";
-  }
-
-  if (safeStatus === "BLOCKED") {
-    return "border-red-500/40 bg-red-500/10 text-red-300";
-  }
-
-  return "border-slate-600 bg-slate-800 text-slate-300";
+function getQualityBar(quality: string | null | undefined) {
+  const q = quality || "N/A";
+  if (q === "IDEAL") return "bg-emerald-500";
+  if (q === "GOOD") return "bg-blue-500";
+  if (q === "ACCEPTABLE") return "bg-yellow-400";
+  if (q === "AVOID") return "bg-red-500";
+  return "bg-slate-600";
 }
 
-function StatCard({
-  label,
-  value,
-  subtext,
-  valueClass = "text-white",
-}: {
-  label: string;
-  value: string | number;
-  subtext?: string;
-  valueClass?: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-        {label}
-      </p>
-      <p className={`mt-2 text-2xl font-black ${valueClass}`}>{value}</p>
-      {subtext ? <p className="mt-1 text-xs text-slate-400">{subtext}</p> : null}
-    </div>
-  );
+function getQualityColor(quality: string | null | undefined) {
+  const q = quality || "N/A";
+  if (q === "IDEAL") return "text-emerald-300";
+  if (q === "GOOD") return "text-blue-300";
+  if (q === "ACCEPTABLE") return "text-yellow-300";
+  if (q === "AVOID") return "text-red-400";
+  return "text-slate-400";
 }
 
-function SmallStat({
-  label,
-  value,
-  valueClass = "text-white",
-}: {
-  label: string;
-  value: string | number;
-  valueClass?: string;
-}) {
-  return (
-    <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className={`mt-1 text-sm font-black ${valueClass}`}>{value}</p>
-    </div>
-  );
+function getQualityBadge(quality: string | null | undefined) {
+  const q = quality || "N/A";
+  if (q === "IDEAL") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
+  if (q === "GOOD") return "border-blue-500/40 bg-blue-500/10 text-blue-300";
+  if (q === "ACCEPTABLE") return "border-yellow-500/40 bg-yellow-500/10 text-yellow-300";
+  if (q === "AVOID") return "border-red-500/40 bg-red-500/10 text-red-400";
+  return "border-slate-700/60 bg-slate-800/60 text-slate-400";
 }
 
+function getRiskBar(status: string | null | undefined) {
+  const s = String(status || "").toUpperCase();
+  if (s === "APPROVED") return "bg-emerald-500";
+  if (s === "CAUTION") return "bg-yellow-400";
+  if (s === "BLOCKED") return "bg-red-500";
+  return "bg-slate-600";
+}
+
+function getRiskColor(status: string | null | undefined) {
+  const s = String(status || "").toUpperCase();
+  if (s === "APPROVED") return "text-emerald-300";
+  if (s === "CAUTION") return "text-yellow-300";
+  if (s === "BLOCKED") return "text-red-400";
+  return "text-slate-400";
+}
+
+function getRiskBadge(status: string | null | undefined) {
+  const s = String(status || "").toUpperCase();
+  if (s === "APPROVED") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
+  if (s === "CAUTION") return "border-yellow-500/40 bg-yellow-500/10 text-yellow-300";
+  if (s === "BLOCKED") return "border-red-500/40 bg-red-500/10 text-red-400";
+  return "border-slate-700/60 bg-slate-800/60 text-slate-400";
+}
+
+function winRateBar(rate: number) {
+  if (rate >= 60) return "bg-emerald-500";
+  if (rate >= 40) return "bg-yellow-400";
+  return "bg-red-500";
+}
+
+// ─── calculateQualityStats — untouched ───────────────────────────────────────
 function calculateQualityStats(details: OptionTradeDetail[]): QualityStats[] {
   const qualities = ["IDEAL", "GOOD", "ACCEPTABLE", "AVOID", "N/A"];
+  return qualities.map((quality) => {
+    const trades = details.filter((d) => (d.contract_quality || "N/A") === quality);
+    const closedTrades = trades.filter(
+      (d) => d.option_status === "closed" || d.option_pnl !== null || d.option_pnl !== undefined
+    );
+    const wins = closedTrades.filter((d) => Number(d.option_pnl || 0) > 0);
+    const losses = closedTrades.filter((d) => Number(d.option_pnl || 0) < 0);
+    const breakevens = closedTrades.filter((d) => Number(d.option_pnl || 0) === 0);
+    const totalPnl = closedTrades.reduce((s, d) => s + Number(d.option_pnl || 0), 0);
+    const averagePnl = closedTrades.length > 0 ? totalPnl / closedTrades.length : 0;
+    const winRate = closedTrades.length > 0 ? (wins.length / closedTrades.length) * 100 : 0;
+    return { quality, total: trades.length, closed: closedTrades.length, wins: wins.length, losses: losses.length, breakevens: breakevens.length, totalPnl, averagePnl, winRate };
+  }).filter((b) => b.total > 0);
+}
 
-  return qualities
-    .map((quality) => {
-      const trades = details.filter(
-        (detail) => (detail.contract_quality || "N/A") === quality
-      );
+// ─── MiniStat — matches suite ─────────────────────────────────────────────────
+function MiniStat({ label, value, valueClass = "text-slate-200" }: { label: string; value: string | number; valueClass?: string; }) {
+  return (
+    <div className="flex flex-col gap-0.5 rounded-lg border border-slate-800/80 bg-black/30 px-2.5 py-2">
+      <span className="font-mono text-[8px] font-bold uppercase tracking-[0.22em] text-slate-600">{label}</span>
+      <span className={`font-mono text-xs font-black ${valueClass}`}>{value}</span>
+    </div>
+  );
+}
 
-      const closedTrades = trades.filter(
-        (detail) =>
-          detail.option_status === "closed" ||
-          detail.option_pnl !== null ||
-          detail.option_pnl !== undefined
-      );
-
-      const wins = closedTrades.filter((detail) => Number(detail.option_pnl || 0) > 0);
-      const losses = closedTrades.filter((detail) => Number(detail.option_pnl || 0) < 0);
-      const breakevens = closedTrades.filter(
-        (detail) => Number(detail.option_pnl || 0) === 0
-      );
-
-      const totalPnl = closedTrades.reduce(
-        (sum, detail) => sum + Number(detail.option_pnl || 0),
-        0
-      );
-
-      const averagePnl =
-        closedTrades.length > 0 ? totalPnl / closedTrades.length : 0;
-
-      const winRate =
-        closedTrades.length > 0 ? (wins.length / closedTrades.length) * 100 : 0;
-
-      return {
-        quality,
-        total: trades.length,
-        closed: closedTrades.length,
-        wins: wins.length,
-        losses: losses.length,
-        breakevens: breakevens.length,
-        totalPnl,
-        averagePnl,
-        winRate,
-      };
-    })
-    .filter((bucket) => bucket.total > 0);
+// ─── SummaryCell — left-bar KPI card ─────────────────────────────────────────
+function SummaryCell({ label, value, sub, bar = "bg-slate-600", valueClass = "text-white" }: { label: string; value: string | number; sub?: string; bar?: string; valueClass?: string; }) {
+  return (
+    <div className="relative overflow-hidden rounded-xl border border-slate-700/60 bg-slate-900/60 p-4 ring-1 ring-slate-700/10">
+      <div className={`absolute inset-y-0 left-0 w-[3px] ${bar}`} />
+      <div className="pl-1">
+        <p className="font-mono text-[8px] font-bold uppercase tracking-[0.22em] text-slate-600">{label}</p>
+        <p className={`mt-1 font-mono text-2xl font-black ${valueClass}`}>{value}</p>
+        {sub && <p className="mt-0.5 font-mono text-[9px] text-slate-600">{sub}</p>}
+      </div>
+    </div>
+  );
 }
 
 export default function OptionPerformanceScoreboard() {
+  // ─── All state — untouched ────────────────────────────────────────────────
   const [details, setDetails] = useState<OptionTradeDetail[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("Loading option performance...");
 
-  useEffect(() => {
-    loadOptionDetails();
-  }, []);
+  useEffect(() => { loadOptionDetails(); }, []);
 
+  // ─── Supabase load — untouched ────────────────────────────────────────────
   async function loadOptionDetails() {
     setLoading(true);
     setMessage("Loading option performance...");
-
     try {
       const { data, error } = await supabase
         .from("option_trade_details")
         .select("*")
         .order("created_at", { ascending: false })
         .limit(100);
-
-      if (error) {
-        console.error("Option performance load failed:", error);
-        setMessage(`Option performance load failed: ${error.message}`);
-        setLoading(false);
-        return;
-      }
-
+      if (error) { console.error("Option performance load failed:", error); setMessage(`Option performance load failed: ${error.message}`); setLoading(false); return; }
       setDetails(data || []);
       setMessage(`Loaded ${(data || []).length} option trade detail records.`);
     } catch (error: any) {
@@ -237,481 +199,302 @@ export default function OptionPerformanceScoreboard() {
     }
   }
 
+  // ─── All stat calculations — untouched ───────────────────────────────────
   const stats = useMemo(() => {
     const totalTrades = details.length;
-
-    const openTrades = details.filter(
-      (detail) => (detail.option_status || "open") !== "closed"
-    );
-
-    const closedTrades = details.filter(
-      (detail) =>
-        detail.option_status === "closed" ||
-        detail.option_pnl !== null ||
-        detail.option_pnl !== undefined
-    );
-
-    const wins = closedTrades.filter((detail) => Number(detail.option_pnl || 0) > 0);
-    const losses = closedTrades.filter((detail) => Number(detail.option_pnl || 0) < 0);
-    const breakevens = closedTrades.filter(
-      (detail) => Number(detail.option_pnl || 0) === 0
-    );
-
-    const realizedPnl = closedTrades.reduce(
-      (sum, detail) => sum + Number(detail.option_pnl || 0),
-      0
-    );
-
-    const totalEstimatedCost = details.reduce(
-      (sum, detail) => sum + Number(detail.estimated_cost || 0),
-      0
-    );
-
-    const totalMaxRisk = details.reduce(
-      (sum, detail) => sum + Number(detail.max_risk || 0),
-      0
-    );
-
-    const openRisk = openTrades.reduce(
-      (sum, detail) => sum + Number(detail.max_risk || 0),
-      0
-    );
-
-    const averageWinner =
-      wins.length > 0
-        ? wins.reduce((sum, detail) => sum + Number(detail.option_pnl || 0), 0) /
-          wins.length
-        : 0;
-
-    const averageLoser =
-      losses.length > 0
-        ? losses.reduce((sum, detail) => sum + Number(detail.option_pnl || 0), 0) /
-          losses.length
-        : 0;
-
-    const bestTrade =
-      closedTrades.length > 0
-        ? [...closedTrades].sort(
-            (a, b) => Number(b.option_pnl || 0) - Number(a.option_pnl || 0)
-          )[0]
-        : null;
-
-    const worstTrade =
-      closedTrades.length > 0
-        ? [...closedTrades].sort(
-            (a, b) => Number(a.option_pnl || 0) - Number(b.option_pnl || 0)
-          )[0]
-        : null;
-
-    const optionWinRate =
-      closedTrades.length > 0 ? (wins.length / closedTrades.length) * 100 : 0;
-
-    const averageOptionPnl =
-      closedTrades.length > 0 ? realizedPnl / closedTrades.length : 0;
-
-    const approvedTrades = details.filter(
-      (detail) => detail.risk_guard_status === "APPROVED"
-    );
-
-    const cautionTrades = details.filter(
-      (detail) => detail.risk_guard_status === "CAUTION"
-    );
-
-    const blockedTrades = details.filter(
-      (detail) => detail.risk_guard_status === "BLOCKED"
-    );
-
-    const riskGuardQuality =
-      details.length > 0 ? (approvedTrades.length / details.length) * 100 : 0;
-
-    const avgLiquidity =
-      details.length > 0
-        ? details.reduce((sum, detail) => sum + Number(detail.liquidity_score || 0), 0) /
-          details.length
-        : 0;
-
-    const avgSpread =
-      details.length > 0
-        ? details.reduce((sum, detail) => sum + Number(detail.spread_percent || 0), 0) /
-          details.length
-        : 0;
-
-    const winningTradesWithSpread = wins.filter(
-      (detail) => detail.spread_percent !== null && detail.spread_percent !== undefined
-    );
-
-    const averageSpreadOnWinners =
-      winningTradesWithSpread.length > 0
-        ? winningTradesWithSpread.reduce(
-            (sum, detail) => sum + Number(detail.spread_percent || 0),
-            0
-          ) / winningTradesWithSpread.length
-        : 0;
-
+    const openTrades = details.filter((d) => (d.option_status || "open") !== "closed");
+    const closedTrades = details.filter((d) => d.option_status === "closed" || d.option_pnl !== null || d.option_pnl !== undefined);
+    const wins = closedTrades.filter((d) => Number(d.option_pnl || 0) > 0);
+    const losses = closedTrades.filter((d) => Number(d.option_pnl || 0) < 0);
+    const breakevens = closedTrades.filter((d) => Number(d.option_pnl || 0) === 0);
+    const realizedPnl = closedTrades.reduce((s, d) => s + Number(d.option_pnl || 0), 0);
+    const totalEstimatedCost = details.reduce((s, d) => s + Number(d.estimated_cost || 0), 0);
+    const totalMaxRisk = details.reduce((s, d) => s + Number(d.max_risk || 0), 0);
+    const openRisk = openTrades.reduce((s, d) => s + Number(d.max_risk || 0), 0);
+    const averageWinner = wins.length > 0 ? wins.reduce((s, d) => s + Number(d.option_pnl || 0), 0) / wins.length : 0;
+    const averageLoser = losses.length > 0 ? losses.reduce((s, d) => s + Number(d.option_pnl || 0), 0) / losses.length : 0;
+    const bestTrade = closedTrades.length > 0 ? [...closedTrades].sort((a, b) => Number(b.option_pnl || 0) - Number(a.option_pnl || 0))[0] : null;
+    const worstTrade = closedTrades.length > 0 ? [...closedTrades].sort((a, b) => Number(a.option_pnl || 0) - Number(b.option_pnl || 0))[0] : null;
+    const optionWinRate = closedTrades.length > 0 ? (wins.length / closedTrades.length) * 100 : 0;
+    const averageOptionPnl = closedTrades.length > 0 ? realizedPnl / closedTrades.length : 0;
+    const approvedTrades = details.filter((d) => d.risk_guard_status === "APPROVED");
+    const cautionTrades = details.filter((d) => d.risk_guard_status === "CAUTION");
+    const blockedTrades = details.filter((d) => d.risk_guard_status === "BLOCKED");
+    const riskGuardQuality = details.length > 0 ? (approvedTrades.length / details.length) * 100 : 0;
+    const avgLiquidity = details.length > 0 ? details.reduce((s, d) => s + Number(d.liquidity_score || 0), 0) / details.length : 0;
+    const avgSpread = details.length > 0 ? details.reduce((s, d) => s + Number(d.spread_percent || 0), 0) / details.length : 0;
+    const winningTradesWithSpread = wins.filter((d) => d.spread_percent !== null && d.spread_percent !== undefined);
+    const averageSpreadOnWinners = winningTradesWithSpread.length > 0 ? winningTradesWithSpread.reduce((s, d) => s + Number(d.spread_percent || 0), 0) / winningTradesWithSpread.length : 0;
     const qualityStats = calculateQualityStats(details);
+    const bestQualityBucket = qualityStats.length > 0 ? [...qualityStats].filter((b) => b.closed > 0).sort((a, b) => b.averagePnl - a.averagePnl)[0] || null : null;
+    const worstQualityBucket = qualityStats.length > 0 ? [...qualityStats].filter((b) => b.closed > 0).sort((a, b) => a.averagePnl - b.averagePnl)[0] || null : null;
+    const idealCount = details.filter((d) => d.contract_quality === "IDEAL").length;
+    const goodCount = details.filter((d) => d.contract_quality === "GOOD").length;
+    const acceptableCount = details.filter((d) => d.contract_quality === "ACCEPTABLE").length;
+    const avoidCount = details.filter((d) => d.contract_quality === "AVOID").length;
 
-    const bestQualityBucket =
-      qualityStats.length > 0
-        ? [...qualityStats]
-            .filter((bucket) => bucket.closed > 0)
-            .sort((a, b) => b.averagePnl - a.averagePnl)[0] || null
-        : null;
-
-    const worstQualityBucket =
-      qualityStats.length > 0
-        ? [...qualityStats]
-            .filter((bucket) => bucket.closed > 0)
-            .sort((a, b) => a.averagePnl - b.averagePnl)[0] || null
-        : null;
-
-    const idealCount = details.filter((detail) => detail.contract_quality === "IDEAL").length;
-    const goodCount = details.filter((detail) => detail.contract_quality === "GOOD").length;
-    const acceptableCount = details.filter(
-      (detail) => detail.contract_quality === "ACCEPTABLE"
-    ).length;
-    const avoidCount = details.filter((detail) => detail.contract_quality === "AVOID").length;
-
-    return {
-      totalTrades,
-      openTrades: openTrades.length,
-      closedTrades: closedTrades.length,
-      wins: wins.length,
-      losses: losses.length,
-      breakevens: breakevens.length,
-      realizedPnl,
-      totalEstimatedCost,
-      totalMaxRisk,
-      openRisk,
-      averageWinner,
-      averageLoser,
-      bestTrade,
-      worstTrade,
-      optionWinRate,
-      averageOptionPnl,
-      approvedTrades: approvedTrades.length,
-      cautionTrades: cautionTrades.length,
-      blockedTrades: blockedTrades.length,
-      riskGuardQuality,
-      avgLiquidity,
-      avgSpread,
-      averageSpreadOnWinners,
-      qualityStats,
-      bestQualityBucket,
-      worstQualityBucket,
-      idealCount,
-      goodCount,
-      acceptableCount,
-      avoidCount,
-    };
+    return { totalTrades, openTrades: openTrades.length, closedTrades: closedTrades.length, wins: wins.length, losses: losses.length, breakevens: breakevens.length, realizedPnl, totalEstimatedCost, totalMaxRisk, openRisk, averageWinner, averageLoser, bestTrade, worstTrade, optionWinRate, averageOptionPnl, approvedTrades: approvedTrades.length, cautionTrades: cautionTrades.length, blockedTrades: blockedTrades.length, riskGuardQuality, avgLiquidity, avgSpread, averageSpreadOnWinners, qualityStats, bestQualityBucket, worstQualityBucket, idealCount, goodCount, acceptableCount, avoidCount };
   }, [details]);
 
   return (
-    <section className="rounded-3xl border border-slate-800 bg-slate-950/80 p-5 shadow-2xl shadow-black/30">
-      <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">
-            Option Performance Scoreboard
-          </p>
+    <section className="relative overflow-hidden rounded-2xl border border-slate-700/50 bg-slate-950 shadow-2xl shadow-black/60">
 
-          <h2 className="mt-1 text-2xl font-bold text-white">
-            Contract quality feedback system
-          </h2>
+      {/* ── Background layers ─────────────────────────────────────────── */}
+      <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(ellipse 60% 40% at 5% 0%, rgba(6,182,212,0.04) 0%, transparent 55%), radial-gradient(ellipse 50% 50% at 95% 100%, rgba(37,99,235,0.04) 0%, transparent 55%)" }} />
+      <div className="pointer-events-none absolute inset-0 opacity-[0.02]" style={{ backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.8) 2px, rgba(255,255,255,0.8) 3px)" }} />
+      <div className="absolute inset-x-0 top-0 h-[2px]" style={{ background: "linear-gradient(90deg, transparent 0%, #06b6d4 30%, #3b82f6 70%, transparent 100%)" }} />
 
-          <p className="mt-1 text-sm text-slate-400">
-            Tracks true option P/L, Risk Guard quality, and performance by contract quality bucket.
-          </p>
-        </div>
+      <div className="relative p-5">
 
-        <button
-          onClick={loadOptionDetails}
-          disabled={loading}
-          className="rounded-2xl bg-slate-800 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {loading ? "Refreshing..." : "Refresh Scoreboard"}
-        </button>
-      </div>
-
-      <div className="mb-5 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-        <p className="text-sm font-semibold text-slate-300">{message}</p>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-4">
-        <StatCard
-          label="Realized Option P/L"
-          value={formatMoney(stats.realizedPnl)}
-          valueClass={getPnlClass(stats.realizedPnl)}
-          subtext={`${stats.closedTrades} closed option trades`}
-        />
-
-        <StatCard
-          label="Option Win Rate"
-          value={formatPercent(stats.optionWinRate)}
-          valueClass={stats.optionWinRate >= 50 ? "text-emerald-300" : "text-yellow-300"}
-          subtext={`${stats.wins}W / ${stats.losses}L / ${stats.breakevens}BE`}
-        />
-
-        <StatCard
-          label="Open Option Risk"
-          value={formatMoney(stats.openRisk)}
-          valueClass="text-red-300"
-          subtext={`${stats.openTrades} open option trades`}
-        />
-
-        <StatCard
-          label="Avg Option P/L"
-          value={formatMoney(stats.averageOptionPnl)}
-          valueClass={getPnlClass(stats.averageOptionPnl)}
-          subtext="Average closed trade result"
-        />
-      </div>
-
-      <div className="mt-3 grid gap-3 md:grid-cols-4">
-        <StatCard
-          label="Avg Winner"
-          value={formatMoney(stats.averageWinner)}
-          valueClass="text-emerald-300"
-          subtext={`${stats.wins} winning option trades`}
-        />
-
-        <StatCard
-          label="Avg Loser"
-          value={formatMoney(stats.averageLoser)}
-          valueClass="text-red-300"
-          subtext={`${stats.losses} losing option trades`}
-        />
-
-        <StatCard
-          label="Best Trade"
-          value={stats.bestTrade ? formatMoney(stats.bestTrade.option_pnl) : "$0.00"}
-          valueClass="text-emerald-300"
-          subtext={stats.bestTrade?.stock_symbol || "No closed winner yet"}
-        />
-
-        <StatCard
-          label="Worst Trade"
-          value={stats.worstTrade ? formatMoney(stats.worstTrade.option_pnl) : "$0.00"}
-          valueClass="text-red-300"
-          subtext={stats.worstTrade?.stock_symbol || "No closed loser yet"}
-        />
-      </div>
-
-      <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-        <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        {/* ── HEADER ────────────────────────────────────────────────────── */}
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-              Contract Quality Mix
+            <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-cyan-600">
+              OPTIMA-SYS · Analytics
             </p>
-            <h3 className="mt-1 text-lg font-black text-white">
-              What kind of contracts are being saved?
-            </h3>
+            <h2 className="text-2xl font-black tracking-tight text-white">
+              Option Performance{" "}
+              <span style={{ background: "linear-gradient(135deg, #06b6d4 0%, #60a5fa 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+                Scoreboard
+              </span>
+            </h2>
+            <p className="mt-1 font-mono text-[10px] leading-5 text-slate-500">
+              True option P/L · Risk Guard quality · Performance by contract quality bucket
+            </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <span className={`rounded-full border px-3 py-1 text-xs font-black ${getQualityClass("IDEAL")}`}>
-              IDEAL {stats.idealCount}
-            </span>
-            <span className={`rounded-full border px-3 py-1 text-xs font-black ${getQualityClass("GOOD")}`}>
-              GOOD {stats.goodCount}
-            </span>
-            <span className={`rounded-full border px-3 py-1 text-xs font-black ${getQualityClass("ACCEPTABLE")}`}>
-              ACCEPTABLE {stats.acceptableCount}
-            </span>
-            <span className={`rounded-full border px-3 py-1 text-xs font-black ${getQualityClass("AVOID")}`}>
-              AVOID {stats.avoidCount}
-            </span>
+          <button
+            onClick={loadOptionDetails}
+            disabled={loading}
+            className="group relative shrink-0 overflow-hidden self-start rounded-lg border border-slate-700/80 bg-slate-900/80 px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-cyan-500/40 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <span className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100" style={{ background: "linear-gradient(90deg, transparent, #06b6d4, transparent)" }} />
+            {loading ? (
+              <span className="flex items-center gap-2"><span className="h-1.5 w-1.5 animate-ping rounded-full bg-cyan-400" />Loading...</span>
+            ) : "⟳ Refresh"}
+          </button>
+        </div>
+
+        {/* ── STATUS MESSAGE ────────────────────────────────────────────── */}
+        <div className="relative mb-5 overflow-hidden rounded-lg border border-slate-800 bg-black/30">
+          <div className="absolute inset-y-0 left-0 w-[2px] bg-cyan-500" />
+          <p className="px-4 py-2.5 pl-5 font-mono text-[9px] leading-5 text-slate-500">{message}</p>
+        </div>
+
+        {/* ── PRIMARY KPI ROW ───────────────────────────────────────────── */}
+        <p className="mb-2 font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-600">Key Metrics</p>
+        <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+          <SummaryCell
+            label="Realized Option P/L"
+            value={formatMoney(stats.realizedPnl)}
+            sub={`${stats.closedTrades} closed trades`}
+            bar={getPnlBar(stats.realizedPnl)}
+            valueClass={getPnlClass(stats.realizedPnl)}
+          />
+          <SummaryCell
+            label="Option Win Rate"
+            value={formatPercent(stats.optionWinRate)}
+            sub={`${stats.wins}W · ${stats.losses}L · ${stats.breakevens}BE`}
+            bar={winRateBar(stats.optionWinRate)}
+            valueClass={stats.optionWinRate >= 50 ? "text-emerald-300" : "text-yellow-300"}
+          />
+          <SummaryCell
+            label="Open Option Risk"
+            value={formatMoney(stats.openRisk)}
+            sub={`${stats.openTrades} open trades`}
+            bar="bg-red-500"
+            valueClass="text-red-400"
+          />
+          <SummaryCell
+            label="Avg Option P/L"
+            value={formatMoney(stats.averageOptionPnl)}
+            sub="Per closed trade"
+            bar={getPnlBar(stats.averageOptionPnl)}
+            valueClass={getPnlClass(stats.averageOptionPnl)}
+          />
+        </div>
+
+        {/* ── WINNER / LOSER ROW ────────────────────────────────────────── */}
+        <p className="mb-2 font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-600">Trade Extremes</p>
+        <div className="mb-5 grid grid-cols-2 gap-2 md:grid-cols-4">
+          <SummaryCell
+            label="Avg Winner"
+            value={formatMoney(stats.averageWinner)}
+            sub={`${stats.wins} winning trades`}
+            bar="bg-emerald-500"
+            valueClass="text-emerald-300"
+          />
+          <SummaryCell
+            label="Avg Loser"
+            value={formatMoney(stats.averageLoser)}
+            sub={`${stats.losses} losing trades`}
+            bar="bg-red-500"
+            valueClass="text-red-400"
+          />
+          <SummaryCell
+            label="Best Trade"
+            value={stats.bestTrade ? formatMoney(stats.bestTrade.option_pnl) : "$0.00"}
+            sub={stats.bestTrade?.stock_symbol || "No closed winner"}
+            bar="bg-emerald-500"
+            valueClass="text-emerald-300"
+          />
+          <SummaryCell
+            label="Worst Trade"
+            value={stats.worstTrade ? formatMoney(stats.worstTrade.option_pnl) : "$0.00"}
+            sub={stats.worstTrade?.stock_symbol || "No closed loser"}
+            bar="bg-red-500"
+            valueClass="text-red-400"
+          />
+        </div>
+
+        {/* ── CONTRACT QUALITY MIX ──────────────────────────────────────── */}
+        <div className="relative mb-5 overflow-hidden rounded-xl border border-slate-700/60 bg-slate-900/60 ring-1 ring-slate-700/10">
+          <div className="absolute inset-y-0 left-0 w-[3px] bg-blue-500" />
+          <div className="px-5 py-4 pl-6">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-600">Contract Quality Mix</p>
+                <p className="mt-0.5 font-mono text-sm font-black text-white">What kind of contracts are being saved?</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { q: "IDEAL", count: stats.idealCount },
+                  { q: "GOOD", count: stats.goodCount },
+                  { q: "ACCEPTABLE", count: stats.acceptableCount },
+                  { q: "AVOID", count: stats.avoidCount },
+                ].map(({ q, count }) => (
+                  <span key={q} className={`rounded border px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] ${getQualityBadge(q)}`}>
+                    {q} · {count}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1.5 md:grid-cols-4">
+              <MiniStat
+                label="Avg Liquidity"
+                value={stats.avgLiquidity.toFixed(1)}
+                valueClass={stats.avgLiquidity >= 80 ? "text-emerald-300" : stats.avgLiquidity >= 60 ? "text-yellow-300" : "text-red-400"}
+              />
+              <MiniStat
+                label="Avg Spread"
+                value={formatPercent(stats.avgSpread)}
+                valueClass={stats.avgSpread <= 10 ? "text-emerald-300" : stats.avgSpread <= 20 ? "text-yellow-300" : "text-red-400"}
+              />
+              <MiniStat
+                label="Spread on Winners"
+                value={formatPercent(stats.averageSpreadOnWinners)}
+                valueClass={stats.averageSpreadOnWinners <= 10 ? "text-emerald-300" : stats.averageSpreadOnWinners <= 20 ? "text-yellow-300" : "text-red-400"}
+              />
+              <MiniStat
+                label="Risk Guard Quality"
+                value={formatPercent(stats.riskGuardQuality)}
+                valueClass={stats.riskGuardQuality >= 80 ? "text-emerald-300" : stats.riskGuardQuality >= 50 ? "text-yellow-300" : "text-red-400"}
+              />
+            </div>
           </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-4">
-          <SmallStat
-            label="Average Liquidity"
-            value={stats.avgLiquidity.toFixed(1)}
-            valueClass={
-              stats.avgLiquidity >= 80
-                ? "text-emerald-300"
-                : stats.avgLiquidity >= 60
-                ? "text-yellow-300"
-                : "text-red-300"
-            }
-          />
-
-          <SmallStat
-            label="Average Spread"
-            value={formatPercent(stats.avgSpread)}
-            valueClass={
-              stats.avgSpread <= 10
-                ? "text-emerald-300"
-                : stats.avgSpread <= 20
-                ? "text-yellow-300"
-                : "text-red-300"
-            }
-          />
-
-          <SmallStat
-            label="Avg Spread on Winners"
-            value={formatPercent(stats.averageSpreadOnWinners)}
-            valueClass={
-              stats.averageSpreadOnWinners <= 10
-                ? "text-emerald-300"
-                : stats.averageSpreadOnWinners <= 20
-                ? "text-yellow-300"
-                : "text-red-300"
-            }
-          />
-
-          <SmallStat
-            label="Risk Guard Quality"
-            value={formatPercent(stats.riskGuardQuality)}
-            valueClass={
-              stats.riskGuardQuality >= 80
-                ? "text-emerald-300"
-                : stats.riskGuardQuality >= 50
-                ? "text-yellow-300"
-                : "text-red-300"
-            }
-          />
-        </div>
-      </div>
-
-      <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-        <div className="mb-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-            P/L by Contract Quality
-          </p>
-          <h3 className="mt-1 text-lg font-black text-white">
-            Which quality bucket is performing best?
-          </h3>
-        </div>
-
+        {/* ── P/L BY QUALITY BUCKET ─────────────────────────────────────── */}
+        <p className="mb-2 font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-600">P/L by Contract Quality</p>
         {stats.qualityStats.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/70 p-6 text-center">
-            <p className="text-sm font-bold text-white">No quality data yet</p>
-            <p className="mt-1 text-sm text-slate-400">
-              Save option trades with contract quality fields to populate this section.
-            </p>
+          <div className="mb-5 flex flex-col items-center justify-center rounded-xl border border-slate-800 bg-black/30 py-10">
+            <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-600">No Data</p>
+            <p className="mt-1 font-mono text-sm font-black text-slate-500">No quality data yet</p>
+            <p className="mt-0.5 font-mono text-[9px] text-slate-600">Save option trades with contract quality fields.</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="mb-5 space-y-2">
             {stats.qualityStats.map((bucket) => (
-              <div
-                key={bucket.quality}
-                className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
-              >
-                <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                  <span
-                    className={`w-fit rounded-full border px-3 py-1 text-xs font-black ${getQualityClass(
-                      bucket.quality
-                    )}`}
-                  >
-                    {bucket.quality}
-                  </span>
-
-                  <p className={`text-xl font-black ${getPnlClass(bucket.totalPnl)}`}>
-                    {formatMoney(bucket.totalPnl)}
-                  </p>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-5">
-                  <SmallStat label="Total" value={bucket.total} />
-                  <SmallStat label="Closed" value={bucket.closed} />
-                  <SmallStat
-                    label="Win Rate"
-                    value={formatPercent(bucket.winRate)}
-                    valueClass={
-                      bucket.winRate >= 50 ? "text-emerald-300" : "text-yellow-300"
-                    }
-                  />
-                  <SmallStat
-                    label="Avg P/L"
-                    value={formatMoney(bucket.averagePnl)}
-                    valueClass={getPnlClass(bucket.averagePnl)}
-                  />
-                  <SmallStat
-                    label="Record"
-                    value={`${bucket.wins}W / ${bucket.losses}L / ${bucket.breakevens}BE`}
-                  />
+              <div key={bucket.quality} className="relative overflow-hidden rounded-xl border border-slate-700/60 bg-slate-900/60 ring-1 ring-slate-700/10">
+                <div className={`absolute inset-y-0 left-0 w-[3px] ${getQualityBar(bucket.quality)}`} />
+                <div className="px-5 py-3 pl-6">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`rounded border px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] ${getQualityBadge(bucket.quality)}`}>
+                        {bucket.quality}
+                      </span>
+                      {/* Win rate bar */}
+                      <div className="flex items-center gap-1.5">
+                        <div className="relative h-1 w-16 overflow-hidden rounded-full bg-slate-800">
+                          <div className={`h-full rounded-full ${winRateBar(bucket.winRate)}`} style={{ width: `${Math.min(bucket.winRate, 100)}%` }} />
+                        </div>
+                        <span className={`font-mono text-[9px] font-bold ${bucket.winRate >= 50 ? "text-emerald-300" : "text-yellow-300"}`}>
+                          {formatPercent(bucket.winRate)}
+                        </span>
+                      </div>
+                    </div>
+                    <span className={`font-mono text-lg font-black ${getPnlClass(bucket.totalPnl)}`}>
+                      {formatMoney(bucket.totalPnl)}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    <MiniStat label="Total" value={bucket.total} />
+                    <MiniStat label="Closed" value={bucket.closed} />
+                    <MiniStat label="Win Rate" value={formatPercent(bucket.winRate)} valueClass={bucket.winRate >= 50 ? "text-emerald-300" : "text-yellow-300"} />
+                    <MiniStat label="Avg P/L" value={formatMoney(bucket.averagePnl)} valueClass={getPnlClass(bucket.averagePnl)} />
+                    <MiniStat label="W · L · BE" value={`${bucket.wins} · ${bucket.losses} · ${bucket.breakevens}`} />
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         )}
-      </div>
 
-      <div className="mt-5 grid gap-3 md:grid-cols-2">
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-            Best Quality Bucket
-          </p>
-          <p
-            className={`mt-2 text-2xl font-black ${
-              stats.bestQualityBucket
-                ? getPnlClass(stats.bestQualityBucket.averagePnl)
-                : "text-slate-300"
-            }`}
-          >
-            {stats.bestQualityBucket?.quality || "N/A"}
-          </p>
-          <p className="mt-1 text-sm text-slate-400">
-            Avg P/L:{" "}
-            {stats.bestQualityBucket
-              ? formatMoney(stats.bestQualityBucket.averagePnl)
-              : "$0.00"}
-          </p>
+        {/* ── BEST / WORST QUALITY BUCKET ───────────────────────────────── */}
+        <div className="mb-5 grid gap-2 md:grid-cols-2">
+          <div className="relative overflow-hidden rounded-xl border border-slate-700/60 bg-slate-900/60 ring-1 ring-slate-700/10">
+            <div className={`absolute inset-y-0 left-0 w-[3px] ${stats.bestQualityBucket ? getQualityBar(stats.bestQualityBucket.quality) : "bg-slate-600"}`} />
+            <div className="px-5 py-4 pl-6">
+              <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-600">Best Quality Bucket</p>
+              <p className={`mt-1 font-mono text-2xl font-black ${stats.bestQualityBucket ? getQualityColor(stats.bestQualityBucket.quality) : "text-slate-500"}`}>
+                {stats.bestQualityBucket?.quality || "N/A"}
+              </p>
+              <p className="mt-0.5 font-mono text-[9px] text-slate-600">
+                Avg P/L · {stats.bestQualityBucket ? formatMoney(stats.bestQualityBucket.averagePnl) : "$0.00"}
+              </p>
+            </div>
+          </div>
+          <div className="relative overflow-hidden rounded-xl border border-slate-700/60 bg-slate-900/60 ring-1 ring-slate-700/10">
+            <div className={`absolute inset-y-0 left-0 w-[3px] ${stats.worstQualityBucket ? getQualityBar(stats.worstQualityBucket.quality) : "bg-slate-600"}`} />
+            <div className="px-5 py-4 pl-6">
+              <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-600">Worst Quality Bucket</p>
+              <p className={`mt-1 font-mono text-2xl font-black ${stats.worstQualityBucket ? getQualityColor(stats.worstQualityBucket.quality) : "text-slate-500"}`}>
+                {stats.worstQualityBucket?.quality || "N/A"}
+              </p>
+              <p className="mt-0.5 font-mono text-[9px] text-slate-600">
+                Avg P/L · {stats.worstQualityBucket ? formatMoney(stats.worstQualityBucket.averagePnl) : "$0.00"}
+              </p>
+            </div>
+          </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-            Worst Quality Bucket
-          </p>
-          <p
-            className={`mt-2 text-2xl font-black ${
-              stats.worstQualityBucket
-                ? getPnlClass(stats.worstQualityBucket.averagePnl)
-                : "text-slate-300"
-            }`}
-          >
-            {stats.worstQualityBucket?.quality || "N/A"}
-          </p>
-          <p className="mt-1 text-sm text-slate-400">
-            Avg P/L:{" "}
-            {stats.worstQualityBucket
-              ? formatMoney(stats.worstQualityBucket.averagePnl)
-              : "$0.00"}
-          </p>
+        {/* ── RISK GUARD BREAKDOWN ──────────────────────────────────────── */}
+        <div className="relative overflow-hidden rounded-xl border border-slate-700/60 bg-slate-900/60 ring-1 ring-slate-700/10">
+          <div className="absolute inset-y-0 left-0 w-[3px] bg-blue-500" />
+          <div className="px-5 py-4 pl-6">
+            <p className="mb-3 font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-600">Risk Guard Breakdown</p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { status: "APPROVED", count: stats.approvedTrades },
+                { status: "CAUTION", count: stats.cautionTrades },
+                { status: "BLOCKED", count: stats.blockedTrades },
+              ].map(({ status, count }) => (
+                <div key={status} className={`relative overflow-hidden rounded-lg border px-4 py-2 ${getRiskBadge(status)}`}>
+                  <div className={`absolute inset-y-0 left-0 w-[2px] ${getRiskBar(status)}`} />
+                  <span className={`pl-1 font-mono text-[9px] font-bold uppercase tracking-[0.18em] ${getRiskColor(status)}`}>
+                    {status} · {count}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
+
       </div>
 
-      <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-          Risk Guard Breakdown
-        </p>
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          <span
-            className={`rounded-full border px-3 py-1 text-xs font-black ${getRiskGuardClass(
-              "APPROVED"
-            )}`}
-          >
-            APPROVED {stats.approvedTrades}
-          </span>
-
-          <span
-            className={`rounded-full border px-3 py-1 text-xs font-black ${getRiskGuardClass(
-              "CAUTION"
-            )}`}
-          >
-            CAUTION {stats.cautionTrades}
-          </span>
-
-          <span
-            className={`rounded-full border px-3 py-1 text-xs font-black ${getRiskGuardClass(
-              "BLOCKED"
-            )}`}
-          >
-            BLOCKED {stats.blockedTrades}
-          </span>
-        </div>
-      </div>
+      {/* Bottom neon edge */}
+      <div className="absolute inset-x-0 bottom-0 h-px opacity-20" style={{ background: "linear-gradient(90deg, transparent, #3b82f6, #06b6d4, transparent)" }} />
     </section>
   );
 }

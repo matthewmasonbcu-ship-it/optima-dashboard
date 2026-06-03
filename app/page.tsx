@@ -14,6 +14,7 @@ import AutoPositionMonitor from "../components/AutoPositionMonitor";
 import BrokerStatusCard from "../components/BrokerStatusCard";
 import SystemReadinessCard from "../components/SystemReadinessCard";
 import PaperTradingControlCenter from "../components/PaperTradingControlCenter";
+import TradingDashboardHeader from "../components/TradingDashboardHeader";
 
 type MarketCondition = "BULLISH" | "BEARISH" | "CHOPPY" | "UNKNOWN";
 type TradeDirection = "CALL" | "PUT" | "NO TRADE";
@@ -979,7 +980,7 @@ export default function Home() {
           <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div>
               <div className="inline-flex rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-black uppercase tracking-[0.2em] text-blue-300">
-                Road to Funded Account
+                 <TradingDashboardHeader />
               </div>
 
               <h1 className="mt-3 text-3xl font-black tracking-tight md:text-5xl">
@@ -1058,7 +1059,9 @@ export default function Home() {
           </div>
         </header>
 
-        <BrokerStatusCard />
+        <TradingDashboardHeader />
+
+<BrokerStatusCard />
 
 <SystemReadinessCard />
 

@@ -1,5 +1,7 @@
 "use client";
 
+// ─── UI ONLY — all Supabase, filter, close, and P/L logic untouched ──────────
+
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 
@@ -54,14 +56,12 @@ type TrackerSummary = {
   totalTrades: number;
   cleanTrades: number;
   overrideTrades: number;
-
   openStockTrades: number;
   closedStockTrades: number;
   stockWins: number;
   stockLosses: number;
   stockBreakEvens: number;
   stockPnl: number;
-
   optionTrades: number;
   openOptionTrades: number;
   closedOptionTrades: number;
@@ -69,40 +69,29 @@ type TrackerSummary = {
   optionLosses: number;
   optionBreakEvens: number;
   optionPnl: number;
-
   cleanOptionTrades: number;
   cleanClosedOptionTrades: number;
   cleanOptionWins: number;
   cleanOptionLosses: number;
   cleanOptionBreakEvens: number;
   cleanOptionPnl: number;
-
   overrideOptionTrades: number;
   overrideClosedOptionTrades: number;
   overrideOptionPnl: number;
-
   callCount: number;
   putCount: number;
   totalEstimatedCost: number;
   totalMaxRisk: number;
 };
 
+// ─── All helper functions — untouched ────────────────────────────────────────
 function formatMoney(value: number | null | undefined) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) {
-    return "$0.00";
-  }
-
-  return Number(value).toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-  });
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "$0.00";
+  return Number(value).toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
 function formatNumber(value: number | null | undefined, decimals = 2) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) {
-    return "-";
-  }
-
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
   return Number(value).toFixed(decimals);
 }
 
@@ -115,19 +104,14 @@ function getTradeQuantity(trade: PaperTrade) {
 }
 
 function isOverrideTrade(trade: PaperTrade, optionDetail?: OptionTradeDetail) {
-  return (
-    trade.strategy === "manual_override_test" ||
-    optionDetail?.override_used === true
-  );
+  return trade.strategy === "manual_override_test" || optionDetail?.override_used === true;
 }
 
 function getStockPnl(trade: PaperTrade) {
   const entry = Number(trade.entry_price || 0);
   const exit = Number(trade.exit_price || 0);
   const quantity = getTradeQuantity(trade);
-
   if (!entry || !exit) return 0;
-
   return (exit - entry) * quantity;
 }
 
@@ -136,110 +120,147 @@ function getOptionExitPrice(optionDetail: OptionTradeDetail) {
 }
 
 function getOptionPnl(optionDetail: OptionTradeDetail) {
-  if (
-    optionDetail.option_pnl !== null &&
-    optionDetail.option_pnl !== undefined &&
-    !Number.isNaN(Number(optionDetail.option_pnl))
-  ) {
+  if (optionDetail.option_pnl !== null && optionDetail.option_pnl !== undefined && !Number.isNaN(Number(optionDetail.option_pnl))) {
     return Number(optionDetail.option_pnl);
   }
-
   const entryMid = Number(optionDetail.mid_price || 0);
   const exitPrice = getOptionExitPrice(optionDetail);
   const contracts = Number(optionDetail.contracts || 1);
-
   if (!entryMid || !exitPrice) return 0;
-
   return (exitPrice - entryMid) * 100 * contracts;
 }
 
 function getOptionStatus(optionDetail: OptionTradeDetail) {
   if (optionDetail.option_status) return optionDetail.option_status;
-
   const exitPrice = getOptionExitPrice(optionDetail);
-
   return exitPrice > 0 ? "closed" : "open";
 }
 
-function getStatusClass(status: string | null | undefined) {
-  const cleanStatus = String(status || "").toUpperCase();
-
-  if (cleanStatus === "APPROVED") {
-    return "border-emerald-400 bg-emerald-500/10 text-emerald-300";
-  }
-
-  if (cleanStatus === "CAUTION") {
-    return "border-yellow-400 bg-yellow-500/10 text-yellow-300";
-  }
-
-  if (cleanStatus === "BLOCKED") {
-    return "border-red-400 bg-red-500/10 text-red-300";
-  }
-
-  return "border-slate-600 bg-slate-800 text-slate-300";
-}
-
-function getPnlClass(value: number) {
+// ─── Visual helpers ───────────────────────────────────────────────────────────
+function getPnlColor(value: number) {
   if (value > 0) return "text-emerald-400";
   if (value < 0) return "text-red-400";
-  return "text-slate-300";
+  return "text-slate-400";
 }
 
-function StatCard({
+function getRiskBar(status: string | null | undefined) {
+  const s = String(status || "").toUpperCase();
+  if (s === "APPROVED") return "bg-emerald-500";
+  if (s === "CAUTION") return "bg-yellow-400";
+  if (s === "BLOCKED") return "bg-red-500";
+  return "bg-slate-600";
+}
+
+function getRiskColor(status: string | null | undefined) {
+  const s = String(status || "").toUpperCase();
+  if (s === "APPROVED") return "text-emerald-300";
+  if (s === "CAUTION") return "text-yellow-300";
+  if (s === "BLOCKED") return "text-red-400";
+  return "text-slate-400";
+}
+
+function getRiskBorder(status: string | null | undefined) {
+  const s = String(status || "").toUpperCase();
+  if (s === "APPROVED") return "border-emerald-500/25 ring-emerald-500/10";
+  if (s === "CAUTION") return "border-yellow-500/25 ring-yellow-500/10";
+  if (s === "BLOCKED") return "border-red-500/25 ring-red-500/10";
+  return "border-slate-700/60 ring-slate-700/10";
+}
+
+function getDirectionColor(dir: string | null | undefined) {
+  const d = String(dir || "").toUpperCase();
+  if (d.includes("CALL")) return "text-emerald-300";
+  if (d.includes("PUT")) return "text-red-400";
+  return "text-slate-400";
+}
+
+function getDirectionBadge(dir: string | null | undefined) {
+  const d = String(dir || "").toUpperCase();
+  if (d.includes("CALL")) return "border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
+  if (d.includes("PUT")) return "border-red-500/40 bg-red-500/10 text-red-400";
+  return "border-slate-700/60 bg-slate-800 text-slate-400";
+}
+
+// ─── MiniStat — matches suite ─────────────────────────────────────────────────
+function MiniStat({
   label,
   value,
-  subtext,
+  valueClass = "text-slate-200",
+}: {
+  label: string;
+  value: string | number;
+  valueClass?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5 rounded-lg border border-slate-800/80 bg-black/30 px-3 py-2">
+      <span className="font-mono text-[8px] font-bold uppercase tracking-[0.22em] text-slate-600">
+        {label}
+      </span>
+      <span className={`font-mono text-xs font-black ${valueClass}`}>{value}</span>
+    </div>
+  );
+}
+
+// ─── SummaryCell — left-bar stat cell for the summary grid ───────────────────
+function SummaryCell({
+  label,
+  value,
+  sub,
+  bar = "bg-slate-700",
   valueClass = "text-white",
 }: {
   label: string;
   value: string | number;
-  subtext?: string;
+  sub?: string;
+  bar?: string;
   valueClass?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-lg shadow-black/20">
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-        {label}
+    <div className="relative overflow-hidden rounded-xl border border-slate-800/80 bg-slate-900/60 px-4 py-3 ring-1 ring-slate-700/10">
+      <div className={`absolute inset-y-0 left-0 w-[3px] ${bar}`} />
+      <div className="pl-1">
+        <p className="font-mono text-[8px] font-bold uppercase tracking-[0.22em] text-slate-600">
+          {label}
+        </p>
+        <p className={`mt-1 font-mono text-lg font-black ${valueClass}`}>{value}</p>
+        {sub && (
+          <p className="mt-0.5 font-mono text-[9px] text-slate-600">{sub}</p>
+        )}
       </div>
-      <div className={`mt-2 text-2xl font-black ${valueClass}`}>{value}</div>
-      {subtext && <div className="mt-1 text-xs text-slate-500">{subtext}</div>}
     </div>
   );
 }
 
 export default function PaperTradeTracker() {
+  // ─── All state — untouched ────────────────────────────────────────────────
   const [trades, setTrades] = useState<PaperTrade[]>([]);
   const [optionDetails, setOptionDetails] = useState<OptionTradeDetail[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [tradeFilter, setTradeFilter] = useState<TradeFilter>("all");
 
+  // ─── All data loading — untouched ─────────────────────────────────────────
   async function loadTrades() {
     setLoading(true);
     setMessage("");
-
     try {
       const { data: paperTradeData, error: paperTradeError } = await supabase
         .from("paper_trades")
         .select("*")
         .order("created_at", { ascending: false });
-
       if (paperTradeError) throw paperTradeError;
 
       const { data: optionDetailData, error: optionDetailError } = await supabase
         .from("option_trade_details")
         .select("*")
         .order("created_at", { ascending: false });
-
       if (optionDetailError) throw optionDetailError;
 
       setTrades((paperTradeData || []) as PaperTrade[]);
       setOptionDetails((optionDetailData || []) as OptionTradeDetail[]);
     } catch (error) {
       console.error("PaperTradeTracker load error:", error);
-      setMessage(
-        error instanceof Error ? error.message : "Failed to load paper trades."
-      );
+      setMessage(error instanceof Error ? error.message : "Failed to load paper trades.");
     } finally {
       setLoading(false);
     }
@@ -247,14 +268,9 @@ export default function PaperTradeTracker() {
 
   useEffect(() => {
     loadTrades();
-
-    function handleRefresh() {
-      loadTrades();
-    }
-
+    function handleRefresh() { loadTrades(); }
     window.addEventListener("paper-trade-saved", handleRefresh);
     window.addEventListener("option-trade-saved", handleRefresh);
-
     return () => {
       window.removeEventListener("paper-trade-saved", handleRefresh);
       window.removeEventListener("option-trade-saved", handleRefresh);
@@ -265,610 +281,595 @@ export default function PaperTradeTracker() {
     return optionDetails.find((detail) => detail.paper_trade_id === tradeId);
   }
 
-  async function closeStockTrade(
-    trade: PaperTrade,
-    result: "win" | "loss" | "be"
-  ) {
+  // ─── Trade close logic — untouched ───────────────────────────────────────
+  async function closeStockTrade(trade: PaperTrade, result: "win" | "loss" | "be") {
     const entry = Number(trade.entry_price || 0);
     const stopLoss = Number(trade.stop_loss || 0);
     const takeProfit = Number(trade.take_profit || 0);
-
     let exitPrice = entry;
-
     if (result === "win") exitPrice = takeProfit || entry;
     if (result === "loss") exitPrice = stopLoss || entry;
     if (result === "be") exitPrice = entry;
 
     const { error } = await supabase
       .from("paper_trades")
-      .update({
-        status: "closed",
-        exit_price: exitPrice,
-      })
+      .update({ status: "closed", exit_price: exitPrice })
       .eq("id", trade.id);
 
-    if (error) {
-      console.error("Close trade error:", error);
-      setMessage(error.message);
-      return;
-    }
-
+    if (error) { console.error("Close trade error:", error); setMessage(error.message); return; }
     setMessage(`${getTradeSymbol(trade)} stock trade closed as ${result.toUpperCase()}.`);
     await loadTrades();
   }
 
+  // ─── Filter logic — untouched ─────────────────────────────────────────────
   const filteredTrades = useMemo(() => {
     return trades.filter((trade) => {
       const optionDetail = getOptionDetailForTrade(trade.id);
       const override = isOverrideTrade(trade, optionDetail);
-
       if (tradeFilter === "clean") return !override;
       if (tradeFilter === "override") return override;
-
       return true;
     });
   }, [trades, optionDetails, tradeFilter]);
 
   const filteredOptionDetails = useMemo(() => {
     const filteredTradeIds = new Set(filteredTrades.map((trade) => trade.id));
-
     return optionDetails.filter((detail) => filteredTradeIds.has(detail.paper_trade_id));
   }, [filteredTrades, optionDetails]);
 
+  // ─── Summary calculations — untouched ────────────────────────────────────
   const summary = useMemo<TrackerSummary>(() => {
     const cleanTrades = trades.filter((trade) => {
-      const optionDetail = optionDetails.find((detail) => detail.paper_trade_id === trade.id);
+      const optionDetail = optionDetails.find((d) => d.paper_trade_id === trade.id);
       return !isOverrideTrade(trade, optionDetail);
     });
-
     const overrideTrades = trades.filter((trade) => {
-      const optionDetail = optionDetails.find((detail) => detail.paper_trade_id === trade.id);
+      const optionDetail = optionDetails.find((d) => d.paper_trade_id === trade.id);
       return isOverrideTrade(trade, optionDetail);
     });
-
-    const closedStockTrades = filteredTrades.filter(
-      (trade) => trade.status === "closed" || trade.exit_price !== null
-    );
-
-    const openStockTrades = filteredTrades.filter(
-      (trade) => trade.status !== "closed" && trade.exit_price === null
-    );
-
+    const closedStockTrades = filteredTrades.filter((t) => t.status === "closed" || t.exit_price !== null);
+    const openStockTrades = filteredTrades.filter((t) => t.status !== "closed" && t.exit_price === null);
     const stockPnls = closedStockTrades.map(getStockPnl);
-    const stockWins = stockPnls.filter((pnl) => pnl > 0).length;
-    const stockLosses = stockPnls.filter((pnl) => pnl < 0).length;
-    const stockBreakEvens = stockPnls.filter((pnl) => pnl === 0).length;
-    const stockPnl = stockPnls.reduce((sum, pnl) => sum + pnl, 0);
-
-    const closedOptions = filteredOptionDetails.filter(
-      (detail) => getOptionStatus(detail).toLowerCase() === "closed"
-    );
-
-    const openOptions = filteredOptionDetails.filter(
-      (detail) => getOptionStatus(detail).toLowerCase() !== "closed"
-    );
-
+    const stockWins = stockPnls.filter((p) => p > 0).length;
+    const stockLosses = stockPnls.filter((p) => p < 0).length;
+    const stockBreakEvens = stockPnls.filter((p) => p === 0).length;
+    const stockPnl = stockPnls.reduce((s, p) => s + p, 0);
+    const closedOptions = filteredOptionDetails.filter((d) => getOptionStatus(d).toLowerCase() === "closed");
+    const openOptions = filteredOptionDetails.filter((d) => getOptionStatus(d).toLowerCase() !== "closed");
     const optionPnls = closedOptions.map(getOptionPnl);
-    const optionWins = optionPnls.filter((pnl) => pnl > 0).length;
-    const optionLosses = optionPnls.filter((pnl) => pnl < 0).length;
-    const optionBreakEvens = optionPnls.filter((pnl) => pnl === 0).length;
-    const optionPnl = optionPnls.reduce((sum, pnl) => sum + pnl, 0);
-
-    const cleanTradeIds = new Set(cleanTrades.map((trade) => trade.id));
-    const overrideTradeIds = new Set(overrideTrades.map((trade) => trade.id));
-
-    const cleanOptions = optionDetails.filter((detail) =>
-      cleanTradeIds.has(detail.paper_trade_id)
-    );
-
-    const overrideOptions = optionDetails.filter((detail) =>
-      overrideTradeIds.has(detail.paper_trade_id)
-    );
-
-    const cleanClosedOptions = cleanOptions.filter(
-      (detail) => getOptionStatus(detail).toLowerCase() === "closed"
-    );
-
-    const overrideClosedOptions = overrideOptions.filter(
-      (detail) => getOptionStatus(detail).toLowerCase() === "closed"
-    );
-
+    const optionWins = optionPnls.filter((p) => p > 0).length;
+    const optionLosses = optionPnls.filter((p) => p < 0).length;
+    const optionBreakEvens = optionPnls.filter((p) => p === 0).length;
+    const optionPnl = optionPnls.reduce((s, p) => s + p, 0);
+    const cleanTradeIds = new Set(cleanTrades.map((t) => t.id));
+    const overrideTradeIds = new Set(overrideTrades.map((t) => t.id));
+    const cleanOptions = optionDetails.filter((d) => cleanTradeIds.has(d.paper_trade_id));
+    const overrideOptions = optionDetails.filter((d) => overrideTradeIds.has(d.paper_trade_id));
+    const cleanClosedOptions = cleanOptions.filter((d) => getOptionStatus(d).toLowerCase() === "closed");
+    const overrideClosedOptions = overrideOptions.filter((d) => getOptionStatus(d).toLowerCase() === "closed");
     const cleanOptionPnls = cleanClosedOptions.map(getOptionPnl);
     const overrideOptionPnls = overrideClosedOptions.map(getOptionPnl);
-
-    const cleanOptionWins = cleanOptionPnls.filter((pnl) => pnl > 0).length;
-    const cleanOptionLosses = cleanOptionPnls.filter((pnl) => pnl < 0).length;
-    const cleanOptionBreakEvens = cleanOptionPnls.filter((pnl) => pnl === 0).length;
-    const cleanOptionPnl = cleanOptionPnls.reduce((sum, pnl) => sum + pnl, 0);
-    const overrideOptionPnl = overrideOptionPnls.reduce((sum, pnl) => sum + pnl, 0);
-
-    const callCount = filteredOptionDetails.filter((detail) => {
-      const direction = String(detail.trade_direction || "").toUpperCase();
-      return direction.includes("CALL");
-    }).length;
-
-    const putCount = filteredOptionDetails.filter((detail) => {
-      const direction = String(detail.trade_direction || "").toUpperCase();
-      return direction.includes("PUT");
-    }).length;
-
-    const totalEstimatedCost = filteredOptionDetails.reduce(
-      (sum, detail) => sum + Number(detail.estimated_cost || 0),
-      0
-    );
-
-    const totalMaxRisk = filteredOptionDetails.reduce(
-      (sum, detail) => sum + Number(detail.max_risk || 0),
-      0
-    );
+    const cleanOptionWins = cleanOptionPnls.filter((p) => p > 0).length;
+    const cleanOptionLosses = cleanOptionPnls.filter((p) => p < 0).length;
+    const cleanOptionBreakEvens = cleanOptionPnls.filter((p) => p === 0).length;
+    const cleanOptionPnl = cleanOptionPnls.reduce((s, p) => s + p, 0);
+    const overrideOptionPnl = overrideOptionPnls.reduce((s, p) => s + p, 0);
+    const callCount = filteredOptionDetails.filter((d) => String(d.trade_direction || "").toUpperCase().includes("CALL")).length;
+    const putCount = filteredOptionDetails.filter((d) => String(d.trade_direction || "").toUpperCase().includes("PUT")).length;
+    const totalEstimatedCost = filteredOptionDetails.reduce((s, d) => s + Number(d.estimated_cost || 0), 0);
+    const totalMaxRisk = filteredOptionDetails.reduce((s, d) => s + Number(d.max_risk || 0), 0);
 
     return {
       totalTrades: filteredTrades.length,
       cleanTrades: cleanTrades.length,
       overrideTrades: overrideTrades.length,
-
       openStockTrades: openStockTrades.length,
       closedStockTrades: closedStockTrades.length,
-      stockWins,
-      stockLosses,
-      stockBreakEvens,
-      stockPnl,
-
+      stockWins, stockLosses, stockBreakEvens, stockPnl,
       optionTrades: filteredOptionDetails.length,
       openOptionTrades: openOptions.length,
       closedOptionTrades: closedOptions.length,
-      optionWins,
-      optionLosses,
-      optionBreakEvens,
-      optionPnl,
-
+      optionWins, optionLosses, optionBreakEvens, optionPnl,
       cleanOptionTrades: cleanOptions.length,
       cleanClosedOptionTrades: cleanClosedOptions.length,
-      cleanOptionWins,
-      cleanOptionLosses,
-      cleanOptionBreakEvens,
-      cleanOptionPnl,
-
+      cleanOptionWins, cleanOptionLosses, cleanOptionBreakEvens, cleanOptionPnl,
       overrideOptionTrades: overrideOptions.length,
       overrideClosedOptionTrades: overrideClosedOptions.length,
       overrideOptionPnl,
-
-      callCount,
-      putCount,
-      totalEstimatedCost,
-      totalMaxRisk,
+      callCount, putCount, totalEstimatedCost, totalMaxRisk,
     };
   }, [trades, optionDetails, filteredTrades, filteredOptionDetails]);
 
-  const stockWinRate =
-    summary.closedStockTrades > 0
-      ? (summary.stockWins / summary.closedStockTrades) * 100
-      : 0;
-
-  const optionWinRate =
-    summary.closedOptionTrades > 0
-      ? (summary.optionWins / summary.closedOptionTrades) * 100
-      : 0;
-
-  const cleanOptionWinRate =
-    summary.cleanClosedOptionTrades > 0
-      ? (summary.cleanOptionWins / summary.cleanClosedOptionTrades) * 100
-      : 0;
-
-  const avgOptionPnl =
-    summary.closedOptionTrades > 0
-      ? summary.optionPnl / summary.closedOptionTrades
-      : 0;
+  // ─── Derived display values — untouched ──────────────────────────────────
+  const stockWinRate = summary.closedStockTrades > 0 ? (summary.stockWins / summary.closedStockTrades) * 100 : 0;
+  const optionWinRate = summary.closedOptionTrades > 0 ? (summary.optionWins / summary.closedOptionTrades) * 100 : 0;
+  const cleanOptionWinRate = summary.cleanClosedOptionTrades > 0 ? (summary.cleanOptionWins / summary.cleanClosedOptionTrades) * 100 : 0;
+  const avgOptionPnl = summary.closedOptionTrades > 0 ? summary.optionPnl / summary.closedOptionTrades : 0;
 
   return (
-    <div className="rounded-3xl border border-slate-800 bg-gradient-to-b from-slate-950 to-black p-5 text-white shadow-2xl shadow-black/30">
-      <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <div className="inline-flex rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-blue-300">
-            Road to Funded Account
-          </div>
+    <div className="relative overflow-hidden rounded-2xl border border-slate-700/50 bg-slate-950 shadow-2xl shadow-black/60">
 
-          <h2 className="mt-3 text-2xl font-black tracking-tight">
-            Paper Trade Tracker
-          </h2>
+      {/* ── Background layers ─────────────────────────────────────────── */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 60% 40% at 5% 0%, rgba(6,182,212,0.04) 0%, transparent 55%), radial-gradient(ellipse 50% 50% at 95% 100%, rgba(37,99,235,0.04) 0%, transparent 55%)",
+        }}
+      />
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.02]"
+        style={{
+          backgroundImage:
+            "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.8) 2px, rgba(255,255,255,0.8) 3px)",
+        }}
+      />
+      <div
+        className="absolute inset-x-0 top-0 h-[2px]"
+        style={{
+          background: "linear-gradient(90deg, transparent 0%, #06b6d4 30%, #3b82f6 70%, transparent 100%)",
+        }}
+      />
 
-          <p className="mt-1 text-sm text-slate-400">
-            Clean system trades are separated from manual override tests so your real stats stay honest.
-          </p>
-        </div>
+      <div className="relative p-5">
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="flex rounded-2xl border border-slate-800 bg-slate-900 p-1">
-            <button
-              onClick={() => setTradeFilter("all")}
-              className={`rounded-xl px-3 py-2 text-xs font-bold transition ${
-                tradeFilter === "all"
-                  ? "bg-white text-slate-950"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              All Trades
-            </button>
-
-            <button
-              onClick={() => setTradeFilter("clean")}
-              className={`rounded-xl px-3 py-2 text-xs font-bold transition ${
-                tradeFilter === "clean"
-                  ? "bg-emerald-400 text-slate-950"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              Clean Only
-            </button>
-
-            <button
-              onClick={() => setTradeFilter("override")}
-              className={`rounded-xl px-3 py-2 text-xs font-bold transition ${
-                tradeFilter === "override"
-                  ? "bg-orange-400 text-slate-950"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              Overrides
-            </button>
-          </div>
-
-          <button
-            onClick={loadTrades}
-            disabled={loading}
-            className="rounded-2xl border border-blue-500/40 bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-lg shadow-blue-950/30 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading ? "Refreshing..." : "Refresh"}
-          </button>
-        </div>
-      </div>
-
-      {message && (
-        <div className="mb-4 rounded-2xl border border-slate-700 bg-slate-900 p-3 text-sm text-slate-200">
-          {message}
-        </div>
-      )}
-
-      <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Visible Trades"
-          value={summary.totalTrades}
-          subtext={`${summary.cleanTrades} clean / ${summary.overrideTrades} override total`}
-        />
-
-        <StatCard
-          label="Filtered Stock Win Rate"
-          value={`${stockWinRate.toFixed(1)}%`}
-          subtext={`${summary.stockWins}W / ${summary.stockLosses}L / ${summary.stockBreakEvens}BE`}
-        />
-
-        <StatCard
-          label="Filtered Stock P/L"
-          value={formatMoney(summary.stockPnl)}
-          valueClass={getPnlClass(summary.stockPnl)}
-          subtext="Based on visible filtered trades"
-        />
-
-        <StatCard
-          label="Filtered Option P/L"
-          value={formatMoney(summary.optionPnl)}
-          valueClass={getPnlClass(summary.optionPnl)}
-          subtext={`${summary.closedOptionTrades} closed visible options`}
-        />
-
-        <StatCard
-          label="Filtered Option Win Rate"
-          value={`${optionWinRate.toFixed(1)}%`}
-          subtext={`${summary.optionWins}W / ${summary.optionLosses}L / ${summary.optionBreakEvens}BE`}
-        />
-
-        <StatCard
-          label="Clean Option Win Rate"
-          value={`${cleanOptionWinRate.toFixed(1)}%`}
-          subtext={`${summary.cleanOptionWins}W / ${summary.cleanOptionLosses}L / ${summary.cleanOptionBreakEvens}BE`}
-        />
-
-        <StatCard
-          label="Clean Option P/L"
-          value={formatMoney(summary.cleanOptionPnl)}
-          valueClass={getPnlClass(summary.cleanOptionPnl)}
-          subtext={`${summary.cleanOptionTrades} clean option trades`}
-        />
-
-        <StatCard
-          label="Override Test P/L"
-          value={formatMoney(summary.overrideOptionPnl)}
-          valueClass={getPnlClass(summary.overrideOptionPnl)}
-          subtext={`${summary.overrideOptionTrades} override option trades`}
-        />
-
-        <StatCard
-          label="Option Trades"
-          value={summary.optionTrades}
-          subtext={`${summary.callCount} CALL / ${summary.putCount} PUT visible`}
-        />
-
-        <StatCard
-          label="Total Max Risk"
-          value={formatMoney(summary.totalMaxRisk)}
-          subtext={`${formatMoney(summary.totalEstimatedCost)} visible estimated cost`}
-        />
-
-        <StatCard
-          label="Open Options"
-          value={summary.openOptionTrades}
-          subtext={`${summary.closedOptionTrades} closed visible options`}
-        />
-
-        <StatCard
-          label="Avg Option P/L"
-          value={formatMoney(avgOptionPnl)}
-          valueClass={getPnlClass(avgOptionPnl)}
-          subtext="Average of closed visible options"
-        />
-      </div>
-
-      {filteredTrades.length === 0 ? (
-        <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-8 text-center text-slate-400">
-          No trades found for this filter.
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filteredTrades.map((trade) => {
-            const optionDetail = getOptionDetailForTrade(trade.id);
-            const symbol = getTradeSymbol(trade);
-            const strategy = trade.strategy || "manual";
-            const override = isOverrideTrade(trade, optionDetail);
-            const isClosed = trade.status === "closed" || trade.exit_price !== null;
-            const stockPnl = getStockPnl(trade);
-
-            return (
-              <div
-                key={trade.id}
-                className={`rounded-3xl border p-4 shadow-xl shadow-black/20 ${
-                  override
-                    ? "border-orange-500/40 bg-orange-950/20"
-                    : "border-slate-800 bg-slate-900/80"
-                }`}
+        {/* ── HEADER ────────────────────────────────────────────────────── */}
+        <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-cyan-600">
+              OPTIMA-SYS · Trade Journal
+            </p>
+            <h2 className="text-2xl font-black tracking-tight text-white">
+              Paper Trade{" "}
+              <span
+                style={{
+                  background: "linear-gradient(135deg, #06b6d4 0%, #60a5fa 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
               >
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-xl font-black">{symbol}</h3>
+                Tracker
+              </span>
+            </h2>
+            <p className="mt-1 font-mono text-[10px] leading-5 text-slate-500">
+              Clean trades separated from override tests · real stats stay honest
+            </p>
+          </div>
 
-                      <span className="rounded-full border border-slate-700 bg-slate-950 px-2 py-1 text-xs font-bold text-slate-300">
-                        {String(trade.status || "open").toUpperCase()}
-                      </span>
-
-                      <span className="rounded-full border border-blue-700/60 bg-blue-950 px-2 py-1 text-xs font-bold text-blue-200">
-                        {strategy}
-                      </span>
-
-                      {override && (
-                        <span className="rounded-full border border-orange-400 bg-orange-500/15 px-2 py-1 text-xs font-black text-orange-200">
-                          TEST OVERRIDE
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-slate-300 md:grid-cols-4">
-                      <div>
-                        <span className="text-slate-500">Entry: </span>
-                        {formatMoney(trade.entry_price)}
-                      </div>
-
-                      <div>
-                        <span className="text-slate-500">Exit: </span>
-                        {trade.exit_price ? formatMoney(trade.exit_price) : "Open"}
-                      </div>
-
-                      <div>
-                        <span className="text-slate-500">Stop: </span>
-                        {formatMoney(trade.stop_loss)}
-                      </div>
-
-                      <div>
-                        <span className="text-slate-500">Target: </span>
-                        {formatMoney(trade.take_profit)}
-                      </div>
-                    </div>
-
-                    {isClosed && (
-                      <div className={`mt-2 text-sm font-black ${getPnlClass(stockPnl)}`}>
-                        Stock P/L: {formatMoney(stockPnl)}
-                      </div>
-                    )}
-                  </div>
-
-                  {!isClosed && (
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={() => closeStockTrade(trade, "win")}
-                        className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-500"
-                      >
-                        Win
-                      </button>
-
-                      <button
-                        onClick={() => closeStockTrade(trade, "loss")}
-                        className="rounded-xl bg-red-600 px-3 py-2 text-xs font-black text-white hover:bg-red-500"
-                      >
-                        Loss
-                      </button>
-
-                      <button
-                        onClick={() => closeStockTrade(trade, "be")}
-                        className="rounded-xl bg-slate-700 px-3 py-2 text-xs font-black text-white hover:bg-slate-600"
-                      >
-                        BE
-                      </button>
-                    </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            {/* Filter tab strip */}
+            <div className="flex overflow-hidden rounded-lg border border-slate-700/60 bg-black/40">
+              {(
+                [
+                  { key: "all", label: "All Trades", active: "bg-slate-700 text-white", bar: "bg-slate-400" },
+                  { key: "clean", label: "Clean", active: "bg-emerald-500/20 text-emerald-300", bar: "bg-emerald-500" },
+                  { key: "override", label: "Overrides", active: "bg-orange-500/20 text-orange-300", bar: "bg-orange-500" },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setTradeFilter(tab.key)}
+                  className={`relative px-4 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.18em] transition-all ${
+                    tradeFilter === tab.key
+                      ? tab.active
+                      : "text-slate-500 hover:text-slate-300"
+                  }`}
+                >
+                  {tradeFilter === tab.key && (
+                    <span className={`absolute inset-x-0 bottom-0 h-[2px] ${tab.bar}`} />
                   )}
-                </div>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
 
-                {override && (
-                  <div className="mt-4 rounded-2xl border border-orange-500/50 bg-orange-500/10 p-3 text-sm text-orange-100">
-                    <div className="font-black">TEST OVERRIDE TRADE</div>
-                    <div className="mt-1 text-orange-200">
-                      This trade was manually forced through for testing. It should not count toward clean system performance.
-                    </div>
-                  </div>
-                )}
+            {/* Refresh button */}
+            <button
+              onClick={loadTrades}
+              disabled={loading}
+              className="group relative overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900/80 px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-cyan-500/40 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <span
+                className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
+                style={{ background: "linear-gradient(90deg, transparent, #06b6d4, transparent)" }}
+              />
+              {loading ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 animate-ping rounded-full bg-cyan-400" />
+                  Loading...
+                </span>
+              ) : (
+                "⟳ Refresh"
+              )}
+            </button>
+          </div>
+        </div>
 
-                {optionDetail ? (
-                  <div className="mt-4 rounded-3xl border border-slate-700 bg-black/40 p-4">
-                    <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        {/* ── STATUS MESSAGE ────────────────────────────────────────────── */}
+        {message && (
+          <div className="relative mb-4 overflow-hidden rounded-lg border border-slate-800 bg-black/30">
+            <div className="absolute inset-y-0 left-0 w-[2px] bg-cyan-500" />
+            <p className="px-4 py-2.5 pl-5 font-mono text-[9px] leading-5 text-slate-400">
+              {message}
+            </p>
+          </div>
+        )}
+
+        {/* ── SUMMARY GRID ──────────────────────────────────────────────── */}
+        <div className="mb-6">
+          {/* Clean stats section */}
+          <p className="mb-2 font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-600">
+            Clean Trades
+          </p>
+          <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+            <SummaryCell
+              label="Clean Option W/R"
+              value={`${cleanOptionWinRate.toFixed(1)}%`}
+              sub={`${summary.cleanOptionWins}W · ${summary.cleanOptionLosses}L · ${summary.cleanOptionBreakEvens}BE`}
+              bar="bg-emerald-500"
+              valueClass={cleanOptionWinRate >= 50 ? "text-emerald-300" : "text-red-400"}
+            />
+            <SummaryCell
+              label="Clean Option P/L"
+              value={formatMoney(summary.cleanOptionPnl)}
+              sub={`${summary.cleanOptionTrades} clean option trades`}
+              bar="bg-emerald-500"
+              valueClass={getPnlColor(summary.cleanOptionPnl)}
+            />
+            <SummaryCell
+              label="Clean Trades"
+              value={summary.cleanTrades}
+              sub={`${summary.cleanClosedOptionTrades} closed options`}
+              bar="bg-emerald-500"
+            />
+            <SummaryCell
+              label="Stock Win Rate"
+              value={`${stockWinRate.toFixed(1)}%`}
+              sub={`${summary.stockWins}W · ${summary.stockLosses}L · ${summary.stockBreakEvens}BE`}
+              bar="bg-blue-500"
+              valueClass={stockWinRate >= 50 ? "text-emerald-300" : "text-red-400"}
+            />
+          </div>
+
+          {/* Option + risk stats */}
+          <p className="mb-2 font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-600">
+            Option Performance
+          </p>
+          <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+            <SummaryCell
+              label="Filtered Option W/R"
+              value={`${optionWinRate.toFixed(1)}%`}
+              sub={`${summary.optionWins}W · ${summary.optionLosses}L`}
+              bar="bg-blue-500"
+              valueClass={optionWinRate >= 50 ? "text-emerald-300" : "text-red-400"}
+            />
+            <SummaryCell
+              label="Filtered Option P/L"
+              value={formatMoney(summary.optionPnl)}
+              sub={`${summary.closedOptionTrades} closed visible`}
+              bar="bg-blue-500"
+              valueClass={getPnlColor(summary.optionPnl)}
+            />
+            <SummaryCell
+              label="Avg Option P/L"
+              value={formatMoney(avgOptionPnl)}
+              sub="Per closed visible option"
+              bar="bg-blue-500"
+              valueClass={getPnlColor(avgOptionPnl)}
+            />
+            <SummaryCell
+              label="Open / Closed"
+              value={`${summary.openOptionTrades} / ${summary.closedOptionTrades}`}
+              sub={`${summary.callCount} CALL · ${summary.putCount} PUT`}
+              bar="bg-slate-500"
+            />
+          </div>
+
+          {/* Override + risk */}
+          <p className="mb-2 font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-600">
+            Override Audit · Risk
+          </p>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+            <SummaryCell
+              label="Override Test P/L"
+              value={formatMoney(summary.overrideOptionPnl)}
+              sub={`${summary.overrideOptionTrades} override trades`}
+              bar="bg-orange-500"
+              valueClass={getPnlColor(summary.overrideOptionPnl)}
+            />
+            <SummaryCell
+              label="Total Overrides"
+              value={summary.overrideTrades}
+              sub="Excluded from clean stats"
+              bar="bg-orange-500"
+              valueClass="text-orange-300"
+            />
+            <SummaryCell
+              label="Total Max Risk"
+              value={formatMoney(summary.totalMaxRisk)}
+              sub={`${formatMoney(summary.totalEstimatedCost)} est. cost`}
+              bar="bg-red-500"
+              valueClass="text-red-400"
+            />
+            <SummaryCell
+              label="Visible Trades"
+              value={summary.totalTrades}
+              sub={`${summary.cleanTrades} clean · ${summary.overrideTrades} override`}
+              bar="bg-slate-600"
+            />
+          </div>
+        </div>
+
+        {/* ── TRADE LIST ────────────────────────────────────────────────── */}
+        {filteredTrades.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-slate-800 bg-black/30 py-12">
+            <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-600">
+              No Data
+            </p>
+            <p className="mt-1 font-mono text-sm font-black text-slate-500">
+              No trades found for this filter
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredTrades.map((trade) => {
+              const optionDetail = getOptionDetailForTrade(trade.id);
+              const symbol = getTradeSymbol(trade);
+              const strategy = trade.strategy || "manual";
+              const override = isOverrideTrade(trade, optionDetail);
+              const isClosed = trade.status === "closed" || trade.exit_price !== null;
+              const stockPnl = getStockPnl(trade);
+
+              return (
+                <div
+                  key={trade.id}
+                  className={`relative overflow-hidden rounded-xl border ring-1 ${
+                    override
+                      ? "border-orange-500/30 bg-orange-500/5 ring-orange-500/10"
+                      : "border-slate-700/60 bg-slate-900/60 ring-slate-700/10"
+                  }`}
+                >
+                  {/* Left accent bar */}
+                  <div
+                    className={`absolute inset-y-0 left-0 w-[3px] ${
+                      override ? "bg-orange-500" : isClosed ? "bg-slate-600" : "bg-blue-500"
+                    }`}
+                  />
+
+                  {/* Override top glow */}
+                  {override && (
+                    <div
+                      className="absolute inset-x-0 top-0 h-px opacity-50"
+                      style={{ background: "linear-gradient(90deg, transparent, #f97316, transparent)" }}
+                    />
+                  )}
+
+                  <div className="px-5 py-4 pl-6">
+
+                    {/* ── Trade header row ────────────────────────────── */}
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
-                        <div className="text-sm font-black text-slate-200">
-                          Connected Option Details
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {optionDetail.option_symbol || "No option symbol saved"}
-                        </div>
-                      </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-xl font-black text-white">
+                            {symbol}
+                          </span>
 
-                      {optionDetail.risk_guard_status && (
-                        <span
-                          className={`rounded-full border px-3 py-1 text-xs font-black ${getStatusClass(
-                            optionDetail.risk_guard_status
-                          )}`}
-                        >
-                          Risk Guard: {optionDetail.risk_guard_status}
-                        </span>
-                      )}
-                    </div>
+                          {/* Status badge */}
+                          <span
+                            className={`rounded border px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] ${
+                              isClosed
+                                ? "border-slate-600/60 bg-slate-800/60 text-slate-400"
+                                : "border-blue-500/40 bg-blue-500/10 text-blue-300"
+                            }`}
+                          >
+                            {isClosed ? "Closed" : "Open"}
+                          </span>
 
-                    <div className="grid grid-cols-2 gap-3 text-sm text-slate-300 md:grid-cols-4">
-                      <div>
-                        <div className="text-xs text-slate-500">Direction</div>
-                        <div className="font-bold">
-                          {optionDetail.trade_direction || "-"}
-                        </div>
-                      </div>
+                          {/* Strategy badge */}
+                          <span className="rounded border border-slate-700/60 bg-slate-800/60 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400">
+                            {strategy}
+                          </span>
 
-                      <div>
-                        <div className="text-xs text-slate-500">Expiration</div>
-                        <div className="font-bold">
-                          {optionDetail.expiration_date || "-"}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="text-xs text-slate-500">Strike</div>
-                        <div className="font-bold">
-                          {optionDetail.strike_price
-                            ? `$${formatNumber(optionDetail.strike_price, 2)}`
-                            : "-"}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="text-xs text-slate-500">Contracts</div>
-                        <div className="font-bold">
-                          {optionDetail.contracts || "-"}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="text-xs text-slate-500">Bid</div>
-                        <div className="font-bold">
-                          {formatMoney(optionDetail.bid_price)}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="text-xs text-slate-500">Ask</div>
-                        <div className="font-bold">
-                          {formatMoney(optionDetail.ask_price)}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="text-xs text-slate-500">Entry Mid</div>
-                        <div className="font-bold">
-                          {formatMoney(optionDetail.mid_price)}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="text-xs text-slate-500">Exit Option</div>
-                        <div className="font-bold">
-                          {getOptionExitPrice(optionDetail) > 0
-                            ? formatMoney(getOptionExitPrice(optionDetail))
-                            : "Open"}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="text-xs text-slate-500">Estimated Cost</div>
-                        <div className="font-bold">
-                          {formatMoney(optionDetail.estimated_cost)}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="text-xs text-slate-500">Max Risk</div>
-                        <div className="font-bold">
-                          {formatMoney(optionDetail.max_risk)}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="text-xs text-slate-500">Option Status</div>
-                        <div className="font-bold">
-                          {getOptionStatus(optionDetail).toUpperCase()}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="text-xs text-slate-500">Option P/L</div>
-                        <div
-                          className={`font-black ${getPnlClass(
-                            getOptionPnl(optionDetail)
-                          )}`}
-                        >
-                          {getOptionStatus(optionDetail).toLowerCase() === "closed"
-                            ? formatMoney(getOptionPnl(optionDetail))
-                            : "Open"}
-                        </div>
-                      </div>
-                    </div>
-
-                    {optionDetail.risk_guard_reason && (
-                      <div className="mt-3 rounded-2xl border border-slate-700 bg-slate-900/80 p-3 text-sm text-slate-300">
-                        <div className="font-black text-slate-200">
-                          Risk Guard Reason
-                        </div>
-                        <div className="mt-1">{optionDetail.risk_guard_reason}</div>
-                      </div>
-                    )}
-
-                    {optionDetail.override_used && (
-                      <div className="mt-3 rounded-2xl border border-orange-400/60 bg-orange-500/10 p-3 text-sm text-orange-100">
-                        <div className="font-black">Testing Override Audit</div>
-
-                        <div className="mt-1">
-                          Override Used: <span className="font-bold">YES</span>
+                          {/* Override badge */}
+                          {override && (
+                            <span className="rounded border border-orange-500/40 bg-orange-500/10 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-orange-300">
+                              Test Override
+                            </span>
+                          )}
                         </div>
 
-                        {optionDetail.override_reason && (
-                          <div className="mt-1">
-                            Reason: {optionDetail.override_reason}
+                        {/* Stock price fields */}
+                        <div className="mt-2.5 grid grid-cols-4 gap-1.5">
+                          <MiniStat label="Entry" value={formatMoney(trade.entry_price)} />
+                          <MiniStat
+                            label="Exit"
+                            value={trade.exit_price ? formatMoney(trade.exit_price) : "Open"}
+                            valueClass={trade.exit_price ? "text-slate-200" : "text-blue-400"}
+                          />
+                          <MiniStat label="Stop" value={formatMoney(trade.stop_loss)} />
+                          <MiniStat label="Target" value={formatMoney(trade.take_profit)} />
+                        </div>
+
+                        {/* Stock P/L */}
+                        {isClosed && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <span className="font-mono text-[9px] text-slate-600">
+                              Stock P/L ›
+                            </span>
+                            <span className={`font-mono text-xs font-black ${getPnlColor(stockPnl)}`}>
+                              {formatMoney(stockPnl)}
+                            </span>
                           </div>
                         )}
                       </div>
+
+                      {/* Close buttons — only on open trades */}
+                      {!isClosed && (
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <button
+                            onClick={() => closeStockTrade(trade, "win")}
+                            className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-emerald-300 transition hover:bg-emerald-500/20"
+                          >
+                            Win
+                          </button>
+                          <button
+                            onClick={() => closeStockTrade(trade, "loss")}
+                            className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-red-400 transition hover:bg-red-500/20"
+                          >
+                            Loss
+                          </button>
+                          <button
+                            onClick={() => closeStockTrade(trade, "be")}
+                            className="rounded-lg border border-slate-700/60 bg-slate-800/60 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400 transition hover:text-slate-200"
+                          >
+                            BE
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ── Override audit strip ─────────────────────────── */}
+                    {override && (
+                      <div className="relative mt-3 overflow-hidden rounded-lg border border-orange-500/20 bg-orange-500/5">
+                        <div className="absolute inset-y-0 left-0 w-[2px] bg-orange-500" />
+                        <div className="px-4 py-2.5 pl-5">
+                          <p className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-orange-500">
+                            Audit · Test Override Trade
+                          </p>
+                          <p className="mt-0.5 font-mono text-[9px] leading-4 text-orange-700">
+                            Forced through for testing. Excluded from clean system performance stats.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Connected option details ─────────────────────── */}
+                    {optionDetail ? (
+                      <div className="relative mt-3 overflow-hidden rounded-xl border border-slate-700/60 bg-black/30 ring-1 ring-slate-700/10">
+                        <div className={`absolute inset-y-0 left-0 w-[2px] ${getRiskBar(optionDetail.risk_guard_status)}`} />
+
+                        <div className="px-4 py-3 pl-5">
+                          {/* Option detail header */}
+                          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <p className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-slate-600">
+                                Connected Option
+                              </p>
+                              <p className="mt-0.5 break-all font-mono text-xs font-black text-slate-300">
+                                {optionDetail.option_symbol || "No option symbol saved"}
+                              </p>
+                            </div>
+
+                            {optionDetail.risk_guard_status && (
+                              <div
+                                className={`relative overflow-hidden rounded-lg border ring-1 px-3 py-1.5 ${getRiskBorder(optionDetail.risk_guard_status)}`}
+                              >
+                                <div className={`absolute inset-y-0 left-0 w-[2px] ${getRiskBar(optionDetail.risk_guard_status)}`} />
+                                <span className={`pl-1 font-mono text-[9px] font-bold uppercase tracking-[0.18em] ${getRiskColor(optionDetail.risk_guard_status)}`}>
+                                  Risk Guard · {optionDetail.risk_guard_status}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Option stats grid */}
+                          <div className="grid grid-cols-4 gap-1.5 md:grid-cols-6 xl:grid-cols-12">
+                            <MiniStat
+                              label="Dir"
+                              value={String(optionDetail.trade_direction || "—").toUpperCase()}
+                              valueClass={getDirectionColor(optionDetail.trade_direction)}
+                            />
+                            <MiniStat label="Exp" value={optionDetail.expiration_date || "—"} />
+                            <MiniStat
+                              label="Strike"
+                              value={optionDetail.strike_price ? `$${formatNumber(optionDetail.strike_price, 2)}` : "—"}
+                            />
+                            <MiniStat label="Qty" value={optionDetail.contracts ?? "—"} />
+                            <MiniStat label="Bid" value={formatMoney(optionDetail.bid_price)} />
+                            <MiniStat label="Ask" value={formatMoney(optionDetail.ask_price)} />
+                            <MiniStat label="Mid" value={formatMoney(optionDetail.mid_price)} valueClass="text-emerald-300" />
+                            <MiniStat
+                              label="Exit"
+                              value={getOptionExitPrice(optionDetail) > 0 ? formatMoney(getOptionExitPrice(optionDetail)) : "Open"}
+                              valueClass={getOptionExitPrice(optionDetail) > 0 ? "text-slate-200" : "text-blue-400"}
+                            />
+                            <MiniStat label="Cost" value={formatMoney(optionDetail.estimated_cost)} />
+                            <MiniStat label="Max Risk" value={formatMoney(optionDetail.max_risk)} valueClass="text-red-400" />
+                            <MiniStat
+                              label="Status"
+                              value={getOptionStatus(optionDetail).toUpperCase()}
+                              valueClass={getOptionStatus(optionDetail).toLowerCase() === "closed" ? "text-slate-400" : "text-blue-400"}
+                            />
+                            <MiniStat
+                              label="Option P/L"
+                              value={
+                                getOptionStatus(optionDetail).toLowerCase() === "closed"
+                                  ? formatMoney(getOptionPnl(optionDetail))
+                                  : "Open"
+                              }
+                              valueClass={
+                                getOptionStatus(optionDetail).toLowerCase() === "closed"
+                                  ? getPnlColor(getOptionPnl(optionDetail))
+                                  : "text-blue-400"
+                              }
+                            />
+                          </div>
+
+                          {/* Risk Guard reason */}
+                          {optionDetail.risk_guard_reason && (
+                            <div className="relative mt-2.5 overflow-hidden rounded-lg border border-slate-800 bg-black/20">
+                              <div className={`absolute inset-y-0 left-0 w-[2px] ${getRiskBar(optionDetail.risk_guard_status)}`} />
+                              <div className="px-4 py-2 pl-5">
+                                <span className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-slate-600">
+                                  Risk Guard Reason ›{" "}
+                                </span>
+                                <span className="font-mono text-[9px] text-slate-500">
+                                  {optionDetail.risk_guard_reason}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Override audit for option */}
+                          {optionDetail.override_used && (
+                            <div className="relative mt-2.5 overflow-hidden rounded-lg border border-orange-500/20 bg-orange-500/5">
+                              <div className="absolute inset-y-0 left-0 w-[2px] bg-orange-500" />
+                              <div className="px-4 py-2.5 pl-5">
+                                <p className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-orange-500">
+                                  Testing Override Audit · Override Used: YES
+                                </p>
+                                {optionDetail.override_reason && (
+                                  <p className="mt-0.5 font-mono text-[9px] leading-4 text-orange-700">
+                                    {optionDetail.override_reason}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="relative mt-3 overflow-hidden rounded-lg border border-slate-800/60 bg-black/20">
+                        <div className="absolute inset-y-0 left-0 w-[2px] bg-slate-700" />
+                        <p className="px-4 py-2.5 pl-5 font-mono text-[9px] text-slate-600">
+                          No connected option details for this trade.
+                        </p>
+                      </div>
                     )}
                   </div>
-                ) : (
-                  <div className="mt-4 rounded-2xl border border-slate-800 bg-black/30 p-3 text-sm text-slate-500">
-                    No connected option details found for this trade.
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Bottom neon edge */}
+      <div
+        className="absolute inset-x-0 bottom-0 h-px opacity-20"
+        style={{ background: "linear-gradient(90deg, transparent, #3b82f6, #06b6d4, transparent)" }}
+      />
     </div>
   );
 }

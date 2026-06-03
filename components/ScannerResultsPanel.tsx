@@ -1,5 +1,7 @@
 "use client";
 
+// ─── UI ONLY — all scanner logic, props, types, and selection behavior untouched ───
+
 type TradeDirection = "CALL" | "PUT" | "NO TRADE";
 type MarketCondition = "BULLISH" | "BEARISH" | "CHOPPY" | "UNKNOWN";
 
@@ -49,6 +51,7 @@ type ScannerResultsPanelProps = {
   marketCondition?: MarketCondition | string;
 };
 
+// ─── All helper functions untouched ──────────────────────────────────────────
 function getNumber(value: unknown, fallback = 0) {
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
@@ -56,17 +59,12 @@ function getNumber(value: unknown, fallback = 0) {
 
 function formatMoney(value: unknown) {
   const num = getNumber(value, 0);
-
-  return num.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-  });
+  return num.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
 function formatPercent(value: unknown) {
   const num = getNumber(value, 0);
   const sign = num > 0 ? "+" : "";
-
   return `${sign}${num.toFixed(2)}%`;
 }
 
@@ -99,111 +97,109 @@ function getBlockReasons(result: ScanResult) {
 }
 
 function getTradeSummary(result: ScanResult) {
-  return (
-    result.tradeSummary ||
-    result.trade_summary ||
-    `${result.symbol} scanner setup`
-  );
+  return result.tradeSummary || result.trade_summary || `${result.symbol} scanner setup`;
 }
 
-function getDirectionClass(direction: TradeDirection) {
-  if (direction === "CALL") {
-    return "border-emerald-400/50 bg-emerald-500/10 text-emerald-300";
-  }
-
-  if (direction === "PUT") {
-    return "border-red-400/50 bg-red-500/10 text-red-300";
-  }
-
-  return "border-slate-600 bg-slate-800 text-slate-300";
+// ─── Visual helpers — only colors and classes ─────────────────────────────────
+function getDirectionBar(direction: TradeDirection) {
+  if (direction === "CALL") return "bg-emerald-500";
+  if (direction === "PUT") return "bg-red-500";
+  return "bg-slate-600";
 }
 
-function getScoreClass(score: number) {
+function getDirectionBadge(direction: TradeDirection) {
+  if (direction === "CALL")
+    return "border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
+  if (direction === "PUT")
+    return "border-red-500/40 bg-red-500/10 text-red-300";
+  return "border-slate-600/60 bg-slate-800/60 text-slate-400";
+}
+
+function getDirectionRing(direction: TradeDirection) {
+  if (direction === "CALL") return "ring-emerald-500/15";
+  if (direction === "PUT") return "ring-red-500/15";
+  return "ring-slate-700/20";
+}
+
+function getScoreColor(score: number) {
   if (score >= 80) return "text-emerald-300";
   if (score >= 65) return "text-blue-300";
   if (score >= 50) return "text-yellow-300";
-  return "text-red-300";
+  return "text-red-400";
 }
 
-function getMarketAlignmentText(result: ScanResult) {
+function getScoreBarColor(score: number) {
+  if (score >= 80) return "bg-emerald-500";
+  if (score >= 65) return "bg-blue-500";
+  if (score >= 50) return "bg-yellow-400";
+  return "bg-red-500";
+}
+
+function getMarketBadge(marketCondition?: string) {
+  const c = String(marketCondition || "UNKNOWN").toUpperCase();
+  if (c === "BULLISH") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
+  if (c === "BEARISH") return "border-red-500/40 bg-red-500/10 text-red-300";
+  if (c === "CHOPPY") return "border-yellow-500/40 bg-yellow-500/10 text-yellow-300";
+  return "border-slate-700/60 bg-slate-800/60 text-slate-400";
+}
+
+function getMarketBar(marketCondition?: string) {
+  const c = String(marketCondition || "UNKNOWN").toUpperCase();
+  if (c === "BULLISH") return "bg-emerald-500";
+  if (c === "BEARISH") return "bg-red-500";
+  if (c === "CHOPPY") return "bg-yellow-400";
+  return "bg-slate-600";
+}
+
+function getAlignmentBadge(result: ScanResult) {
   const aligned = result.marketAlignment ?? result.market_alignment;
-
-  if (aligned === true) return "Aligned";
-  if (aligned === false) return "Not aligned";
-
-  return "Unknown";
+  if (aligned === true) return { label: "Aligned", cls: "text-emerald-400" };
+  if (aligned === false) return { label: "Misaligned", cls: "text-red-400" };
+  return { label: "Unknown", cls: "text-slate-500" };
 }
 
-function getMarketAlignmentClass(result: ScanResult) {
-  const aligned = result.marketAlignment ?? result.market_alignment;
-
-  if (aligned === true) {
-    return "border-emerald-400/40 bg-emerald-500/10 text-emerald-300";
-  }
-
-  if (aligned === false) {
-    return "border-red-400/40 bg-red-500/10 text-red-300";
-  }
-
-  return "border-slate-700 bg-slate-900 text-slate-400";
-}
-
-function getVolumeText(result: ScanResult) {
+function getVolumeBadge(result: ScanResult) {
   const confirmed = result.volumeConfirmation ?? result.volume_confirmation;
-
-  if (confirmed === true) return "Confirmed";
-  if (confirmed === false) return "Weak";
-
-  return "Placeholder";
+  if (confirmed === true) return { label: "Vol ✓", cls: "text-emerald-400" };
+  if (confirmed === false) return { label: "Vol weak", cls: "text-yellow-400" };
+  return { label: "Vol —", cls: "text-slate-500" };
 }
 
-function getVolumeClass(result: ScanResult) {
-  const confirmed = result.volumeConfirmation ?? result.volume_confirmation;
-
-  if (confirmed === true) {
-    return "border-emerald-400/40 bg-emerald-500/10 text-emerald-300";
-  }
-
-  if (confirmed === false) {
-    return "border-yellow-400/40 bg-yellow-500/10 text-yellow-300";
-  }
-
-  return "border-slate-700 bg-slate-900 text-slate-400";
-}
-
-function getMarketClass(marketCondition?: string) {
-  const condition = String(marketCondition || "UNKNOWN").toUpperCase();
-
-  if (condition === "BULLISH") {
-    return "border-emerald-400/40 bg-emerald-500/10 text-emerald-300";
-  }
-
-  if (condition === "BEARISH") {
-    return "border-red-400/40 bg-red-500/10 text-red-300";
-  }
-
-  if (condition === "CHOPPY") {
-    return "border-yellow-400/40 bg-yellow-500/10 text-yellow-300";
-  }
-
-  return "border-slate-700 bg-slate-900 text-slate-300";
-}
-
+// ─── MiniStat — compact terminal data cell ───────────────────────────────────
 function MiniStat({
   label,
   value,
-  valueClass = "text-slate-100",
+  valueClass = "text-slate-200",
 }: {
   label: string;
   value: string | number;
   valueClass?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-800 bg-black/30 p-3">
-      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+    <div className="flex flex-col gap-0.5 rounded-lg border border-slate-800/80 bg-black/30 px-3 py-2">
+      <span className="font-mono text-[8px] font-bold uppercase tracking-[0.22em] text-slate-600">
         {label}
+      </span>
+      <span className={`font-mono text-xs font-black ${valueClass}`}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+// ─── Score bar — compact visual score indicator ───────────────────────────────
+function ScoreBar({ score }: { score: number }) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="relative h-1 w-16 overflow-hidden rounded-full bg-slate-800">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${getScoreBarColor(score)}`}
+          style={{ width: `${Math.min(score, 100)}%` }}
+        />
       </div>
-      <div className={`mt-1 text-sm font-black ${valueClass}`}>{value}</div>
+      <span className={`font-mono text-xs font-black ${getScoreColor(score)}`}>
+        {score}
+      </span>
     </div>
   );
 }
@@ -216,276 +212,313 @@ export default function ScannerResultsPanel({
   onSelectResult,
   marketCondition = "UNKNOWN",
 }: ScannerResultsPanelProps) {
+  // ─── Data + handler — untouched ────────────────────────────────────────────
   const data = scannerResults || results || [];
 
   function handleSelect(result: ScanResult) {
-    if (onSelectSetup) {
-      onSelectSetup(result);
-      return;
-    }
-
-    if (onSelectResult) {
-      onSelectResult(result);
-    }
+    if (onSelectSetup) { onSelectSetup(result); return; }
+    if (onSelectResult) { onSelectResult(result); }
   }
 
   const bestSetup = data[0];
 
   return (
-    <div className="rounded-[1.75rem] border border-slate-800 bg-slate-950/85 p-5 text-white shadow-xl shadow-black/30 backdrop-blur">
-      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <div className="inline-flex rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-blue-300">
-            Scanner Intelligence
+    <div className="relative overflow-hidden rounded-2xl border border-slate-700/50 bg-slate-950 shadow-2xl shadow-black/60">
+
+      {/* ── Background layers ─────────────────────────────────────────── */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 70% 40% at 10% 0%, rgba(6,182,212,0.05) 0%, transparent 55%), radial-gradient(ellipse 50% 50% at 90% 100%, rgba(37,99,235,0.04) 0%, transparent 55%)",
+        }}
+      />
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.02]"
+        style={{
+          backgroundImage:
+            "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.8) 2px, rgba(255,255,255,0.8) 3px)",
+        }}
+      />
+      <div
+        className="absolute inset-x-0 top-0 h-[2px]"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent 0%, #06b6d4 30%, #3b82f6 70%, transparent 100%)",
+        }}
+      />
+
+      <div className="relative p-5">
+
+        {/* ── HEADER ────────────────────────────────────────────────────── */}
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-cyan-600">
+              OPTIMA-SYS · Scanner Intelligence
+            </p>
+            <h2 className="text-2xl font-black tracking-tight text-white">
+              Live{" "}
+              <span
+                style={{
+                  background: "linear-gradient(135deg, #06b6d4 0%, #60a5fa 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                Setups
+              </span>
+            </h2>
+            <p className="mt-1 font-mono text-[10px] leading-5 text-slate-500">
+              Select a setup → load option chain → Risk Guard checks contract.
+            </p>
           </div>
 
-          <h2 className="mt-3 text-2xl font-black tracking-tight">
-            Live Setups
-          </h2>
-
-          <p className="mt-1 text-sm text-slate-400">
-            Select a setup, then load the option chain and let Risk Guard check the contract.
-          </p>
-        </div>
-
-        <div className={`rounded-2xl border px-4 py-3 ${getMarketClass(marketCondition)}`}>
-          <div className="text-[10px] font-black uppercase tracking-[0.18em] opacity-70">
-            Market
-          </div>
-          <div className="mt-1 text-sm font-black">
-            {String(marketCondition || "UNKNOWN").toUpperCase()}
-          </div>
-        </div>
-      </div>
-
-      {bestSetup && (
-        <div className="mb-5 rounded-3xl border border-blue-500/30 bg-blue-500/10 p-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="text-xs font-black uppercase tracking-[0.18em] text-blue-300">
-                Best Setup
-              </div>
-
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <div className="text-2xl font-black">{bestSetup.symbol}</div>
-
-                <span
-                  className={`rounded-full border px-3 py-1 text-xs font-black ${getDirectionClass(
-                    getDirection(bestSetup)
-                  )}`}
-                >
-                  {getDirection(bestSetup)}
-                </span>
-
-                <span className="rounded-full border border-slate-700 bg-black/30 px-3 py-1 text-xs font-black text-slate-300">
-                  Score {getSetupScore(bestSetup)}
-                </span>
-              </div>
-
-              <p className="mt-2 text-sm text-slate-300">
-                {getTradeSummary(bestSetup)}
+          {/* Market condition badge */}
+          <div
+            className={`relative overflow-hidden rounded-xl border px-4 py-3 ring-1 ${getMarketBadge(marketCondition)} ring-current/10`}
+          >
+            <div
+              className={`absolute inset-y-0 left-0 w-[3px] ${getMarketBar(marketCondition)}`}
+            />
+            <div className="pl-1">
+              <p className="font-mono text-[9px] font-bold uppercase tracking-[0.25em] opacity-60">
+                Market
+              </p>
+              <p className="font-mono text-sm font-black tracking-tight">
+                {String(marketCondition || "UNKNOWN").toUpperCase()}
               </p>
             </div>
-
-            <button
-              onClick={() => handleSelect(bestSetup)}
-              className="rounded-2xl bg-blue-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-blue-950/40 hover:bg-blue-400"
-            >
-              Select Best Setup
-            </button>
           </div>
         </div>
-      )}
 
-      {data.length === 0 ? (
-        <div className="rounded-3xl border border-slate-800 bg-black/30 p-8 text-center">
-          <div className="text-lg font-black text-slate-300">
-            No scanner results yet
-          </div>
-          <p className="mt-2 text-sm text-slate-500">
-            Run the scanner to load real quote-based setups.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {data.map((result) => {
-            const direction = getDirection(result);
-            const setupScore = getSetupScore(result);
-            const confidenceScore = getConfidenceScore(result);
-            const trendStrength = getTrendStrength(result);
-            const changePercent = getChangePercent(result);
-            const riskReward = getRiskReward(result);
-            const blockReasons = getBlockReasons(result);
-            const isSelected = selectedSymbol === result.symbol;
-
-            return (
+        {/* ── BEST SETUP BANNER ─────────────────────────────────────────── */}
+        {bestSetup && (
+          <div className="relative mb-4 overflow-hidden rounded-xl border border-cyan-500/20 bg-cyan-500/5 ring-1 ring-cyan-500/10">
+            <div className="absolute inset-x-0 top-0 h-px opacity-60"
+              style={{ background: "linear-gradient(90deg, transparent, #06b6d4, transparent)" }}
+            />
+            <div className="absolute inset-y-0 left-0 w-[3px] bg-cyan-500" />
+            <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="pl-1">
+                <p className="mb-1 font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-cyan-600">
+                  Top Ranked Setup
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-xl font-black text-white">
+                    {bestSetup.symbol}
+                  </span>
+                  <span
+                    className={`rounded border px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.15em] ${getDirectionBadge(getDirection(bestSetup))}`}
+                  >
+                    {getDirection(bestSetup)}
+                  </span>
+                  <ScoreBar score={getSetupScore(bestSetup)} />
+                </div>
+                <p className="mt-1 font-mono text-[10px] text-slate-400">
+                  {getTradeSummary(bestSetup)}
+                </p>
+              </div>
               <button
-                key={result.symbol}
-                onClick={() => handleSelect(result)}
-                className={`w-full rounded-3xl border p-4 text-left transition hover:-translate-y-[1px] hover:border-blue-400/50 hover:bg-slate-900/90 ${
-                  isSelected
-                    ? "border-blue-400 bg-blue-500/10 shadow-lg shadow-blue-950/30"
-                    : "border-slate-800 bg-slate-900/60"
-                }`}
+                onClick={() => handleSelect(bestSetup)}
+                className="group relative shrink-0 overflow-hidden rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-300 transition-all hover:bg-cyan-500/20 hover:text-cyan-200"
               >
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="min-w-0 flex-1">
+                <span
+                  className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
+                  style={{ background: "linear-gradient(90deg, transparent, #06b6d4, transparent)" }}
+                />
+                Load Best Setup ›
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── EMPTY STATE ───────────────────────────────────────────────── */}
+        {data.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-slate-800 bg-black/30 py-14">
+            <div className="mb-2 font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-600">
+              No Data
+            </div>
+            <p className="font-mono text-sm font-black text-slate-400">
+              No scanner results yet
+            </p>
+            <p className="mt-1 font-mono text-[10px] text-slate-600">
+              Run the scanner to load real quote-based setups.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {data.map((result) => {
+              const direction = getDirection(result);
+              const setupScore = getSetupScore(result);
+              const confidenceScore = getConfidenceScore(result);
+              const trendStrength = getTrendStrength(result);
+              const changePercent = getChangePercent(result);
+              const riskReward = getRiskReward(result);
+              const blockReasons = getBlockReasons(result);
+              const isSelected = selectedSymbol === result.symbol;
+              const alignment = getAlignmentBadge(result);
+              const volume = getVolumeBadge(result);
+
+              return (
+                <button
+                  key={result.symbol}
+                  onClick={() => handleSelect(result)}
+                  className={`group relative w-full overflow-hidden rounded-xl border text-left transition-all duration-150
+                    ${isSelected
+                      ? "border-cyan-500/40 bg-slate-900/90 ring-1 ring-cyan-500/20 shadow-lg shadow-cyan-950/20"
+                      : `border-slate-700/60 bg-slate-900/60 ring-1 ${getDirectionRing(direction)} hover:border-slate-600/80 hover:bg-slate-900/80`
+                    }`}
+                >
+                  {/* Selected: top cyan highlight line */}
+                  {isSelected && (
+                    <div
+                      className="absolute inset-x-0 top-0 h-px"
+                      style={{ background: "linear-gradient(90deg, transparent, #06b6d4 40%, #3b82f6 70%, transparent)" }}
+                    />
+                  )}
+
+                  {/* Left direction accent bar */}
+                  <div
+                    className={`absolute inset-y-0 left-0 w-[3px] transition-all ${
+                      isSelected ? "bg-cyan-500" : getDirectionBar(direction)
+                    }`}
+                  />
+
+                  <div className="px-5 py-4 pl-6">
+                    {/* ── Row 1: Symbol + badges + score ─────────────────── */}
                     <div className="flex flex-wrap items-center gap-2">
-                      <div className="text-2xl font-black tracking-tight">
+                      <span className="font-mono text-xl font-black tracking-tight text-white">
                         {result.symbol}
-                      </div>
+                      </span>
 
                       <span
-                        className={`rounded-full border px-3 py-1 text-xs font-black ${getDirectionClass(
-                          direction
-                        )}`}
+                        className={`rounded border px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] ${getDirectionBadge(direction)}`}
                       >
                         {direction}
                       </span>
 
                       {isSelected && (
-                        <span className="rounded-full border border-blue-400/60 bg-blue-500/20 px-3 py-1 text-xs font-black text-blue-200">
-                          SELECTED
+                        <span className="rounded border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-cyan-300">
+                          Selected
                         </span>
                       )}
 
                       {blockReasons.length > 0 && (
-                        <span className="rounded-full border border-yellow-400/40 bg-yellow-500/10 px-3 py-1 text-xs font-black text-yellow-300">
-                          {blockReasons.length} warning
-                          {blockReasons.length === 1 ? "" : "s"}
+                        <span className="rounded border border-yellow-500/30 bg-yellow-500/8 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-yellow-400">
+                          {blockReasons.length} warning{blockReasons.length > 1 ? "s" : ""}
                         </span>
                       )}
+
+                      {/* Score bar — right-aligned on the same row */}
+                      <span className="ml-auto">
+                        <ScoreBar score={setupScore} />
+                      </span>
                     </div>
 
-                    <div className="mt-2 text-sm text-slate-400">
+                    {/* ── Row 2: Summary ──────────────────────────────────── */}
+                    <p className="mt-1.5 font-mono text-[10px] leading-5 text-slate-500">
                       {getTradeSummary(result)}
-                    </div>
+                    </p>
 
-                    <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+                    {/* ── Row 3: Stat grid ────────────────────────────────── */}
+                    <div className="mt-3 grid grid-cols-4 gap-1.5 md:grid-cols-8">
+                      <MiniStat label="Price" value={formatMoney(result.price)} />
                       <MiniStat
-                        label="Price"
-                        value={formatMoney(result.price)}
-                      />
-
-                      <MiniStat
-                        label="Change"
+                        label="Chg"
                         value={formatPercent(changePercent)}
                         valueClass={
                           changePercent > 0
                             ? "text-emerald-300"
                             : changePercent < 0
-                            ? "text-red-300"
-                            : "text-slate-300"
+                            ? "text-red-400"
+                            : "text-slate-400"
                         }
                       />
-
                       <MiniStat
-                        label="Setup Score"
-                        value={setupScore}
-                        valueClass={getScoreClass(setupScore)}
-                      />
-
-                      <MiniStat
-                        label="Confidence"
+                        label="Conf"
                         value={`${confidenceScore}%`}
-                        valueClass={getScoreClass(confidenceScore)}
+                        valueClass={getScoreColor(confidenceScore)}
                       />
-
                       <MiniStat
                         label="Trend"
                         value={trendStrength}
-                        valueClass={getScoreClass(trendStrength)}
+                        valueClass={getScoreColor(trendStrength)}
                       />
-
                       <MiniStat
-                        label="Risk/Reward"
-                        value={riskReward ? `${riskReward.toFixed(1)}R` : "-"}
+                        label="R:R"
+                        value={riskReward ? `${riskReward.toFixed(1)}R` : "—"}
                       />
-
                       <MiniStat
                         label="Stop"
                         value={formatMoney(result.stopLoss ?? result.stop_loss)}
                       />
-
                       <MiniStat
                         label="Target"
                         value={formatMoney(result.takeProfit ?? result.take_profit)}
                       />
+                      <MiniStat
+                        label="DTE"
+                        value={result.preferredExpirationWindow || "7-21"}
+                      />
                     </div>
 
-                    <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-3">
-                      <div
-                        className={`rounded-2xl border px-3 py-2 text-xs font-bold ${getMarketAlignmentClass(
-                          result
-                        )}`}
-                      >
-                        Market: {getMarketAlignmentText(result)}
-                      </div>
-
-                      <div
-                        className={`rounded-2xl border px-3 py-2 text-xs font-bold ${getVolumeClass(
-                          result
-                        )}`}
-                      >
-                        Volume: {getVolumeText(result)}
-                      </div>
-
-                      <div className="rounded-2xl border border-slate-700 bg-black/30 px-3 py-2 text-xs font-bold text-slate-300">
+                    {/* ── Row 4: Inline signal strip ──────────────────────── */}
+                    <div className="mt-2.5 flex flex-wrap items-center gap-3">
+                      <span className={`font-mono text-[9px] font-bold ${alignment.cls}`}>
+                        Mkt: {alignment.label}
+                      </span>
+                      <span className="text-slate-700">·</span>
+                      <span className={`font-mono text-[9px] font-bold ${volume.cls}`}>
+                        {volume.label}
+                      </span>
+                      <span className="text-slate-700">·</span>
+                      <span className="font-mono text-[9px] text-slate-600">
                         Contract: {result.contractSelectionStatus || "READY"}
-                      </div>
+                      </span>
+                      <span className="text-slate-700">·</span>
+                      <span className="font-mono text-[9px] text-slate-600">
+                        {result.preferredMoneyness || "Near the money"}
+                      </span>
+
+                      {/* Load arrow — right side */}
+                      <span
+                        className={`ml-auto font-mono text-[9px] font-bold tracking-widest transition-colors ${
+                          isSelected ? "text-cyan-400" : "text-slate-700 group-hover:text-slate-500"
+                        }`}
+                      >
+                        {isSelected ? "● LOADED" : "LOAD ›"}
+                      </span>
                     </div>
 
+                    {/* ── Row 5: Block reasons — slim strip ───────────────── */}
                     {blockReasons.length > 0 && (
-                      <div className="mt-4 rounded-2xl border border-yellow-400/30 bg-yellow-500/10 p-3">
-                        <div className="text-xs font-black uppercase tracking-[0.16em] text-yellow-300">
-                          Block / Caution Reasons
-                        </div>
-
-                        <ul className="mt-2 space-y-1 text-sm text-yellow-100">
-                          {blockReasons.map((reason, index) => (
-                            <li key={`${result.symbol}-reason-${index}`}>
-                              • {reason}
-                            </li>
+                      <div className="mt-3 rounded-lg border border-yellow-500/20 bg-yellow-500/5 px-3 py-2">
+                        <div className="flex flex-wrap gap-x-3 gap-y-1">
+                          {blockReasons.map((reason, i) => (
+                            <span
+                              key={`${result.symbol}-r-${i}`}
+                              className="font-mono text-[9px] text-yellow-500/80"
+                            >
+                              › {reason}
+                            </span>
                           ))}
-                        </ul>
+                        </div>
                       </div>
                     )}
                   </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
-                  <div className="flex shrink-0 flex-col gap-2 xl:w-40">
-                    <div className="rounded-2xl border border-slate-800 bg-black/30 p-3 text-center">
-                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
-                        Action
-                      </div>
-                      <div className="mt-1 text-sm font-black text-slate-200">
-                        {isSelected ? "Loaded" : "Click to Load"}
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-800 bg-black/30 p-3 text-center">
-                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
-                        Option Type
-                      </div>
-                      <div className="mt-1 text-sm font-black text-slate-200">
-                        {result.optionCandidateType || direction}
-                      </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-800 bg-black/30 p-3 text-center">
-                      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
-                        Expiration
-                      </div>
-                      <div className="mt-1 text-sm font-black text-slate-200">
-                        {result.preferredExpirationWindow || "7-21 DTE"}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {/* Bottom neon edge */}
+      <div
+        className="absolute inset-x-0 bottom-0 h-px opacity-20"
+        style={{ background: "linear-gradient(90deg, transparent, #3b82f6, #06b6d4, transparent)" }}
+      />
     </div>
   );
 }
