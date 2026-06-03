@@ -13,6 +13,7 @@ import AutoTradeJournal from "../components/AutoTradeJournal";
 import AutoPositionMonitor from "../components/AutoPositionMonitor";
 import BrokerStatusCard from "../components/BrokerStatusCard";
 import SystemReadinessCard from "../components/SystemReadinessCard";
+import PaperTradingControlCenter from "../components/PaperTradingControlCenter";
 
 type MarketCondition = "BULLISH" | "BEARISH" | "CHOPPY" | "UNKNOWN";
 type TradeDirection = "CALL" | "PUT" | "NO TRADE";
@@ -1058,10 +1059,14 @@ export default function Home() {
         </header>
 
         <BrokerStatusCard />
-        
-        <SystemReadinessCard />
 
-        <section className="grid grid-cols-1 gap-6 xl:grid-cols-[380px_1fr]">
+<SystemReadinessCard />
+
+<PaperTradingControlCenter />
+      
+        
+
+    <section className="grid grid-cols-1 gap-6 xl:grid-cols-[380px_1fr]">
           <aside className="flex flex-col gap-6">
             <div className="rounded-[1.75rem] border border-slate-800 bg-slate-950/85 p-5 shadow-xl shadow-black/30 backdrop-blur">
               <div className="mb-4 flex items-start justify-between gap-4">
