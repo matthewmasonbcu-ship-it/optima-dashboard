@@ -524,7 +524,7 @@ export default function OptionTradeCommandCenter({
         </div>
 
         {/* ── MAIN GRID ─────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="grid grid-cols-1 gap-4">
 
           {/* ── LEFT COLUMN ───────────────────────────────────────────── */}
           <div className="space-y-4">

@@ -258,9 +258,11 @@ function buildManualContract(params: { stockSymbol: string; direction: TradeDire
 // ─── MiniStat — matches suite ─────────────────────────────────────────────────
 function MiniStat({ label, value, valueClass = "text-slate-200" }: { label: string; value: string | number; valueClass?: string; }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-lg border border-slate-800/80 bg-black/30 px-2.5 py-2">
+    <div className="min-w-0 overflow-hidden rounded-lg border border-slate-800/80 bg-black/30 px-2.5 py-2">
       <span className="font-mono text-[8px] font-bold uppercase tracking-[0.22em] text-slate-600">{label}</span>
-      <span className={`font-mono text-[10px] font-black ${valueClass}`}>{value}</span>
+      <span className={`block truncate font-mono text-[10px] font-black ${valueClass}`}>
+  {value}
+</span>
     </div>
   );
 }
@@ -650,7 +652,7 @@ export default function OptionContractSelector({
                   </p>
 
                   {/* ── Row 3: Stats grid ──────────────────────────────── */}
-                  <div className="mt-3 grid grid-cols-5 gap-1.5 md:grid-cols-10">
+                  <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-5">
                     <MiniStat label="Exp" value={expiration || "—"} />
                     <MiniStat label="Strike" value={`$${strike.toFixed(2)}`} />
                     <MiniStat label="Bid" value={`$${bid.toFixed(2)}`} />
