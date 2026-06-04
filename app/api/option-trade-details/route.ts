@@ -30,6 +30,27 @@ function toBoolean(value: unknown): boolean {
   return value === true || value === "true";
 }
 
+function normalizeContractQuality(value: unknown): string {
+  const quality = String(value || "UNKNOWN").toUpperCase();
+
+  if (quality === "IDEAL") return "A+";
+  if (quality === "GOOD") return "A";
+  if (quality === "ACCEPTABLE") return "B";
+  if (quality === "AVOID") return "BLOCKED";
+
+  if (
+    quality === "A+" ||
+    quality === "A" ||
+    quality === "B" ||
+    quality === "C" ||
+    quality === "BLOCKED"
+  ) {
+    return quality;
+  }
+
+  return "UNKNOWN";
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -51,6 +72,14 @@ export async function POST(request: Request) {
       risk_guard_reason,
       override_used,
       override_reason,
+
+      // Contract quality grade support
+      contract_quality,
+      qualityGrade,
+      contractQualityGrade,
+      grade,
+      quality_grade,
+      contract_quality_grade,
     } = body;
 
     if (!paper_trade_id) {
@@ -93,6 +122,15 @@ export async function POST(request: Request) {
       );
     }
 
+    const savedContractQuality = normalizeContractQuality(
+      contract_quality ||
+        qualityGrade ||
+        contractQualityGrade ||
+        grade ||
+        quality_grade ||
+        contract_quality_grade
+    );
+
     const insertPayload = {
       paper_trade_id,
       stock_symbol,
@@ -110,6 +148,7 @@ export async function POST(request: Request) {
       risk_guard_reason: risk_guard_reason || null,
       override_used: toBoolean(override_used),
       override_reason: override_reason || null,
+      contract_quality: savedContractQuality,
     };
 
     const { data, error } = await supabase
