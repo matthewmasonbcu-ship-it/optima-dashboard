@@ -187,6 +187,88 @@ function calculateBreakeven({
   return null;
 }
 
+
+function buildFallbackRiskCheck({
+  contract,
+  maxRisk,
+  spreadPercent,
+  accountSize,
+  maxRiskPercent,
+  maxSpreadPercent,
+}: {
+  contract: OptionContractLike | null;
+  maxRisk: number | null;
+  spreadPercent: number | null;
+  accountSize: number;
+  maxRiskPercent: number;
+  maxSpreadPercent: number;
+}): RiskCheckLike | null {
+  if (!contract) return null;
+
+  const maxAllowedRisk = accountSize * (maxRiskPercent / 100);
+
+  if (typeof maxRisk !== "number" || Number.isNaN(maxRisk) || maxRisk <= 0) {
+    return {
+      status: "WAITING",
+      reason: "Select a valid option contract to run Risk Guard.",
+      maxAllowedRisk,
+      max_allowed_risk: maxAllowedRisk,
+      riskLimit: maxAllowedRisk,
+      risk_limit: maxAllowedRisk,
+    };
+  }
+
+  if (maxRisk > maxAllowedRisk) {
+    return {
+      status: "BLOCKED",
+      reason: `Max risk ${money(maxRisk)} is above allowed risk ${money(maxAllowedRisk)}.`,
+      maxAllowedRisk,
+      max_allowed_risk: maxAllowedRisk,
+      riskLimit: maxAllowedRisk,
+      risk_limit: maxAllowedRisk,
+    };
+  }
+
+  if (
+    typeof spreadPercent === "number" &&
+    Number.isFinite(spreadPercent) &&
+    spreadPercent > maxSpreadPercent
+  ) {
+    return {
+      status: "BLOCKED",
+      reason: `Bid/ask spread ${spreadPercent.toFixed(1)}% is above max ${maxSpreadPercent}%.`,
+      maxAllowedRisk,
+      max_allowed_risk: maxAllowedRisk,
+      riskLimit: maxAllowedRisk,
+      risk_limit: maxAllowedRisk,
+    };
+  }
+
+  if (
+    typeof spreadPercent === "number" &&
+    Number.isFinite(spreadPercent) &&
+    spreadPercent > maxSpreadPercent * 0.75
+  ) {
+    return {
+      status: "CAUTION",
+      reason: "Risk Guard caution: spread is acceptable but close to the max limit.",
+      maxAllowedRisk,
+      max_allowed_risk: maxAllowedRisk,
+      riskLimit: maxAllowedRisk,
+      risk_limit: maxAllowedRisk,
+    };
+  }
+
+  return {
+    status: "APPROVED",
+    reason: "Risk Guard approved this contract.",
+    maxAllowedRisk,
+    max_allowed_risk: maxAllowedRisk,
+    riskLimit: maxAllowedRisk,
+    risk_limit: maxAllowedRisk,
+  };
+}
+
 // ─── Visual helpers ───────────────────────────────────────────────────────────
 function dirBar(d: string) {
   const u = d.toUpperCase();
@@ -281,6 +363,8 @@ export default function OptionTradeTicket({
   stockSymbol,
   tradeDirection,
   scannerDirection,
+  accountSize = 5000,
+  maxRiskPercent = 2,
   maxSpreadPercent = 20,
 }: OptionTradeTicketProps) {
 
@@ -321,7 +405,7 @@ export default function OptionTradeTicket({
   // ─── All derived display values — untouched ───────────────────────────────
   const contract = contractWasCleared ? null : propContract || broadcastContract;
   const scanSetup = selectedSetup || setup || selectedScanResult || null;
-  const risk = contractWasCleared ? null : optionRiskCheck || riskCheck || riskGuardResult || null;
+  const passedRisk = contractWasCleared ? null : optionRiskCheck || riskCheck || riskGuardResult || null;
 
   const contractSymbol = getContractSymbol(contract);
   // Use selectedSymbol / stockSymbol prop fallbacks for display
@@ -368,9 +452,19 @@ export default function OptionTradeTicket({
   const setupTarget = getSetupTarget(scanSetup);
   const setupScore = getSetupScore(scanSetup);
 
-  const riskStatus = getRiskStatus(risk);
-  const riskReason = getRiskReason(risk);
-  const riskLimit = getRiskLimit(risk);
+  const fallbackRisk = buildFallbackRiskCheck({
+    contract,
+    maxRisk,
+    spreadPercent,
+    accountSize,
+    maxRiskPercent,
+    maxSpreadPercent,
+  });
+
+  const displayRisk = passedRisk || fallbackRisk;
+  const riskStatus = getRiskStatus(displayRisk);
+  const riskReason = getRiskReason(displayRisk);
+  const riskLimit = getRiskLimit(displayRisk);
 
   const hasContract = Boolean(contract);
 
@@ -385,7 +479,7 @@ export default function OptionTradeTicket({
           No option contract selected
         </p>
         <p className="mt-1 font-mono text-[9px] text-slate-600">
-          Load the mock chain and pick a contract above.
+          Load the mock or Tradier chain and pick a contract above.
         </p>
       </div>
     );

@@ -19,6 +19,7 @@ type RouteStatus = {
   chainAvailable?: boolean;
   symbol?: string;
   expiration?: string | null;
+  data?: any;
 };
 
 type BrokerRouteKey =
@@ -213,16 +214,27 @@ export default function BrokerStatusCard() {
   async function loadBrokerStatuses() {
     try {
       setLoading(true);
-      const [profile, balances, positions, expirations, chain] =
-        await Promise.all([
-          fetchJson("/api/tradier/profile"),
-          fetchJson("/api/tradier/balances"),
-          fetchJson("/api/tradier/positions"),
-          fetchJson("/api/tradier/options/expirations?symbol=NVDA"),
-          fetchJson(
-            "/api/tradier/options/chain?symbol=NVDA&expiration=2026-06-19"
-          ),
-        ]);
+
+      const [profile, balances, positions, expirations] = await Promise.all([
+        fetchJson("/api/tradier/profile"),
+        fetchJson("/api/tradier/balances"),
+        fetchJson("/api/tradier/positions"),
+        fetchJson("/api/tradier/options/expirations?symbol=NVDA"),
+      ]);
+
+      const expirationDates = expirations?.data?.expirations?.date;
+      const firstExpiration = Array.isArray(expirationDates)
+        ? expirationDates[0]
+        : typeof expirationDates === "string"
+          ? expirationDates
+          : "2026-06-17";
+
+      const chain = await fetchJson(
+        `/api/tradier/options/chain?symbol=NVDA&expiration=${encodeURIComponent(
+          firstExpiration
+        )}`
+      );
+
       setStatuses({ profile, balances, positions, expirations, chain });
     } catch (error) {
       console.error("Failed to load broker statuses:", error);
@@ -260,6 +272,23 @@ export default function BrokerStatusCard() {
     (s) => s?.liveTradingEnabled === true
   );
   const allRoutesLoaded = Object.values(statuses).every(Boolean);
+  const tradierConnected = profileStatus?.connected === true;
+  const chainConnected = statuses.chain?.chainAvailable === true;
+  const marketDataStatus = chainConnected
+    ? "Tradier Chain"
+    : tradierConnected
+      ? "Mock Fallback"
+      : "Mock Data";
+  const marketDataTone: "green" | "yellow" | "red" | "blue" = chainConnected
+    ? "green"
+    : tradierConnected
+      ? "yellow"
+      : "yellow";
+  const marketDataSubtext = chainConnected
+    ? "Read-only option chain connected"
+    : tradierConnected
+      ? "Tradier connected; chain fallback active"
+      : "Real chain route prepared";
 
   // ─── Route rows for the grid ──────────────────────────────────────────────
   const routeRows = [
@@ -320,7 +349,7 @@ export default function BrokerStatusCard() {
               </span>
             </h2>
             <p className="mt-1.5 max-w-lg font-mono text-[10px] leading-5 text-slate-500">
-              Read-only Tradier preparation panel. Checks connection routes without allowing broker orders.
+              Read-only Tradier status panel. Checks sandbox market-data routes without allowing broker orders.
             </p>
           </div>
 
@@ -374,9 +403,9 @@ export default function BrokerStatusCard() {
           />
           <StatusPill
             label="Option Chain"
-            value="Mock Data"
-            tone="yellow"
-            subtext="Real chain route prepared"
+            value={marketDataStatus}
+            tone={marketDataTone}
+            subtext={marketDataSubtext}
           />
         </div>
 

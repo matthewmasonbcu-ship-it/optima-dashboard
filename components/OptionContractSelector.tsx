@@ -255,6 +255,179 @@ function buildManualContract(params: { stockSymbol: string; direction: TradeDire
   return manualContract;
 }
 
+
+function getRawOptionType(contract: OptionContract) {
+  return String(
+    getContractValue(
+      contract,
+      ["option_type", "optionType", "trade_direction", "tradeDirection"],
+      ""
+    )
+  ).toUpperCase();
+}
+
+function getTradierLiquidityScore(contract: OptionContract) {
+  const volume = getNumber(contract.volume, 0);
+  const openInterest = getOpenInterest(contract);
+
+  if (volume >= 250 || openInterest >= 1000) return 100;
+  if (volume >= 100 || openInterest >= 500) return 85;
+  if (volume >= 25 || openInterest >= 150) return 70;
+  if (volume >= 5 || openInterest >= 50) return 50;
+  if (volume > 0 || openInterest > 0) return 25;
+
+  return 0;
+}
+
+function getTradierQualityGrade(
+  contract: OptionContract,
+  params: {
+    accountSize: number;
+    maxRiskPercent: number;
+    maxSpreadPercent: number;
+  }
+) {
+  const bid = getBid(contract);
+  const ask = getAsk(contract);
+  const mid = getMid(contract);
+  const spread = getSpreadPercent(contract);
+  const maxRisk = getMaxRisk(contract);
+  const allowedRisk = params.accountSize * (params.maxRiskPercent / 100);
+  const liquidityScore = getTradierLiquidityScore(contract);
+
+  if (bid <= 0 || ask <= 0 || mid <= 0) return "BLOCKED";
+  if (ask < bid) return "BLOCKED";
+  if (maxRisk > allowedRisk) return "BLOCKED";
+  if (spread > params.maxSpreadPercent * 2) return "BLOCKED";
+
+  if (spread <= 10 && liquidityScore >= 85) return "A+";
+  if (spread <= 15 && liquidityScore >= 70) return "A";
+  if (spread <= params.maxSpreadPercent && liquidityScore >= 25) return "B";
+
+  return "C";
+}
+
+function getTradierRecommendationScore(
+  contract: OptionContract,
+  params: {
+    accountSize: number;
+    maxRiskPercent: number;
+    maxSpreadPercent: number;
+  }
+) {
+  const grade = getTradierQualityGrade(contract, params);
+  const spread = getSpreadPercent(contract);
+  const liquidityScore = getTradierLiquidityScore(contract);
+  const maxRisk = getMaxRisk(contract);
+  const allowedRisk = params.accountSize * (params.maxRiskPercent / 100);
+  const riskFitScore = allowedRisk > 0 ? Math.max(0, 100 - (maxRisk / allowedRisk) * 100) : 0;
+  const spreadScore = Math.max(0, 100 - (spread / Math.max(params.maxSpreadPercent, 1)) * 100);
+
+  const gradeScore =
+    grade === "A+"
+      ? 100
+      : grade === "A"
+      ? 85
+      : grade === "B"
+      ? 65
+      : grade === "C"
+      ? 35
+      : 0;
+
+  return Math.round(gradeScore * 0.4 + liquidityScore * 0.25 + spreadScore * 0.2 + riskFitScore * 0.15);
+}
+
+function enrichTradierContract(
+  contract: OptionContract,
+  params: {
+    stockSymbol: string;
+    direction: TradeDirection;
+    accountSize: number;
+    maxRiskPercent: number;
+    maxSpreadPercent: number;
+  }
+): OptionContract {
+  const bid = getBid(contract);
+  const ask = getAsk(contract);
+  const mid = getMid(contract);
+  const contracts = getContracts(contract);
+  const estimatedCost = getEstimatedCost(contract);
+  const maxRisk = getMaxRisk(contract);
+  const spread = getSpreadPercent(contract);
+  const liquidityScore = getTradierLiquidityScore(contract);
+  const recommendationScore = getTradierRecommendationScore(contract, params);
+  const qualityGrade = getTradierQualityGrade(contract, params);
+  const riskStatus = getRiskStatus(
+    { ...contract, qualityGrade, contractQualityGrade: qualityGrade, grade: qualityGrade },
+    {
+      accountSize: params.accountSize,
+      maxRiskPercent: params.maxRiskPercent,
+      maxSpreadPercent: params.maxSpreadPercent,
+    }
+  );
+
+  return {
+    ...contract,
+    stock_symbol: String(getContractValue(contract, ["stock_symbol", "stockSymbol"], params.stockSymbol)),
+    stockSymbol: String(getContractValue(contract, ["stock_symbol", "stockSymbol"], params.stockSymbol)),
+    trade_direction: params.direction,
+    tradeDirection: params.direction,
+    bid_price: bid,
+    bidPrice: bid,
+    bid,
+    ask_price: ask,
+    askPrice: ask,
+    ask,
+    mid_price: mid,
+    midPrice: mid,
+    mid,
+    contracts,
+    estimated_cost: estimatedCost,
+    estimatedCost,
+    max_risk: maxRisk,
+    maxRisk,
+    spreadPercent: spread,
+    spread_percent: spread,
+    bidAskSpreadPercent: spread,
+    liquidityScore,
+    liquidity_score: liquidityScore,
+    recommendationScore,
+    recommendation_score: recommendationScore,
+    qualityGrade,
+    contractQualityGrade: qualityGrade,
+    grade: qualityGrade,
+    recommendationReason:
+      qualityGrade === "BLOCKED"
+        ? `Tradier contract blocked by safety filters. ${riskStatus.reason}`
+        : qualityGrade === "C"
+        ? "Tradier contract is weak quality. Testing Override required before saving."
+        : qualityGrade === "B"
+        ? "Tradier contract is acceptable, but not ideal. Confirm Risk Guard before saving."
+        : "Tradier contract passes current read-only quality filters.",
+    whyThisContract: [
+      "Loaded from Tradier sandbox option chain.",
+      `Spread ${spread.toFixed(1)}%.`,
+      `Liquidity score ${liquidityScore}.`,
+      "Read-only market data only. Paper trade save remains controlled by Risk Guard.",
+    ],
+  };
+}
+
+function getFirstExpirationFromResponse(data: any): string {
+  const dates = data?.data?.expirations?.date || data?.expirations?.date || data?.dates || [];
+
+  if (Array.isArray(dates) && dates.length > 0) {
+    return String(dates[0]);
+  }
+
+  if (typeof dates === "string") {
+    return dates;
+  }
+
+  return "";
+}
+
+
 // ─── MiniStat — matches suite ─────────────────────────────────────────────────
 function MiniStat({ label, value, valueClass = "text-slate-200" }: { label: string; value: string | number; valueClass?: string; }) {
   return (
@@ -287,6 +460,8 @@ export default function OptionContractSelector({
 
   const [contracts, setContracts] = useState<OptionContract[]>([]);
   const [loadingChain, setLoadingChain] = useState(false);
+  const [chainSource, setChainSource] = useState<"mock" | "tradier" | "none">("none");
+  const [tradierExpiration, setTradierExpiration] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [hideBlockedContracts, setHideBlockedContracts] = useState(true);
   const [sortMode, setSortMode] = useState<SortMode>("recommendation");
@@ -315,11 +490,100 @@ export default function OptionContractSelector({
       const rawContracts = data.contracts || data.optionChain || data.chain || [];
       if (!Array.isArray(rawContracts)) { setStatusMessage("Option chain returned invalid contract data."); setContracts([]); return; }
       setContracts(rawContracts);
+      setChainSource("mock");
       setStatusMessage(`Loaded ${rawContracts.length} mock contracts. Turn Hide BLOCKED off to see blocked test contracts.`);
     } catch (error) {
       console.error("loadMockChain error:", error);
       setStatusMessage("Option chain failed. Check console.");
       setContracts([]);
+      setChainSource("none");
+    } finally {
+      setLoadingChain(false);
+    }
+  }
+
+  async function loadTradierChain() {
+    if (!finalSymbol) {
+      setStatusMessage("Select a scanner setup before loading Tradier contracts.");
+      return;
+    }
+
+    if (finalDirection === "NO TRADE") {
+      setStatusMessage("Direction is NO TRADE. Select a CALL or PUT setup first.");
+      return;
+    }
+
+    setLoadingChain(true);
+    setStatusMessage("Loading Tradier read-only option chain...");
+
+    try {
+      let expiration = tradierExpiration.trim();
+
+      if (!expiration) {
+        const expirationRes = await fetch(
+          `/api/tradier/options/expirations?symbol=${encodeURIComponent(finalSymbol)}`,
+          { cache: "no-store" }
+        );
+        const expirationData = await expirationRes.json();
+
+        if (!expirationRes.ok || !expirationData?.success || !expirationData?.expirationsAvailable) {
+          setStatusMessage(expirationData?.message || expirationData?.error || "Could not load Tradier expirations.");
+          setContracts([]);
+          setChainSource("none");
+          return;
+        }
+
+        expiration = getFirstExpirationFromResponse(expirationData);
+
+        if (!expiration) {
+          setStatusMessage("Tradier did not return any expiration dates for this symbol.");
+          setContracts([]);
+          setChainSource("none");
+          return;
+        }
+
+        setTradierExpiration(expiration);
+      }
+
+      const chainRes = await fetch(
+        `/api/tradier/options/chain?symbol=${encodeURIComponent(finalSymbol)}&expiration=${encodeURIComponent(expiration)}`,
+        { cache: "no-store" }
+      );
+      const chainData = await chainRes.json();
+
+      if (!chainRes.ok || !chainData?.success || !chainData?.chainAvailable) {
+        setStatusMessage(chainData?.message || chainData?.error || "Tradier option chain failed.");
+        setContracts([]);
+        setChainSource("none");
+        return;
+      }
+
+      const rawContracts = Array.isArray(chainData.contracts) ? chainData.contracts : [];
+      const directionFiltered = rawContracts.filter((contract: OptionContract) => {
+        const optionType = getRawOptionType(contract);
+        return optionType === finalDirection || String(contract.trade_direction || contract.tradeDirection || "").toUpperCase() === finalDirection;
+      });
+
+      const enrichedContracts = directionFiltered.map((contract: OptionContract) =>
+        enrichTradierContract(contract, {
+          stockSymbol: finalSymbol,
+          direction: finalDirection,
+          accountSize,
+          maxRiskPercent,
+          maxSpreadPercent,
+        })
+      );
+
+      setContracts(enrichedContracts);
+      setChainSource("tradier");
+      setStatusMessage(
+        `Loaded ${enrichedContracts.length} Tradier ${finalDirection} contracts for ${finalSymbol} ${expiration}. Read-only sandbox data. Orders remain disabled.`
+      );
+    } catch (error) {
+      console.error("loadTradierChain error:", error);
+      setStatusMessage("Tradier option chain failed. Check console.");
+      setContracts([]);
+      setChainSource("none");
     } finally {
       setLoadingChain(false);
     }
@@ -340,6 +604,7 @@ export default function OptionContractSelector({
     if (!Number.isFinite(contractCount) || contractCount <= 0) { setStatusMessage("Enter a valid contract count."); return; }
     const manualContract = buildManualContract({ stockSymbol: finalSymbol, direction: finalDirection, optionSymbol: manualOptionSymbol.trim().toUpperCase(), expirationDate: manualExpiration, strikePrice: strike, bid, ask, contracts: contractCount });
     selectContract(manualContract);
+    setChainSource("none");
     setStatusMessage(`Manual contract selected: ${manualContract.option_symbol}`);
   }
 
@@ -389,35 +654,71 @@ export default function OptionContractSelector({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-cyan-600">
-            OPTIMA-SYS · Mock Option Chain
+            OPTIMA-SYS · Option Chain Selector
           </p>
           <p className="mt-0.5 font-mono text-xs font-black text-slate-300">
             Contract Builder · {finalSymbol || "No symbol"}{" "}
             <span className={`${getDirectionColor(finalDirection)}`}>{finalDirection}</span>
           </p>
           <p className="mt-0.5 font-mono text-[9px] text-slate-600">
-            C and BLOCKED contracts stay visible for safety testing.
+            Use mock contracts for testing or Tradier sandbox contracts for read-only market data.
           </p>
         </div>
 
-        <button
-          onClick={loadMockChain}
-          disabled={loadingChain || !finalSymbol || finalDirection === "NO TRADE"}
-          className="group relative shrink-0 overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900/80 px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-cyan-500/40 hover:bg-slate-800/80 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <span
-            className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
-            style={{ background: "linear-gradient(90deg, transparent, #06b6d4, transparent)" }}
+        <div className="flex w-full flex-col gap-2 sm:w-auto">
+          <input
+            value={tradierExpiration}
+            onChange={(e) => setTradierExpiration(e.target.value)}
+            placeholder="Tradier expiration YYYY-MM-DD"
+            className="rounded-lg border border-slate-700/60 bg-slate-950/80 px-3 py-2 font-mono text-[10px] text-white outline-none placeholder:text-slate-600 focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/20"
           />
-          {loadingChain ? (
-            <span className="flex items-center gap-2">
-              <span className="h-1.5 w-1.5 animate-ping rounded-full bg-cyan-400" />
-              Loading...
-            </span>
-          ) : (
-            "⟳ Load Mock Chain"
-          )}
-        </button>
+
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={loadMockChain}
+              disabled={loadingChain || !finalSymbol || finalDirection === "NO TRADE"}
+              className="group relative shrink-0 overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900/80 px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-cyan-500/40 hover:bg-slate-800/80 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <span
+                className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
+                style={{ background: "linear-gradient(90deg, transparent, #06b6d4, transparent)" }}
+              />
+              {loadingChain ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 animate-ping rounded-full bg-cyan-400" />
+                  Loading...
+                </span>
+              ) : (
+                "⟳ Load Mock Chain"
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={loadTradierChain}
+              disabled={loadingChain || !finalSymbol || finalDirection === "NO TRADE"}
+              className="group relative shrink-0 overflow-hidden rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-300 transition-all hover:border-emerald-400/50 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <span
+                className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
+                style={{ background: "linear-gradient(90deg, transparent, #10b981, transparent)" }}
+              />
+              {loadingChain ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 animate-ping rounded-full bg-emerald-400" />
+                  Loading...
+                </span>
+              ) : (
+                "↯ Load Tradier Chain"
+              )}
+            </button>
+          </div>
+
+          <p className="font-mono text-[8px] leading-4 text-slate-600">
+            Leave expiration blank to auto-pick the first Tradier expiration. Read-only sandbox data only.
+          </p>
+        </div>
       </div>
 
       {/* ── STATUS MESSAGE ──────────────────────────────────────────────── */}
@@ -431,7 +732,7 @@ export default function OptionContractSelector({
       )}
 
       {/* ── CONTEXT STRIP ───────────────────────────────────────────────── */}
-      <div className="grid grid-cols-4 gap-1.5">
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5">
         <div className="relative overflow-hidden rounded-lg border border-slate-800/80 bg-black/30 px-3 py-2">
           <div className="absolute inset-y-0 left-0 w-[2px] bg-slate-600" />
           <p className="pl-0.5 font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-slate-600">Symbol</p>
@@ -451,6 +752,13 @@ export default function OptionContractSelector({
           <div className="absolute inset-y-0 left-0 w-[2px] bg-slate-500" />
           <p className="pl-0.5 font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-slate-600">Visible</p>
           <p className="pl-0.5 font-mono text-[10px] font-black text-slate-300">{visibleContracts.length}</p>
+        </div>
+        <div className="relative overflow-hidden rounded-lg border border-slate-800/80 bg-black/30 px-3 py-2">
+          <div className={`absolute inset-y-0 left-0 w-[2px] ${chainSource === "tradier" ? "bg-emerald-500" : chainSource === "mock" ? "bg-cyan-500" : "bg-slate-600"}`} />
+          <p className="pl-0.5 font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-slate-600">Source</p>
+          <p className={`pl-0.5 font-mono text-[10px] font-black ${chainSource === "tradier" ? "text-emerald-300" : chainSource === "mock" ? "text-cyan-300" : "text-slate-400"}`}>
+            {chainSource === "tradier" ? "Tradier" : chainSource === "mock" ? "Mock" : "—"}
+          </p>
         </div>
       </div>
 
@@ -584,7 +892,7 @@ export default function OptionContractSelector({
           <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-600">No Data</p>
           <p className="mt-1 font-mono text-sm font-black text-slate-400">No visible contracts</p>
           <p className="mt-0.5 font-mono text-[9px] text-slate-600">
-            Load the mock chain or turn Hide BLOCKED off.
+            Load the mock chain, load the Tradier chain, or turn Hide BLOCKED off.
           </p>
         </div>
       ) : (
