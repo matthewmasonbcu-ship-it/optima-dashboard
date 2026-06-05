@@ -116,6 +116,7 @@ type OptionContract = {
   grade?: string;
   quality_grade?: string;
   contract_quality_grade?: string;
+  contract_quality?: string;
 
   riskStatus?: string;
 };
@@ -163,22 +164,60 @@ function getContractValue(
   return fallback;
 }
 
+function normalizeContractGradeValue(value: any) {
+  const cleanGrade = String(value || "").trim().toUpperCase();
+
+  if (!cleanGrade || cleanGrade === "UNKNOWN" || cleanGrade === "N/A" || cleanGrade === "NULL") {
+    return "";
+  }
+
+  if (cleanGrade === "IDEAL") return "A+";
+  if (cleanGrade === "GOOD") return "A";
+  if (cleanGrade === "ACCEPTABLE") return "B";
+  if (cleanGrade === "AVOID") return "BLOCKED";
+
+  if (
+    cleanGrade === "A+" ||
+    cleanGrade === "A" ||
+    cleanGrade === "B" ||
+    cleanGrade === "C" ||
+    cleanGrade === "BLOCKED"
+  ) {
+    return cleanGrade;
+  }
+
+  return "";
+}
+
 function getContractGrade(contract: OptionContract | null) {
   if (!contract) return "UNKNOWN";
 
-  const grade = getContractValue(
-    contract,
-    [
-      "qualityGrade",
-      "contractQualityGrade",
-      "grade",
-      "quality_grade",
-      "contract_quality_grade",
-    ],
-    "UNKNOWN"
-  );
+  const gradeKeys = [
+    "contract_quality",
+    "qualityGrade",
+    "contractQualityGrade",
+    "grade",
+    "quality_grade",
+    "contract_quality_grade",
+  ];
 
-  return String(grade || "UNKNOWN").toUpperCase();
+  for (const key of gradeKeys) {
+    const normalizedGrade = normalizeContractGradeValue((contract as any)[key]);
+
+    if (normalizedGrade) {
+      return normalizedGrade;
+    }
+  }
+
+  return "UNKNOWN";
+}
+
+function isCleanContractGrade(grade: string) {
+  return grade === "A+" || grade === "A" || grade === "B";
+}
+
+function gradeRequiresTestingOverride(grade: string) {
+  return !isCleanContractGrade(grade);
 }
 
 function calculateRiskGuard(params: {
@@ -584,6 +623,8 @@ function normalizeContractForSave(
     estimatedCost
   );
 
+  const contractQuality = getContractGrade(contract);
+
   return {
     stock_symbol: String(
       getContractValue(
@@ -617,6 +658,14 @@ function normalizeContractForSave(
     contracts,
     estimated_cost: estimatedCost,
     max_risk: maxRisk,
+
+    // Contract-quality compatibility for Supabase and tracker analytics.
+    contract_quality: contractQuality,
+    qualityGrade: contractQuality,
+    contractQualityGrade: contractQuality,
+    grade: contractQuality,
+    quality_grade: contractQuality,
+    contract_quality_grade: contractQuality,
   };
 }
 
@@ -832,9 +881,25 @@ export default function Home() {
         marketCondition,
       });
 
+      const selectedContractGrade = getContractGrade(selectedContract);
+
+      if (gradeRequiresTestingOverride(selectedContractGrade) && !testingOverrideEnabled) {
+        setStatusMessage(
+          `Paper trade blocked: Contract quality grade is ${selectedContractGrade}. Only A+, A, or B contracts can save clean. Turn Testing Override ON only for intentional testing.`
+        );
+        return;
+      }
+
       if (latestPreTradeCheck.status === "BLOCKED" && !testingOverrideEnabled) {
         setStatusMessage(`Paper trade blocked: ${latestPreTradeCheck.message}`);
         return;
+      }
+
+      if (gradeRequiresTestingOverride(selectedContractGrade) && testingOverrideEnabled) {
+        console.warn("TESTING OVERRIDE USED FOR WEAK CONTRACT GRADE:", {
+          selectedContractGrade,
+          blocks: latestPreTradeCheck.blocks,
+        });
       }
 
       if (latestPreTradeCheck.status === "BLOCKED" && testingOverrideEnabled) {
@@ -921,7 +986,7 @@ export default function Home() {
 
           override_used: testingOverrideEnabled,
           override_reason: testingOverrideEnabled
-            ? `Testing Override used. Pre-Trade Status: ${
+            ? `Testing Override used. Contract Quality: ${selectedContractGrade}. Pre-Trade Status: ${
                 latestPreTradeCheck.status
               }. Risk Guard: ${latestRiskCheck.status}. Reason: ${
                 latestPreTradeCheck.message ||
@@ -953,7 +1018,7 @@ export default function Home() {
       }
 
       setStatusMessage(
-        `Paper trade and option details saved successfully: ${selectedSymbol}. Risk Guard: ${latestRiskCheck.status}.`
+        `Paper trade and option details saved successfully: ${selectedSymbol}. Risk Guard: ${latestRiskCheck.status}. Contract Quality: ${selectedContractGrade}.`
       );
 
       setRefreshKey((prev) => prev + 1);

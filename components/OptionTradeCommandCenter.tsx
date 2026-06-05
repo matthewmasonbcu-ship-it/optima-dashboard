@@ -54,6 +54,7 @@ type OptionContract = {
   qualityGrade?: string;
   contractQualityGrade?: string;
   grade?: string;
+  contract_quality?: string;
   quality_grade?: string;
   contract_quality_grade?: string;
   recommendationScore?: number;
@@ -121,7 +122,14 @@ function getContractValue(
 function getContractGrade(contract?: OptionContract | null) {
   const grade = getContractValue(
     contract,
-    ["qualityGrade", "contractQualityGrade", "grade", "quality_grade", "contract_quality_grade"],
+    [
+      "qualityGrade",
+      "contractQualityGrade",
+      "grade",
+      "contract_quality",
+      "quality_grade",
+      "contract_quality_grade",
+    ],
     "UNKNOWN"
   );
   return String(grade || "UNKNOWN").toUpperCase();
@@ -319,6 +327,26 @@ function SectionCard({
   );
 }
 
+
+function normalizeSelectedContractForPassThrough(contract: OptionContract | null): OptionContract | null {
+  if (!contract) return null;
+
+  const grade = getContractGrade(contract);
+
+  return {
+    ...contract,
+
+    // Preserve contract quality across every naming style used by the app.
+    // This prevents Tradier-selected contracts from reaching page.tsx as UNKNOWN.
+    qualityGrade: grade,
+    contractQualityGrade: grade,
+    grade,
+    contract_quality: grade,
+    quality_grade: grade,
+    contract_quality_grade: grade,
+  };
+}
+
 export default function OptionTradeCommandCenter({
   selectedSetup = null,
   selectedSymbol,
@@ -358,8 +386,16 @@ export default function OptionTradeCommandCenter({
 
   // ─── All handlers — untouched ────────────────────────────────────────────────
   const handleContractSelected = (contract: OptionContract | null) => {
-    if (onSelectContract) { onSelectContract(contract); return; }
-    if (onContractSelected) { onContractSelected(contract); }
+    const normalizedContract = normalizeSelectedContractForPassThrough(contract);
+
+    if (onSelectContract) {
+      onSelectContract(normalizedContract);
+      return;
+    }
+
+    if (onContractSelected) {
+      onContractSelected(normalizedContract);
+    }
   };
 
   const handleClearContract = () => {

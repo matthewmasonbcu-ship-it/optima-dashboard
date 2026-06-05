@@ -1,6 +1,6 @@
 "use client";
 
-// ─── UI ONLY — all chain logic, filtering, sorting, and selection untouched ──
+// --- UI ONLY - all chain logic, filtering, sorting, and selection untouched --
 
 import { useMemo, useState } from "react";
 
@@ -53,11 +53,19 @@ type OptionContract = {
   qualityGrade?: "A+" | "A" | "B" | "C" | "BLOCKED" | string;
   contractQualityGrade?: "A+" | "A" | "B" | "C" | "BLOCKED" | string;
   grade?: "A+" | "A" | "B" | "C" | "BLOCKED" | string;
+  contract_quality?: string;
   quality_grade?: string;
   contract_quality_grade?: string;
   recommendationReason?: string;
   whyThisContract?: string[];
   riskStatus?: string;
+  source?: string;
+  delta?: number | null;
+  gamma?: number | null;
+  theta?: number | null;
+  vega?: number | null;
+  implied_volatility?: number | null;
+  impliedVolatility?: number | null;
 };
 
 type OptionContractSelectorProps = {
@@ -74,7 +82,7 @@ type OptionContractSelectorProps = {
   maxSpreadPercent?: number;
 };
 
-// ─── All helper functions untouched ──────────────────────────────────────────
+// --- All helper functions untouched ------------------------------------------
 function getNumber(value: any, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -99,8 +107,66 @@ function getOptionSymbol(contract: OptionContract | null | undefined) {
   return String(getContractValue(contract, ["option_symbol", "optionSymbol", "symbol"], ""));
 }
 
+function normalizeGradeValue(value: unknown) {
+  const grade = String(value || "").trim().toUpperCase();
+
+  if (!grade || grade === "UNKNOWN" || grade === "N/A" || grade === "NULL") {
+    return "";
+  }
+
+  if (grade === "IDEAL") return "A+";
+  if (grade === "GOOD") return "A";
+  if (grade === "ACCEPTABLE") return "B";
+  if (grade === "AVOID") return "BLOCKED";
+
+  if (
+    grade === "A+" ||
+    grade === "A" ||
+    grade === "B" ||
+    grade === "C" ||
+    grade === "BLOCKED"
+  ) {
+    return grade;
+  }
+
+  return "";
+}
+
 function getGrade(contract: OptionContract | null | undefined) {
-  return String(getContractValue(contract, ["qualityGrade", "contractQualityGrade", "grade", "quality_grade", "contract_quality_grade"], "UNKNOWN")).toUpperCase();
+  if (!contract) return "UNKNOWN";
+
+  const gradeCandidates = [
+    contract.contract_quality,
+    contract.qualityGrade,
+    contract.contractQualityGrade,
+    contract.grade,
+    contract.quality_grade,
+    contract.contract_quality_grade,
+  ];
+
+  for (const candidate of gradeCandidates) {
+    const normalized = normalizeGradeValue(candidate);
+
+    if (normalized) return normalized;
+  }
+
+  return "UNKNOWN";
+}
+
+function withSyncedContractQuality(contract: OptionContract | null): OptionContract | null {
+  if (!contract) return null;
+
+  const syncedGrade = getGrade(contract);
+
+  return {
+    ...contract,
+    qualityGrade: syncedGrade,
+    contractQualityGrade: syncedGrade,
+    grade: syncedGrade,
+    contract_quality: syncedGrade,
+    quality_grade: syncedGrade,
+    contract_quality_grade: syncedGrade,
+  };
 }
 
 function getBid(contract: OptionContract) {
@@ -158,6 +224,72 @@ function getOpenInterest(contract: OptionContract) {
   return getNumber(getContractValue(contract, ["openInterest", "open_interest"]), 0);
 }
 
+function getVolume(contract: OptionContract) {
+  return getNumber(getContractValue(contract, ["volume"]), 0);
+}
+
+function getDelta(contract: OptionContract) {
+  const value = getContractValue(contract, ["delta"], null);
+
+  if (value === null || value === undefined || value === "") return null;
+
+  const delta = Number(value);
+
+  if (!Number.isFinite(delta)) return null;
+
+  return delta;
+}
+
+function getDeltaAbs(contract: OptionContract) {
+  const delta = getDelta(contract);
+
+  if (delta === null) return null;
+
+  return Math.abs(delta);
+}
+
+function getDeltaFitScore(contract: OptionContract) {
+  const deltaAbs = getDeltaAbs(contract);
+
+  // If Greeks are missing, do not block the contract, but do not reward it either.
+  if (deltaAbs === null) return 50;
+
+  if (deltaAbs >= 0.30 && deltaAbs <= 0.55) return 100;
+  if (deltaAbs >= 0.25 && deltaAbs < 0.30) return 85;
+  if (deltaAbs > 0.55 && deltaAbs <= 0.70) return 75;
+  if (deltaAbs >= 0.18 && deltaAbs < 0.25) return 60;
+  if (deltaAbs > 0.70 && deltaAbs <= 0.85) return 45;
+
+  return 20;
+}
+
+function getTradierExpirationDays(contract: OptionContract) {
+  const expiration = String(getContractValue(contract, ["expiration_date", "expirationDate"], ""));
+
+  if (!expiration) return null;
+
+  const expirationTime = new Date(`${expiration}T16:00:00`).getTime();
+
+  if (!Number.isFinite(expirationTime)) return null;
+
+  const now = Date.now();
+  const days = Math.ceil((expirationTime - now) / (1000 * 60 * 60 * 24));
+
+  return days;
+}
+
+function getExpirationFitScore(contract: OptionContract) {
+  const days = getTradierExpirationDays(contract);
+
+  if (days === null) return 50;
+  if (days >= 7 && days <= 45) return 100;
+  if (days >= 3 && days < 7) return 75;
+  if (days > 45 && days <= 90) return 65;
+  if (days > 90) return 45;
+
+  return 20;
+}
+
 function getGradeRank(grade: string) {
   if (grade === "A+") return 5;
   if (grade === "A") return 4;
@@ -167,7 +299,7 @@ function getGradeRank(grade: string) {
   return 0;
 }
 
-// ─── Visual helpers ───────────────────────────────────────────────────────────
+// --- Visual helpers -----------------------------------------------------------
 function getGradeBar(grade: string) {
   if (grade === "A+" || grade === "A") return "bg-emerald-500";
   if (grade === "B") return "bg-blue-500";
@@ -211,7 +343,7 @@ function getDirectionBar(direction: string) {
   return "bg-slate-600";
 }
 
-// ─── getRiskStatus — logic untouched ─────────────────────────────────────────
+// --- getRiskStatus - logic untouched -----------------------------------------
 function getRiskStatus(contract: OptionContract, params: { accountSize: number; maxRiskPercent: number; maxSpreadPercent: number; }) {
   const { accountSize, maxRiskPercent, maxSpreadPercent } = params;
   const maxRisk = getMaxRisk(contract);
@@ -226,7 +358,7 @@ function getRiskStatus(contract: OptionContract, params: { accountSize: number; 
   return { status: "APPROVED", reason: "Contract passes basic quality filters." };
 }
 
-// ─── buildManualContract — logic untouched ────────────────────────────────────
+// --- buildManualContract - logic untouched ------------------------------------
 function buildManualContract(params: { stockSymbol: string; direction: TradeDirection; optionSymbol: string; expirationDate: string; strikePrice: number; bid: number; ask: number; contracts: number; }) {
   const { stockSymbol, direction, optionSymbol, expirationDate, strikePrice, bid, ask, contracts } = params;
   const mid = bid > 0 && ask > 0 ? Number(((bid + ask) / 2).toFixed(2)) : 0;
@@ -248,7 +380,12 @@ function buildManualContract(params: { stockSymbol: string; direction: TradeDire
     volume: 0, openInterest: 0, open_interest: 0,
     liquidityScore: 0, liquidity_score: 0,
     recommendationScore: 0, recommendation_score: 0,
-    qualityGrade: "UNKNOWN", contractQualityGrade: "UNKNOWN", grade: "UNKNOWN",
+    qualityGrade: "UNKNOWN",
+    contractQualityGrade: "UNKNOWN",
+    grade: "UNKNOWN",
+    contract_quality: "UNKNOWN",
+    quality_grade: "UNKNOWN",
+    contract_quality_grade: "UNKNOWN",
     recommendationReason: "Manual contract. No automatic quality grade.",
     whyThisContract: ["Manual contract entered by user.", "No automatic grade available.", "Use Testing Override only if intentionally testing."],
   };
@@ -267,14 +404,16 @@ function getRawOptionType(contract: OptionContract) {
 }
 
 function getTradierLiquidityScore(contract: OptionContract) {
-  const volume = getNumber(contract.volume, 0);
+  const volume = getVolume(contract);
   const openInterest = getOpenInterest(contract);
 
-  if (volume >= 250 || openInterest >= 1000) return 100;
-  if (volume >= 100 || openInterest >= 500) return 85;
-  if (volume >= 25 || openInterest >= 150) return 70;
-  if (volume >= 5 || openInterest >= 50) return 50;
-  if (volume > 0 || openInterest > 0) return 25;
+  if (volume >= 500 && openInterest >= 1000) return 100;
+  if (volume >= 250 || openInterest >= 1000) return 90;
+  if (volume >= 100 || openInterest >= 500) return 80;
+  if (volume >= 50 || openInterest >= 250) return 70;
+  if (volume >= 20 || openInterest >= 100) return 55;
+  if (volume >= 5 || openInterest >= 25) return 35;
+  if (volume > 0 || openInterest > 0) return 20;
 
   return 0;
 }
@@ -294,15 +433,47 @@ function getTradierQualityGrade(
   const maxRisk = getMaxRisk(contract);
   const allowedRisk = params.accountSize * (params.maxRiskPercent / 100);
   const liquidityScore = getTradierLiquidityScore(contract);
+  const deltaFitScore = getDeltaFitScore(contract);
+  const expirationFitScore = getExpirationFitScore(contract);
+  const volume = getVolume(contract);
+  const openInterest = getOpenInterest(contract);
 
   if (bid <= 0 || ask <= 0 || mid <= 0) return "BLOCKED";
   if (ask < bid) return "BLOCKED";
   if (maxRisk > allowedRisk) return "BLOCKED";
-  if (spread > params.maxSpreadPercent * 2) return "BLOCKED";
+  if (spread > params.maxSpreadPercent * 1.5) return "BLOCKED";
 
-  if (spread <= 10 && liquidityScore >= 85) return "A+";
-  if (spread <= 15 && liquidityScore >= 70) return "A";
-  if (spread <= params.maxSpreadPercent && liquidityScore >= 25) return "B";
+  // Real option chains can include stale/no-market contracts. Keep those out of clean saves.
+  if (volume === 0 && openInterest === 0) return "C";
+
+  if (
+    spread <= 8 &&
+    liquidityScore >= 80 &&
+    deltaFitScore >= 85 &&
+    expirationFitScore >= 65 &&
+    maxRisk <= allowedRisk * 0.75
+  ) {
+    return "A+";
+  }
+
+  if (
+    spread <= 12 &&
+    liquidityScore >= 55 &&
+    deltaFitScore >= 60 &&
+    expirationFitScore >= 50 &&
+    maxRisk <= allowedRisk
+  ) {
+    return "A";
+  }
+
+  if (
+    spread <= params.maxSpreadPercent &&
+    liquidityScore >= 20 &&
+    deltaFitScore >= 45 &&
+    maxRisk <= allowedRisk
+  ) {
+    return "B";
+  }
 
   return "C";
 }
@@ -318,10 +489,30 @@ function getTradierRecommendationScore(
   const grade = getTradierQualityGrade(contract, params);
   const spread = getSpreadPercent(contract);
   const liquidityScore = getTradierLiquidityScore(contract);
+  const deltaFitScore = getDeltaFitScore(contract);
+  const expirationFitScore = getExpirationFitScore(contract);
   const maxRisk = getMaxRisk(contract);
   const allowedRisk = params.accountSize * (params.maxRiskPercent / 100);
-  const riskFitScore = allowedRisk > 0 ? Math.max(0, 100 - (maxRisk / allowedRisk) * 100) : 0;
-  const spreadScore = Math.max(0, 100 - (spread / Math.max(params.maxSpreadPercent, 1)) * 100);
+  const mid = getMid(contract);
+
+  const riskFitScore =
+    allowedRisk > 0 ? Math.max(0, 100 - (maxRisk / allowedRisk) * 100) : 0;
+
+  const spreadScore = Math.max(
+    0,
+    100 - (spread / Math.max(params.maxSpreadPercent, 1)) * 100
+  );
+
+  const priceScore =
+    mid >= 0.5 && mid <= 5
+      ? 100
+      : mid >= 0.25 && mid < 0.5
+      ? 75
+      : mid > 5 && mid <= 10
+      ? 60
+      : mid > 10
+      ? 35
+      : 25;
 
   const gradeScore =
     grade === "A+"
@@ -331,10 +522,18 @@ function getTradierRecommendationScore(
       : grade === "B"
       ? 65
       : grade === "C"
-      ? 35
+      ? 30
       : 0;
 
-  return Math.round(gradeScore * 0.4 + liquidityScore * 0.25 + spreadScore * 0.2 + riskFitScore * 0.15);
+  return Math.round(
+    gradeScore * 0.28 +
+      liquidityScore * 0.22 +
+      spreadScore * 0.18 +
+      deltaFitScore * 0.14 +
+      expirationFitScore * 0.08 +
+      riskFitScore * 0.06 +
+      priceScore * 0.04
+  );
 }
 
 function enrichTradierContract(
@@ -357,8 +556,18 @@ function enrichTradierContract(
   const liquidityScore = getTradierLiquidityScore(contract);
   const recommendationScore = getTradierRecommendationScore(contract, params);
   const qualityGrade = getTradierQualityGrade(contract, params);
+  const deltaAbs = getDeltaAbs(contract);
+  const expirationDays = getTradierExpirationDays(contract);
   const riskStatus = getRiskStatus(
-    { ...contract, qualityGrade, contractQualityGrade: qualityGrade, grade: qualityGrade },
+    {
+      ...contract,
+      qualityGrade,
+      contractQualityGrade: qualityGrade,
+      grade: qualityGrade,
+      contract_quality: qualityGrade,
+      quality_grade: qualityGrade,
+      contract_quality_grade: qualityGrade,
+    },
     {
       accountSize: params.accountSize,
       maxRiskPercent: params.maxRiskPercent,
@@ -368,6 +577,7 @@ function enrichTradierContract(
 
   return {
     ...contract,
+    source: "tradier",
     stock_symbol: String(getContractValue(contract, ["stock_symbol", "stockSymbol"], params.stockSymbol)),
     stockSymbol: String(getContractValue(contract, ["stock_symbol", "stockSymbol"], params.stockSymbol)),
     trade_direction: params.direction,
@@ -396,6 +606,12 @@ function enrichTradierContract(
     qualityGrade,
     contractQualityGrade: qualityGrade,
     grade: qualityGrade,
+
+    // Save-flow compatibility: page.tsx and the option details route can read any of these.
+    contract_quality: qualityGrade,
+    quality_grade: qualityGrade,
+    contract_quality_grade: qualityGrade,
+
     recommendationReason:
       qualityGrade === "BLOCKED"
         ? `Tradier contract blocked by safety filters. ${riskStatus.reason}`
@@ -408,6 +624,8 @@ function enrichTradierContract(
       "Loaded from Tradier sandbox option chain.",
       `Spread ${spread.toFixed(1)}%.`,
       `Liquidity score ${liquidityScore}.`,
+      deltaAbs === null ? "Delta unavailable." : `Delta ${deltaAbs.toFixed(2)} absolute.`,
+      expirationDays === null ? "Expiration distance unavailable." : `${expirationDays} days to expiration.`,
       "Read-only market data only. Paper trade save remains controlled by Risk Guard.",
     ],
   };
@@ -428,7 +646,7 @@ function getFirstExpirationFromResponse(data: any): string {
 }
 
 
-// ─── MiniStat — matches suite ─────────────────────────────────────────────────
+// --- MiniStat - matches suite -------------------------------------------------
 function MiniStat({ label, value, valueClass = "text-slate-200" }: { label: string; value: string | number; valueClass?: string; }) {
   return (
     <div className="min-w-0 overflow-hidden rounded-lg border border-slate-800/80 bg-black/30 px-2.5 py-2">
@@ -454,7 +672,7 @@ export default function OptionContractSelector({
   maxSpreadPercent = 20,
 }: OptionContractSelectorProps) {
 
-  // ─── All state — untouched ────────────────────────────────────────────────
+  // --- All state - untouched ------------------------------------------------
   const finalSymbol = selectedSymbol || stockSymbol;
   const finalDirection = normalizeDirection(String(tradeDirection || scannerDirection || "NO TRADE"));
 
@@ -472,10 +690,13 @@ export default function OptionContractSelector({
   const [manualAsk, setManualAsk] = useState("");
   const [manualContracts, setManualContracts] = useState("1");
 
-  // ─── All handlers — untouched ─────────────────────────────────────────────
+  // --- All handlers - untouched ---------------------------------------------
   function selectContract(contract: OptionContract | null) {
-    if (typeof onSelectContract === "function") onSelectContract(contract);
-    if (typeof onContractSelected === "function") onContractSelected(contract);
+    const syncedContract = withSyncedContractQuality(contract);
+
+
+    if (typeof onSelectContract === "function") onSelectContract(syncedContract);
+    if (typeof onContractSelected === "function") onContractSelected(syncedContract);
   }
 
   async function loadMockChain() {
@@ -577,7 +798,7 @@ export default function OptionContractSelector({
       setContracts(enrichedContracts);
       setChainSource("tradier");
       setStatusMessage(
-        `Loaded ${enrichedContracts.length} Tradier ${finalDirection} contracts for ${finalSymbol} ${expiration}. Read-only sandbox data. Orders remain disabled.`
+        `Loaded ${enrichedContracts.length} Tradier ${finalDirection} contracts for ${finalSymbol} ${expiration}. Read-only sandbox data. Quality ranking is tuned for spread, liquidity, delta, risk, and expiration.`
       );
     } catch (error) {
       console.error("loadTradierChain error:", error);
@@ -608,7 +829,7 @@ export default function OptionContractSelector({
     setStatusMessage(`Manual contract selected: ${manualContract.option_symbol}`);
   }
 
-  // ─── Filter + sort logic — untouched ─────────────────────────────────────
+  // --- Filter + sort logic - untouched -------------------------------------
   const visibleContracts = useMemo(() => {
     const filtered = contracts.filter((contract) => {
       const grade = getGrade(contract);
@@ -616,7 +837,19 @@ export default function OptionContractSelector({
       return true;
     });
     const sorted = [...filtered].sort((a, b) => {
-      if (sortMode === "recommendation") return getRecommendationScore(b) - getRecommendationScore(a);
+      if (sortMode === "recommendation") {
+        const scoreDiff = getRecommendationScore(b) - getRecommendationScore(a);
+        if (scoreDiff !== 0) return scoreDiff;
+
+        const gradeDiff = getGradeRank(getGrade(b)) - getGradeRank(getGrade(a));
+        if (gradeDiff !== 0) return gradeDiff;
+
+        const liquidityDiff = getLiquidityScore(b) - getLiquidityScore(a);
+        if (liquidityDiff !== 0) return liquidityDiff;
+
+        return getSpreadPercent(a) - getSpreadPercent(b);
+      }
+
       if (sortMode === "quality") return getGradeRank(getGrade(b)) - getGradeRank(getGrade(a));
       if (sortMode === "liquidity") return getLiquidityScore(b) - getLiquidityScore(a);
       if (sortMode === "spread") return getSpreadPercent(a) - getSpreadPercent(b);
@@ -639,7 +872,17 @@ export default function OptionContractSelector({
         const riskRankA = riskA.status === "APPROVED" ? 2 : 1;
         const riskRankB = riskB.status === "APPROVED" ? 2 : 1;
         if (riskRankB !== riskRankA) return riskRankB - riskRankA;
-        return getRecommendationScore(b) - getRecommendationScore(a);
+
+        const scoreDiff = getRecommendationScore(b) - getRecommendationScore(a);
+        if (scoreDiff !== 0) return scoreDiff;
+
+        const gradeDiff = getGradeRank(getGrade(b)) - getGradeRank(getGrade(a));
+        if (gradeDiff !== 0) return gradeDiff;
+
+        const liquidityDiff = getLiquidityScore(b) - getLiquidityScore(a);
+        if (liquidityDiff !== 0) return liquidityDiff;
+
+        return getSpreadPercent(a) - getSpreadPercent(b);
       })[0];
     }
     return visibleContracts[0] || null;
@@ -650,14 +893,14 @@ export default function OptionContractSelector({
   return (
     <div className="space-y-4">
 
-      {/* ── HEADER + LOAD BUTTON ────────────────────────────────────────── */}
+      {/* -- HEADER + LOAD BUTTON ------------------------------------------ */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-cyan-600">
-            OPTIMA-SYS · Option Chain Selector
+            OPTIMA-SYS - Option Chain Selector
           </p>
           <p className="mt-0.5 font-mono text-xs font-black text-slate-300">
-            Contract Builder · {finalSymbol || "No symbol"}{" "}
+            Contract Builder - {finalSymbol || "No symbol"}{" "}
             <span className={`${getDirectionColor(finalDirection)}`}>{finalDirection}</span>
           </p>
           <p className="mt-0.5 font-mono text-[9px] text-slate-600">
@@ -690,7 +933,7 @@ export default function OptionContractSelector({
                   Loading...
                 </span>
               ) : (
-                "⟳ Load Mock Chain"
+                "Load Mock Chain"
               )}
             </button>
 
@@ -710,7 +953,7 @@ export default function OptionContractSelector({
                   Loading...
                 </span>
               ) : (
-                "↯ Load Tradier Chain"
+                "Load Tradier Chain"
               )}
             </button>
           </div>
@@ -721,7 +964,7 @@ export default function OptionContractSelector({
         </div>
       </div>
 
-      {/* ── STATUS MESSAGE ──────────────────────────────────────────────── */}
+      {/* -- STATUS MESSAGE ------------------------------------------------ */}
       {statusMessage && (
         <div className="relative overflow-hidden rounded-lg border border-slate-800 bg-black/30">
           <div className="absolute inset-y-0 left-0 w-[2px] bg-cyan-500" />
@@ -731,12 +974,12 @@ export default function OptionContractSelector({
         </div>
       )}
 
-      {/* ── CONTEXT STRIP ───────────────────────────────────────────────── */}
+      {/* -- CONTEXT STRIP ------------------------------------------------- */}
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-5">
         <div className="relative overflow-hidden rounded-lg border border-slate-800/80 bg-black/30 px-3 py-2">
           <div className="absolute inset-y-0 left-0 w-[2px] bg-slate-600" />
           <p className="pl-0.5 font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-slate-600">Symbol</p>
-          <p className="pl-0.5 font-mono text-[10px] font-black text-white">{finalSymbol || "—"}</p>
+          <p className="pl-0.5 font-mono text-[10px] font-black text-white">{finalSymbol || "-"}</p>
         </div>
         <div className="relative overflow-hidden rounded-lg border border-slate-800/80 bg-black/30 px-3 py-2">
           <div className={`absolute inset-y-0 left-0 w-[2px] ${getDirectionBar(finalDirection)}`} />
@@ -757,12 +1000,12 @@ export default function OptionContractSelector({
           <div className={`absolute inset-y-0 left-0 w-[2px] ${chainSource === "tradier" ? "bg-emerald-500" : chainSource === "mock" ? "bg-cyan-500" : "bg-slate-600"}`} />
           <p className="pl-0.5 font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-slate-600">Source</p>
           <p className={`pl-0.5 font-mono text-[10px] font-black ${chainSource === "tradier" ? "text-emerald-300" : chainSource === "mock" ? "text-cyan-300" : "text-slate-400"}`}>
-            {chainSource === "tradier" ? "Tradier" : chainSource === "mock" ? "Mock" : "—"}
+            {chainSource === "tradier" ? "Tradier" : chainSource === "mock" ? "Mock" : "-"}
           </p>
         </div>
       </div>
 
-      {/* ── MANUAL BUILDER ──────────────────────────────────────────────── */}
+      {/* -- MANUAL BUILDER ------------------------------------------------ */}
       <div className="relative overflow-hidden rounded-xl border border-slate-700/60 bg-black/40 ring-1 ring-slate-700/10">
         <div className="absolute inset-y-0 left-0 w-[3px] bg-slate-600" />
         <div className="px-5 py-4 pl-6">
@@ -779,7 +1022,7 @@ export default function OptionContractSelector({
               onClick={handleManualSelect}
               className="shrink-0 rounded-lg border border-slate-700/80 bg-slate-800/80 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-slate-300 transition hover:border-slate-500 hover:text-slate-200"
             >
-              Select Manual ›
+              Select Manual &gt;
             </button>
           </div>
 
@@ -804,7 +1047,7 @@ export default function OptionContractSelector({
         </div>
       </div>
 
-      {/* ── FILTER BAR ──────────────────────────────────────────────────── */}
+      {/* -- FILTER BAR ---------------------------------------------------- */}
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -827,7 +1070,7 @@ export default function OptionContractSelector({
             }}
             className="rounded-lg border border-slate-700/80 bg-slate-900/80 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400 transition hover:border-red-500/30 hover:text-red-400"
           >
-            Clear Selected ×
+            Clear Selected x
           </button>
         )}
 
@@ -837,17 +1080,17 @@ export default function OptionContractSelector({
             onChange={(e) => setSortMode(e.target.value as SortMode)}
             className="rounded-lg border border-slate-700/60 bg-slate-900/80 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-slate-300 outline-none focus:border-cyan-500/40"
           >
-            <option value="recommendation">Sort · Recommendation</option>
-            <option value="quality">Sort · Quality</option>
-            <option value="liquidity">Sort · Liquidity</option>
-            <option value="spread">Sort · Spread</option>
-            <option value="risk">Sort · Risk</option>
-            <option value="price">Sort · Price</option>
+            <option value="recommendation">Sort - Recommendation</option>
+            <option value="quality">Sort - Quality</option>
+            <option value="liquidity">Sort - Liquidity</option>
+            <option value="spread">Sort - Spread</option>
+            <option value="risk">Sort - Risk</option>
+            <option value="price">Sort - Price</option>
           </select>
         </div>
       </div>
 
-      {/* ── RECOMMENDED CONTRACT BANNER ─────────────────────────────────── */}
+      {/* -- RECOMMENDED CONTRACT BANNER ----------------------------------- */}
       {recommendedContract && (
         <div className="relative overflow-hidden rounded-xl border border-emerald-500/20 bg-emerald-500/5 ring-1 ring-emerald-500/10">
           <div
@@ -880,13 +1123,13 @@ export default function OptionContractSelector({
                 className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
                 style={{ background: "linear-gradient(90deg, transparent, #10b981, transparent)" }}
               />
-              Select Recommended ›
+              Select Recommended &gt;
             </button>
           </div>
         </div>
       )}
 
-      {/* ── EMPTY STATE ─────────────────────────────────────────────────── */}
+      {/* -- EMPTY STATE --------------------------------------------------- */}
       {visibleContracts.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-slate-800 bg-black/30 py-10">
           <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-600">No Data</p>
@@ -896,7 +1139,7 @@ export default function OptionContractSelector({
           </p>
         </div>
       ) : (
-        // ── CONTRACT LIST ────────────────────────────────────────────────
+        // -- CONTRACT LIST ------------------------------------------------
         <div className="space-y-2.5">
           {visibleContracts.map((contract) => {
             const optionSymbol = getOptionSymbol(contract);
@@ -936,7 +1179,7 @@ export default function OptionContractSelector({
                 <div className={`absolute inset-y-0 left-0 w-[3px] ${isSelected ? "bg-cyan-500" : getGradeBar(grade)}`} />
 
                 <div className="px-5 py-4 pl-6">
-                  {/* ── Row 1: Symbol + badges ─────────────────────────── */}
+                  {/* -- Row 1: Symbol + badges --------------------------- */}
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="break-all font-mono text-xs font-black text-white">
                       {optionSymbol}
@@ -954,14 +1197,14 @@ export default function OptionContractSelector({
                     )}
                   </div>
 
-                  {/* ── Row 2: Reason ──────────────────────────────────── */}
+                  {/* -- Row 2: Reason ------------------------------------ */}
                   <p className="mt-1.5 font-mono text-[9px] leading-4 text-slate-500">
                     {contract.recommendationReason || risk.reason}
                   </p>
 
-                  {/* ── Row 3: Stats grid ──────────────────────────────── */}
+                  {/* -- Row 3: Stats grid -------------------------------- */}
                   <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-5">
-                    <MiniStat label="Exp" value={expiration || "—"} />
+                    <MiniStat label="Exp" value={expiration || "-"} />
                     <MiniStat label="Strike" value={`$${strike.toFixed(2)}`} />
                     <MiniStat label="Bid" value={`$${bid.toFixed(2)}`} />
                     <MiniStat label="Ask" value={`$${ask.toFixed(2)}`} />
@@ -976,23 +1219,24 @@ export default function OptionContractSelector({
                       value={`$${maxRisk.toFixed(2)}`}
                       valueClass={maxRisk <= accountSize * (maxRiskPercent / 100) ? "text-emerald-300" : "text-red-400"}
                     />
+                    <MiniStat label="Delta" value={getDelta(contract) === null ? "-" : Math.abs(getDelta(contract) || 0).toFixed(2)} />
                     <MiniStat label="Liq" value={liquidity} />
                     <MiniStat label="Score" value={recommendation} />
                     <MiniStat label="Vol / OI" value={`${volume} / ${openInterest}`} />
                   </div>
 
-                  {/* ── Row 4: Why This Contract ────────────────────────── */}
+                  {/* -- Row 4: Why This Contract -------------------------- */}
                   {(contract.whyThisContract && contract.whyThisContract.length > 0) && (
                     <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 rounded-lg border border-slate-800/60 bg-black/20 px-3 py-2">
                       {contract.whyThisContract.map((reason, i) => (
                         <span key={`why-${i}`} className="font-mono text-[9px] text-slate-600">
-                          › {reason}
+                          &gt; {reason}
                         </span>
                       ))}
                     </div>
                   )}
 
-                  {/* ── Row 5: Action buttons ───────────────────────────── */}
+                  {/* -- Row 5: Action buttons ----------------------------- */}
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <button
                       onClick={() => selectContract(contract)}
@@ -1004,12 +1248,12 @@ export default function OptionContractSelector({
                           : "border-slate-700/80 bg-slate-900/80 text-slate-300 hover:border-cyan-500/30 hover:text-cyan-300"
                       }`}
                     >
-                      {isWeak ? "Select for Override Test ›" : isSelected ? "● Selected" : "Select Contract ›"}
+                      {isWeak ? "Select for Override Test &gt;" : isSelected ? "Selected" : "Select Contract &gt;"}
                     </button>
 
                     {isWeak && (
                       <span className="font-mono text-[9px] text-orange-600">
-                        › Intentionally weak. Normal save blocks unless Override is armed.
+                        &gt; Intentionally weak. Normal save blocks unless Override is armed.
                       </span>
                     )}
                   </div>
