@@ -17,6 +17,7 @@ import PaperTradingControlCenter from "../components/PaperTradingControlCenter";
 import TradingDashboardHeader from "../components/TradingDashboardHeader";
 import AlertPanel from "@/components/alerts/AlertPanel";
 import type { TradeApprovalAlert } from "@/types/alerts";
+import { useTradeApprovalAlerts } from "@/hooks/useTradeApprovalAlerts";
 
 type MarketCondition = "BULLISH" | "BEARISH" | "CHOPPY" | "UNKNOWN";
 type TradeDirection = "CALL" | "PUT" | "NO TRADE";
@@ -1041,39 +1042,26 @@ export default function Home() {
       ? `${selectedSymbol} NO TRADE`
       : "None selected";
 
-  const [testAlerts, setTestAlerts] = useState<TradeApprovalAlert[]>([
-  {
-    id: "test-aapl-alert-1",
-    symbol: "AAPL",
-    lane: "OPTIONS_DAY_TRADE",
-    setupName: "Test B-grade options setup",
-    message:
-      "AAPL has a test trade candidate ready for review. This is a fake local alert and does not save trades or place orders.",
-    priority: "HIGH",
-    channels: ["DASHBOARD"],
-    decision: "PENDING",
-    riskGuardStatus: "APPROVED",
-    contractQuality: "B",
-    maxRiskDollars: 85,
-    createdAt: new Date().toISOString(),
-  },
-]);
+const {
+  alerts: tradeApprovalAlerts,
+  createTradeAlert,
+  approveAlert,
+  rejectAlert,
+  reviewAlert,
+} = useTradeApprovalAlerts();
 
-  const updateTestAlertDecision = (
-  alertId: string,
-  decision: "PENDING" | "APPROVED" | "REJECTED"
-) => {
-  setTestAlerts((currentAlerts) =>
-    currentAlerts.map((alert) =>
-      alert.id === alertId
-        ? {
-            ...alert,
-            decision,
-            decidedAt: new Date().toISOString(),
-          }
-        : alert
-    )
-  );
+const createTestTradeAlert = () => {
+  createTradeAlert({
+    symbol: "NVDA",
+    lane: "OPTIONS_DAY_TRADE",
+    setupName: "Test dynamic options alert",
+    message:
+      "NVDA has a dynamic test trade candidate. This proves the dashboard can create approval alerts without saving trades or placing orders.",
+    priority: "HIGH",
+    riskGuardStatus: "APPROVED",
+    contractQuality: "A",
+    maxRiskDollars: 95,
+  });
 };
 
   return (
@@ -1166,12 +1154,23 @@ export default function Home() {
 
 <BrokerStatusCard />
 
+
+  <div className="flex justify-end">
+  <button
+    type="button"
+    onClick={createTestTradeAlert}
+    className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-300 transition hover:bg-emerald-500/20"
+  >
+    Create Test Trade Alert
+  </button>
+</div>
+
 <AlertPanel
-          alerts={testAlerts}
-          onReviewAlert={(alertId) => updateTestAlertDecision(alertId, "PENDING")}
-          onApproveAlert={(alertId) => updateTestAlertDecision(alertId, "APPROVED")}
-          onRejectAlert={(alertId) => updateTestAlertDecision(alertId, "REJECTED")}
-        />
+  alerts={tradeApprovalAlerts}
+  onReviewAlert={reviewAlert}
+  onApproveAlert={approveAlert}
+  onRejectAlert={rejectAlert}
+/>
 
 <SystemReadinessCard />
 
