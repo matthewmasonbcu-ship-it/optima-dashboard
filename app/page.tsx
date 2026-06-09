@@ -15,6 +15,7 @@ import BrokerStatusCard from "../components/BrokerStatusCard";
 import SystemReadinessCard from "../components/SystemReadinessCard";
 import PaperTradingControlCenter from "../components/PaperTradingControlCenter";
 import TradingDashboardHeader from "../components/TradingDashboardHeader";
+import AlertDemoPanel from "@/components/alerts/AlertDemoPanel";
 
 type MarketCondition = "BULLISH" | "BEARISH" | "CHOPPY" | "UNKNOWN";
 type TradeDirection = "CALL" | "PUT" | "NO TRADE";
@@ -1127,6 +1128,8 @@ export default function Home() {
         <TradingDashboardHeader />
 
 <BrokerStatusCard />
+
+<AlertDemoPanel />
 
 <SystemReadinessCard />
 
