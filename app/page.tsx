@@ -16,6 +16,7 @@ import SystemReadinessCard from "../components/SystemReadinessCard";
 import PaperTradingControlCenter from "../components/PaperTradingControlCenter";
 import TradingDashboardHeader from "../components/TradingDashboardHeader";
 import AlertPanel from "@/components/alerts/AlertPanel";
+import type { TradeApprovalAlert } from "@/types/alerts";
 
 type MarketCondition = "BULLISH" | "BEARISH" | "CHOPPY" | "UNKNOWN";
 type TradeDirection = "CALL" | "PUT" | "NO TRADE";
@@ -728,6 +729,7 @@ export default function Home() {
     null
   );
 
+
   const [marketCondition, setMarketCondition] =
     useState<MarketCondition>("UNKNOWN");
 
@@ -1039,6 +1041,41 @@ export default function Home() {
       ? `${selectedSymbol} NO TRADE`
       : "None selected";
 
+  const [testAlerts, setTestAlerts] = useState<TradeApprovalAlert[]>([
+  {
+    id: "test-aapl-alert-1",
+    symbol: "AAPL",
+    lane: "OPTIONS_DAY_TRADE",
+    setupName: "Test B-grade options setup",
+    message:
+      "AAPL has a test trade candidate ready for review. This is a fake local alert and does not save trades or place orders.",
+    priority: "HIGH",
+    channels: ["DASHBOARD"],
+    decision: "PENDING",
+    riskGuardStatus: "APPROVED",
+    contractQuality: "B",
+    maxRiskDollars: 85,
+    createdAt: new Date().toISOString(),
+  },
+]);
+
+  const updateTestAlertDecision = (
+  alertId: string,
+  decision: "PENDING" | "APPROVED" | "REJECTED"
+) => {
+  setTestAlerts((currentAlerts) =>
+    currentAlerts.map((alert) =>
+      alert.id === alertId
+        ? {
+            ...alert,
+            decision,
+            decidedAt: new Date().toISOString(),
+          }
+        : alert
+    )
+  );
+};
+
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#172554_0,_#020617_35%,_#000_100%)] text-white">
       <div className="mx-auto flex max-w-[1500px] flex-col gap-6 px-4 py-5 md:px-6 lg:px-8">
@@ -1129,7 +1166,12 @@ export default function Home() {
 
 <BrokerStatusCard />
 
-<AlertPanel alerts={[]} />
+<AlertPanel
+          alerts={testAlerts}
+          onReviewAlert={(alertId) => updateTestAlertDecision(alertId, "PENDING")}
+          onApproveAlert={(alertId) => updateTestAlertDecision(alertId, "APPROVED")}
+          onRejectAlert={(alertId) => updateTestAlertDecision(alertId, "REJECTED")}
+        />
 
 <SystemReadinessCard />
 
