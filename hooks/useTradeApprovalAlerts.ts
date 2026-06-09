@@ -1,7 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import type { ApprovalDecision, TradeApprovalAlert } from "@/types/alerts";
+import type {
+  AlertPriority,
+  ApprovalDecision,
+  TradeApprovalAlert,
+} from "@/types/alerts";
+import type { ContractQuality, RiskGuardStatus, TradeLane } from "@/types/trades";
+
+type CreateTradeApprovalAlertInput = {
+  symbol: string;
+  lane: TradeLane;
+  setupName?: string | null;
+  message: string;
+  priority?: AlertPriority;
+  riskGuardStatus: RiskGuardStatus;
+  contractQuality?: ContractQuality | null;
+  maxRiskDollars?: number | null;
+};
 
 const initialTestAlerts: TradeApprovalAlert[] = [
   {
@@ -21,8 +37,33 @@ const initialTestAlerts: TradeApprovalAlert[] = [
   },
 ];
 
+function createLocalAlertId(symbol: string) {
+  return `local-${symbol.toLowerCase()}-${Date.now()}`;
+}
+
 export function useTradeApprovalAlerts() {
   const [alerts, setAlerts] = useState<TradeApprovalAlert[]>(initialTestAlerts);
+
+  const createTradeAlert = (input: CreateTradeApprovalAlertInput) => {
+    const newAlert: TradeApprovalAlert = {
+      id: createLocalAlertId(input.symbol),
+      symbol: input.symbol,
+      lane: input.lane,
+      setupName: input.setupName ?? null,
+      message: input.message,
+      priority: input.priority ?? "MEDIUM",
+      channels: ["DASHBOARD"],
+      decision: "PENDING",
+      riskGuardStatus: input.riskGuardStatus,
+      contractQuality: input.contractQuality ?? null,
+      maxRiskDollars: input.maxRiskDollars ?? null,
+      createdAt: new Date().toISOString(),
+    };
+
+    setAlerts((currentAlerts) => [newAlert, ...currentAlerts]);
+
+    return newAlert;
+  };
 
   const updateAlertDecision = (
     alertId: string,
@@ -53,11 +94,19 @@ export function useTradeApprovalAlerts() {
     updateAlertDecision(alertId, "PENDING");
   };
 
+  const clearResolvedAlerts = () => {
+    setAlerts((currentAlerts) =>
+      currentAlerts.filter((alert) => alert.decision === "PENDING")
+    );
+  };
+
   return {
     alerts,
+    createTradeAlert,
     approveAlert,
     rejectAlert,
     reviewAlert,
     updateAlertDecision,
+    clearResolvedAlerts,
   };
 }
