@@ -92,6 +92,51 @@ type BrokerPreviewLockTestResult = {
   };
 };
 
+type SandboxEnvReadinessResult = {
+  success: boolean;
+  route: string;
+  mode: string;
+  status: "PASSED" | "BLOCKED" | "ERROR";
+  message?: string;
+  checks?: {
+    tradierEnvPresent: boolean;
+    tradierEnvIsSandbox: boolean;
+    tradierAccessTokenPresent: boolean;
+    tradierAccountIdPresent: boolean;
+    sandboxBaseUrlPresent: boolean;
+    sandboxBaseUrlIsSandboxOnly: boolean;
+    ordersEnabledIsFalse: boolean;
+    liveTradingEnabledIsFalse: boolean;
+    tradierLiveTradingEnabledIsFalse: boolean;
+    ordersEnabledRawValueSafe: boolean;
+    liveTradingEnabledRawValueSafe: boolean;
+    tradierLiveTradingEnabledRawValueSafe: boolean;
+  };
+  safeEnvSummary?: {
+    tradierEnv?: string;
+    accessTokenPresent: boolean;
+    accountIdPresent: boolean;
+    sandboxBaseUrl: string;
+    ordersEnabled: boolean;
+    liveTradingEnabled: boolean;
+    tradierLiveTradingEnabled: boolean;
+  };
+  safetyLocks?: {
+    approved_for_order: boolean;
+    approved_for_sandbox_order: boolean;
+    approved_for_live_order: boolean;
+    submitted_to_broker: boolean;
+  };
+  brokerCall?: {
+    tradierPreviewEndpointCalled: boolean;
+    tradierOrderEndpointCalled: boolean;
+    liveEndpointCalled: boolean;
+  };
+  dbWrites?: boolean;
+  requiredTradierEnv?: string;
+  requiredSandboxBaseUrl?: string;
+};
+
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString([], {
     month: "short",
@@ -213,6 +258,10 @@ export default function PaperOrderPreviewDetailModal({
     useState<BrokerPreviewLockTestResult | null>(null);
   const [brokerPreviewLockError, setBrokerPreviewLockError] =
     useState<string | null>(null);
+  const [checkingSandboxEnv, setCheckingSandboxEnv] = useState(false);
+  const [sandboxEnvResult, setSandboxEnvResult] =
+    useState<SandboxEnvReadinessResult | null>(null);
+  const [sandboxEnvError, setSandboxEnvError] = useState<string | null>(null);
 
   const displayBrokerPreviewPayload = buildDisplayBrokerPreviewPayload(preview);
 
@@ -222,6 +271,37 @@ export default function PaperOrderPreviewDetailModal({
     preview.approved_for_sandbox_order === false &&
     preview.approved_for_live_order === false &&
     preview.submitted_to_broker === false;
+
+
+  async function checkSandboxEnvReadiness() {
+    setCheckingSandboxEnv(true);
+    setSandboxEnvResult(null);
+    setSandboxEnvError(null);
+
+    try {
+      const response = await fetch("/api/tradier/orders/sandbox-env-check", {
+        method: "GET",
+      });
+
+      const result = (await response.json()) as SandboxEnvReadinessResult;
+
+      if (!response.ok) {
+        setSandboxEnvError(
+          result.message || "Sandbox env readiness check failed."
+        );
+        return;
+      }
+
+      setSandboxEnvResult(result);
+    } catch (error) {
+      console.error("Sandbox env readiness UI error:", error);
+      setSandboxEnvError(
+        "Unexpected UI error while checking sandbox environment readiness."
+      );
+    } finally {
+      setCheckingSandboxEnv(false);
+    }
+  }
 
   async function validateSandboxPreview() {
     setValidatingSandboxPreview(true);
@@ -354,6 +434,192 @@ export default function PaperOrderPreviewDetailModal({
           <span className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs font-bold text-slate-300">
             {preview.broker}
           </span>
+        </div>
+
+        <div className="mb-5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h4 className="text-sm font-bold uppercase tracking-[0.18em] text-emerald-300">
+                Tradier Sandbox Env Readiness
+              </h4>
+
+              <p className="mt-2 text-sm text-emerald-100/80">
+                Read-only environment check. This verifies sandbox settings and
+                safety flags only. It does not call Tradier, does not submit
+                orders, and does not write to Supabase.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={checkSandboxEnvReadiness}
+              disabled={checkingSandboxEnv}
+              className="rounded-xl border border-emerald-400/50 bg-emerald-500/20 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-emerald-200 transition hover:border-emerald-300 hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-900 disabled:text-slate-500"
+            >
+              {checkingSandboxEnv ? "Checking..." : "Check Sandbox Env"}
+            </button>
+          </div>
+
+          {sandboxEnvError && (
+            <div className="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
+              {sandboxEnvError}
+            </div>
+          )}
+
+          {sandboxEnvResult && (
+            <div
+              className={`mt-4 rounded-xl border p-4 ${getValidationBadgeClass(
+                sandboxEnvResult.status
+              )}`}
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-current px-3 py-1 text-xs font-bold">
+                  {sandboxEnvResult.status}
+                </span>
+
+                <span className="text-xs font-bold uppercase tracking-[0.16em] opacity-80">
+                  {sandboxEnvResult.mode}
+                </span>
+              </div>
+
+              <p className="mt-3 text-sm">
+                {sandboxEnvResult.message || "Sandbox env check completed."}
+              </p>
+
+              <div className="mt-4 grid gap-2 md:grid-cols-2">
+                <DetailRow
+                  label="Tradier Env"
+                  value={formatValue(sandboxEnvResult.safeEnvSummary?.tradierEnv)}
+                  valueClassName={
+                    sandboxEnvResult.checks?.tradierEnvIsSandbox
+                      ? "text-emerald-300"
+                      : "text-red-300"
+                  }
+                />
+
+                <DetailRow
+                  label="Token Present"
+                  value={formatBool(
+                    sandboxEnvResult.safeEnvSummary?.accessTokenPresent ?? false
+                  )}
+                  valueClassName={
+                    sandboxEnvResult.checks?.tradierAccessTokenPresent
+                      ? "text-emerald-300"
+                      : "text-red-300"
+                  }
+                />
+
+                <DetailRow
+                  label="Account ID Present"
+                  value={formatBool(
+                    sandboxEnvResult.safeEnvSummary?.accountIdPresent ?? false
+                  )}
+                  valueClassName={
+                    sandboxEnvResult.checks?.tradierAccountIdPresent
+                      ? "text-emerald-300"
+                      : "text-red-300"
+                  }
+                />
+
+                <DetailRow
+                  label="Sandbox URL Safe"
+                  value={formatBool(
+                    sandboxEnvResult.checks?.sandboxBaseUrlIsSandboxOnly ??
+                      false
+                  )}
+                  valueClassName={
+                    sandboxEnvResult.checks?.sandboxBaseUrlIsSandboxOnly
+                      ? "text-emerald-300"
+                      : "text-red-300"
+                  }
+                />
+
+                <DetailRow
+                  label="Orders Enabled"
+                  value={formatBool(
+                    sandboxEnvResult.safeEnvSummary?.ordersEnabled ?? false
+                  )}
+                  valueClassName={
+                    sandboxEnvResult.checks?.ordersEnabledIsFalse
+                      ? "text-emerald-300"
+                      : "text-red-300"
+                  }
+                />
+
+                <DetailRow
+                  label="Live Trading Enabled"
+                  value={formatBool(
+                    sandboxEnvResult.safeEnvSummary?.liveTradingEnabled ?? false
+                  )}
+                  valueClassName={
+                    sandboxEnvResult.checks?.liveTradingEnabledIsFalse
+                      ? "text-emerald-300"
+                      : "text-red-300"
+                  }
+                />
+
+                <DetailRow
+                  label="Tradier Live Enabled"
+                  value={formatBool(
+                    sandboxEnvResult.safeEnvSummary
+                      ?.tradierLiveTradingEnabled ?? false
+                  )}
+                  valueClassName={
+                    sandboxEnvResult.checks?.tradierLiveTradingEnabledIsFalse
+                      ? "text-emerald-300"
+                      : "text-red-300"
+                  }
+                />
+
+                <DetailRow
+                  label="DB Writes"
+                  value={formatBool(sandboxEnvResult.dbWrites ?? false)}
+                  valueClassName={
+                    sandboxEnvResult.dbWrites ? "text-red-300" : "text-emerald-300"
+                  }
+                />
+
+                <DetailRow
+                  label="Tradier Preview Called"
+                  value={formatBool(
+                    sandboxEnvResult.brokerCall?.tradierPreviewEndpointCalled ??
+                      false
+                  )}
+                  valueClassName="text-emerald-300"
+                />
+
+                <DetailRow
+                  label="Tradier Order Called"
+                  value={formatBool(
+                    sandboxEnvResult.brokerCall?.tradierOrderEndpointCalled ??
+                      false
+                  )}
+                  valueClassName="text-emerald-300"
+                />
+
+                <DetailRow
+                  label="Live Endpoint Called"
+                  value={formatBool(
+                    sandboxEnvResult.brokerCall?.liveEndpointCalled ?? false
+                  )}
+                  valueClassName="text-emerald-300"
+                />
+
+                <DetailRow
+                  label="Required Env"
+                  value={formatValue(sandboxEnvResult.requiredTradierEnv)}
+                  valueClassName="text-emerald-300"
+                />
+              </div>
+
+              {sandboxEnvResult.safeEnvSummary?.sandboxBaseUrl && (
+                <div className="mt-4 rounded-xl border border-emerald-500/30 bg-black/20 p-3 text-sm text-emerald-200">
+                  Sandbox base URL:{" "}
+                  {sandboxEnvResult.safeEnvSummary.sandboxBaseUrl}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="mb-5 rounded-2xl border border-sky-500/30 bg-sky-500/10 p-4">
