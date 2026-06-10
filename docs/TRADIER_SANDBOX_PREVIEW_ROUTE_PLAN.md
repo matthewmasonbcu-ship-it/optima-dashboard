@@ -533,3 +533,34 @@ Current behavior:
 Next planned step:
 - Add a read-only sandbox env readiness indicator to the dashboard/modal
 - Do not enable external Tradier calls yet
+
+## Completed Checkpoint — Sandbox Env Readiness UI Indicator
+
+Status: COMPLETE
+
+Verified:
+- PaperOrderPreviewDetailModal includes a read-only sandbox env readiness check
+- UI calls only GET /api/tradier/orders/sandbox-env-check
+- Route checks TRADIER_ENV is sandbox
+- Route checks Tradier token is present without exposing it
+- Route checks Tradier account ID is present without exposing it
+- Route checks ORDERS_ENABLED is false
+- Route checks LIVE_TRADING_ENABLED is false
+- Route checks TRADIER_LIVE_TRADING_ENABLED is false or missing
+- Tradier preview endpoint is not called
+- Tradier order endpoint is not called
+- Live endpoint is not called
+- No Supabase writes are performed
+- Safety locks remain false
+
+Current dashboard behavior:
+- Users can validate internal sandbox preview payloads
+- Users can test that broker preview remains locked
+- Users can check sandbox env readiness
+- Users cannot call Tradier broker preview
+- Users cannot submit sandbox orders
+- Users cannot submit live orders
+
+Next planned step:
+- Build a shared safety gate helper for preview, broker-preview, and sandbox-submit routes
+- Keep external Tradier calls disabled until safety gate helper is tested
