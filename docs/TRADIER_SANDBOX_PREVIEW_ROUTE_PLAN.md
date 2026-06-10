@@ -388,3 +388,35 @@ Future route:
 
 ```txt
 POST /api/tradier/orders/sandbox-broker-preview
+
+## Completed Checkpoint — Locked Broker Preview Payload Builder
+
+Status: COMPLETE  
+Route: POST /api/tradier/orders/sandbox-broker-preview  
+Mode: sandbox_broker_preview_blocked_only  
+
+Verified:
+- Safety gates pass for REVIEWED_ONLY + ready_for_sandbox_preview previews
+- Tradier sandbox preview payload is built correctly
+- Payload maps internal DB fields into Tradier-style fields
+- order_side is lowercased
+- order_type is lowercased
+- time_in_force is lowercased
+- contract_symbol maps to option_symbol
+- estimated_limit_price maps to price
+- External Tradier preview endpoint is not called
+- Tradier order endpoint is not called
+- Live endpoint is not called
+- No Supabase writes are performed
+- Safety locks remain false
+
+Tested payload example:
+```txt
+class=option
+symbol=AAPL
+option_symbol=AAPL260610P00287500
+side=buy_to_open
+quantity=1
+type=limit
+duration=day
+price=0.885
