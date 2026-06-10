@@ -109,13 +109,37 @@ export default function AlertPanel({
           <p className="text-xs uppercase tracking-[0.25em] text-slate-500">
             Alert Center
           </p>
+
           <h2 className="mt-1 text-xl font-bold text-white">
             Trade Approval Queue
           </h2>
+
           <p className="mt-2 text-sm text-slate-400">
             Dashboard-only approval center. Phone alerts and broker actions will
             connect later after paper testing.
           </p>
+
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 font-semibold text-emerald-300">
+              Risk Guard APPROVED
+            </span>
+
+            <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-1 font-semibold text-sky-300">
+              Grade A+ / A / B
+            </span>
+
+            <span className="rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2 py-1 font-semibold text-yellow-300">
+              Max Risk ≤ $100
+            </span>
+
+            <span className="rounded-full border border-purple-500/30 bg-purple-500/10 px-2 py-1 font-semibold text-purple-300">
+              Duplicates Blocked
+            </span>
+
+            <span className="rounded-full border border-slate-600 bg-slate-900 px-2 py-1 font-semibold text-slate-300">
+              No Orders Placed
+            </span>
+          </div>
         </div>
 
         <div className="rounded-xl border border-slate-700 px-4 py-3 text-sm">
@@ -124,7 +148,7 @@ export default function AlertPanel({
         </div>
       </div>
 
-            {isSavingApprovalDecision && (
+      {isSavingApprovalDecision && (
         <div className="mb-4 rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-sm font-semibold text-sky-300">
           Saving approval decision...
         </div>
@@ -170,6 +194,7 @@ export default function AlertPanel({
             <p className="text-xs uppercase tracking-[0.25em] text-slate-500">
               Audit Trail
             </p>
+
             <h3 className="mt-1 text-lg font-bold text-white">
               Recent Approval Decisions
             </h3>
@@ -231,7 +256,9 @@ export default function AlertPanel({
 
                     <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
                       {row.strike !== null && <span>Strike: {row.strike}</span>}
+
                       {row.expiration && <span>Exp: {row.expiration}</span>}
+
                       {row.risk_guard_status && (
                         <span>Risk Guard: {row.risk_guard_status}</span>
                       )}
@@ -242,6 +269,7 @@ export default function AlertPanel({
                     <p className="text-xs text-slate-500">
                       {formatDateTime(row.created_at)}
                     </p>
+
                     <p className="mt-1 text-xs font-bold text-slate-400">
                       Order Approved: {row.approved_for_order ? "YES" : "NO"}
                     </p>
