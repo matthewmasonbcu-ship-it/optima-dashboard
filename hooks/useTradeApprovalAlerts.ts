@@ -98,7 +98,26 @@ export function useTradeApprovalAlerts() {
   const [isSavingApprovalDecision, setIsSavingApprovalDecision] = useState(false);
 
   const createTradeAlert = (input: CreateTradeApprovalAlertInput) => {
-    const newAlert: TradeApprovalAlert = {
+  const duplicatePendingAlert = alerts.find((alert) => {
+    const sameSymbol = alert.symbol === input.symbol;
+    const sameLane = alert.lane === input.lane;
+    const sameContract =
+      (alert.contractSymbol ?? null) === (input.contractSymbol ?? null);
+    const isPending = alert.decision === "PENDING";
+
+    return sameSymbol && sameLane && sameContract && isPending;
+  });
+
+  if (duplicatePendingAlert) {
+    setApprovalActionStatus(
+      `${input.symbol} already has a pending approval alert. Duplicate blocked.`
+    );
+    setApprovalActionError(null);
+
+    return duplicatePendingAlert;
+  }
+
+  const newAlert: TradeApprovalAlert = {
       id: createLocalAlertId(input.symbol),
       symbol: input.symbol,
       lane: input.lane,
