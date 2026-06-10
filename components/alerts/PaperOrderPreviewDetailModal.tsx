@@ -61,6 +61,37 @@ type SandboxPreviewValidationResult = {
   };
 };
 
+type BrokerPreviewLockTestResult = {
+  success: boolean;
+  route: string;
+  mode: string;
+  status: "BLOCKED" | "ERROR";
+  message?: string;
+  reason?: string;
+  safetyLocks?: {
+    approved_for_order: boolean;
+    approved_for_sandbox_order: boolean;
+    approved_for_live_order: boolean;
+    submitted_to_broker: boolean;
+  };
+  brokerCall?: {
+    tradierPreviewEndpointCalled: boolean;
+    tradierOrderEndpointCalled: boolean;
+    liveEndpointCalled: boolean;
+  };
+  dbWrites?: boolean;
+  tradierSandboxPreviewPayload?: {
+    class: string;
+    symbol: string;
+    option_symbol: string;
+    side: string;
+    quantity: number;
+    type: string;
+    duration: string;
+    price: number;
+  };
+};
+
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString([], {
     month: "short",
@@ -176,6 +207,12 @@ export default function PaperOrderPreviewDetailModal({
   const [validationResult, setValidationResult] =
     useState<SandboxPreviewValidationResult | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [testingBrokerPreviewLock, setTestingBrokerPreviewLock] =
+    useState(false);
+  const [brokerPreviewLockResult, setBrokerPreviewLockResult] =
+    useState<BrokerPreviewLockTestResult | null>(null);
+  const [brokerPreviewLockError, setBrokerPreviewLockError] =
+    useState<string | null>(null);
 
   const displayBrokerPreviewPayload = buildDisplayBrokerPreviewPayload(preview);
 
@@ -217,6 +254,42 @@ export default function PaperOrderPreviewDetailModal({
       setValidationError("Unexpected UI error while validating preview.");
     } finally {
       setValidatingSandboxPreview(false);
+    }
+  }
+
+  async function testBrokerPreviewLock() {
+    setTestingBrokerPreviewLock(true);
+    setBrokerPreviewLockResult(null);
+    setBrokerPreviewLockError(null);
+
+    try {
+      const response = await fetch("/api/tradier/orders/sandbox-broker-preview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          paper_order_preview_id: preview.id,
+        }),
+      });
+
+      const result = (await response.json()) as BrokerPreviewLockTestResult;
+
+      if (!response.ok) {
+        setBrokerPreviewLockError(
+          result.message || "Broker preview lock test failed."
+        );
+        return;
+      }
+
+      setBrokerPreviewLockResult(result);
+    } catch (error) {
+      console.error("Broker preview lock test UI error:", error);
+      setBrokerPreviewLockError(
+        "Unexpected UI error while testing broker preview lock."
+      );
+    } finally {
+      setTestingBrokerPreviewLock(false);
     }
   }
 
@@ -418,18 +491,21 @@ export default function PaperOrderPreviewDetailModal({
             </div>
 
             <div className="flex flex-col gap-2 md:items-end">
-  <span className="rounded-full border border-orange-500/40 bg-orange-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-orange-300">
-    BLOCKED ONLY
-  </span>
+              <span className="rounded-full border border-orange-500/40 bg-orange-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-orange-300">
+                BLOCKED ONLY
+              </span>
 
-  <button
-    type="button"
-    disabled
-    className="cursor-not-allowed rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-500"
-  >
-    Broker Preview Locked
-  </button>
-</div>
+              <button
+                type="button"
+                onClick={testBrokerPreviewLock}
+                disabled={testingBrokerPreviewLock}
+                className="rounded-xl border border-orange-400/50 bg-orange-500/20 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-orange-200 transition hover:border-orange-300 hover:bg-orange-500/30 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-900 disabled:text-slate-500"
+              >
+                {testingBrokerPreviewLock
+                  ? "Testing Lock..."
+                  : "Test Broker Preview Lock"}
+              </button>
+            </div>
           </div>
 
           <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -525,6 +601,149 @@ export default function PaperOrderPreviewDetailModal({
                   valueClassName="text-orange-200"
                 />
               </div>
+            </div>
+          )}
+
+          {brokerPreviewLockError && (
+            <div className="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
+              {brokerPreviewLockError}
+            </div>
+          )}
+
+          {brokerPreviewLockResult && (
+            <div className="mt-4 rounded-xl border border-orange-500/30 bg-black/20 p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-orange-500/40 bg-orange-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-orange-300">
+                  {brokerPreviewLockResult.status}
+                </span>
+
+                <span className="text-xs font-bold uppercase tracking-[0.16em] text-orange-200/80">
+                  {brokerPreviewLockResult.mode}
+                </span>
+              </div>
+
+              <p className="mt-3 text-sm text-orange-100/80">
+                {brokerPreviewLockResult.reason ||
+                  brokerPreviewLockResult.message ||
+                  "Broker preview lock test completed."}
+              </p>
+
+              <div className="mt-4 grid gap-2 md:grid-cols-2">
+                <DetailRow
+                  label="Tradier Preview Called"
+                  value={formatBool(
+                    brokerPreviewLockResult.brokerCall
+                      ?.tradierPreviewEndpointCalled ?? false
+                  )}
+                  valueClassName="text-emerald-300"
+                />
+
+                <DetailRow
+                  label="Tradier Order Called"
+                  value={formatBool(
+                    brokerPreviewLockResult.brokerCall
+                      ?.tradierOrderEndpointCalled ?? false
+                  )}
+                  valueClassName="text-emerald-300"
+                />
+
+                <DetailRow
+                  label="Live Endpoint Called"
+                  value={formatBool(
+                    brokerPreviewLockResult.brokerCall?.liveEndpointCalled ??
+                      false
+                  )}
+                  valueClassName="text-emerald-300"
+                />
+
+                <DetailRow
+                  label="DB Writes"
+                  value={formatBool(brokerPreviewLockResult.dbWrites ?? false)}
+                  valueClassName="text-emerald-300"
+                />
+              </div>
+
+              {brokerPreviewLockResult.tradierSandboxPreviewPayload && (
+                <div className="mt-4 rounded-xl border border-orange-500/30 bg-black/20 p-4">
+                  <h5 className="text-xs font-bold uppercase tracking-[0.18em] text-orange-300">
+                    Returned Locked Payload
+                  </h5>
+
+                  <div className="mt-3 grid gap-2 md:grid-cols-2">
+                    <DetailRow
+                      label="Class"
+                      value={
+                        brokerPreviewLockResult.tradierSandboxPreviewPayload
+                          .class
+                      }
+                      valueClassName="text-orange-200"
+                    />
+
+                    <DetailRow
+                      label="Symbol"
+                      value={
+                        brokerPreviewLockResult.tradierSandboxPreviewPayload
+                          .symbol
+                      }
+                      valueClassName="text-orange-200"
+                    />
+
+                    <DetailRow
+                      label="Option Symbol"
+                      value={
+                        brokerPreviewLockResult.tradierSandboxPreviewPayload
+                          .option_symbol
+                      }
+                      valueClassName="text-orange-200"
+                    />
+
+                    <DetailRow
+                      label="Side"
+                      value={
+                        brokerPreviewLockResult.tradierSandboxPreviewPayload
+                          .side
+                      }
+                      valueClassName="text-orange-200"
+                    />
+
+                    <DetailRow
+                      label="Quantity"
+                      value={
+                        brokerPreviewLockResult.tradierSandboxPreviewPayload
+                          .quantity
+                      }
+                      valueClassName="text-orange-200"
+                    />
+
+                    <DetailRow
+                      label="Type"
+                      value={
+                        brokerPreviewLockResult.tradierSandboxPreviewPayload
+                          .type
+                      }
+                      valueClassName="text-orange-200"
+                    />
+
+                    <DetailRow
+                      label="Duration"
+                      value={
+                        brokerPreviewLockResult.tradierSandboxPreviewPayload
+                          .duration
+                      }
+                      valueClassName="text-orange-200"
+                    />
+
+                    <DetailRow
+                      label="Price"
+                      value={formatMoney(
+                        brokerPreviewLockResult.tradierSandboxPreviewPayload
+                          .price
+                      )}
+                      valueClassName="text-orange-200"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
