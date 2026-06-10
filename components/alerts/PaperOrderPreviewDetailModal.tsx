@@ -84,6 +84,31 @@ function formatBool(value: boolean) {
   return value ? "YES" : "NO";
 }
 
+function buildDisplayBrokerPreviewPayload(preview: PaperOrderPreviewRow) {
+  if (
+    !preview.symbol ||
+    !preview.contract_symbol ||
+    !preview.order_side ||
+    !preview.order_type ||
+    !preview.time_in_force ||
+    !preview.quantity ||
+    !preview.estimated_limit_price
+  ) {
+    return null;
+  }
+
+  return {
+    class: "option",
+    symbol: preview.symbol,
+    option_symbol: preview.contract_symbol,
+    side: preview.order_side.toLowerCase(),
+    quantity: preview.quantity,
+    type: preview.order_type.toLowerCase(),
+    duration: preview.time_in_force.toLowerCase(),
+    price: preview.estimated_limit_price,
+  };
+}
+
 function getPreviewBadgeClass(status: string) {
   if (status === "PREVIEW_ONLY") {
     return "border-yellow-500/40 bg-yellow-500/10 text-yellow-300";
@@ -151,6 +176,8 @@ export default function PaperOrderPreviewDetailModal({
   const [validationResult, setValidationResult] =
     useState<SandboxPreviewValidationResult | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  const displayBrokerPreviewPayload = buildDisplayBrokerPreviewPayload(preview);
 
   const canValidateSandboxPreview =
     preview.preview_status === "REVIEWED_ONLY" &&
@@ -375,10 +402,7 @@ export default function PaperOrderPreviewDetailModal({
             </div>
           )}
         </div>
-                <div className="mb-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div>
-              <h4 className="text-sm font-bold uppercase tracking-[0.18em] text-red-300">
+
         <div className="mb-5 rounded-2xl border border-orange-500/30 bg-orange-500/10 p-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
@@ -436,13 +460,74 @@ export default function PaperOrderPreviewDetailModal({
             />
           </div>
 
+          {displayBrokerPreviewPayload && (
+            <div className="mt-4 rounded-xl border border-orange-500/30 bg-black/20 p-4">
+              <h5 className="text-xs font-bold uppercase tracking-[0.18em] text-orange-300">
+                Locked Payload Preview
+              </h5>
+
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                <DetailRow
+                  label="Class"
+                  value={displayBrokerPreviewPayload.class}
+                  valueClassName="text-orange-200"
+                />
+
+                <DetailRow
+                  label="Symbol"
+                  value={displayBrokerPreviewPayload.symbol}
+                  valueClassName="text-orange-200"
+                />
+
+                <DetailRow
+                  label="Option Symbol"
+                  value={displayBrokerPreviewPayload.option_symbol}
+                  valueClassName="text-orange-200"
+                />
+
+                <DetailRow
+                  label="Side"
+                  value={displayBrokerPreviewPayload.side}
+                  valueClassName="text-orange-200"
+                />
+
+                <DetailRow
+                  label="Quantity"
+                  value={displayBrokerPreviewPayload.quantity}
+                  valueClassName="text-orange-200"
+                />
+
+                <DetailRow
+                  label="Type"
+                  value={displayBrokerPreviewPayload.type}
+                  valueClassName="text-orange-200"
+                />
+
+                <DetailRow
+                  label="Duration"
+                  value={displayBrokerPreviewPayload.duration}
+                  valueClassName="text-orange-200"
+                />
+
+                <DetailRow
+                  label="Price"
+                  value={formatMoney(displayBrokerPreviewPayload.price)}
+                  valueClassName="text-orange-200"
+                />
+              </div>
+            </div>
+          )}
+
           <div className="mt-4 rounded-xl border border-orange-500/30 bg-black/20 p-3 text-sm text-orange-100/80">
             Future broker-preview calls will require a separate safety sprint.
             This section is informational only and cannot contact Tradier.
           </div>
         </div>
 
-
+        <div className="mb-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h4 className="text-sm font-bold uppercase tracking-[0.18em] text-red-300">
                 Sandbox Submit Route
               </h4>
 
