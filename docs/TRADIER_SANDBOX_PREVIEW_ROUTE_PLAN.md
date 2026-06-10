@@ -474,3 +474,32 @@ Current behavior:
 Next planned step:
 - Add a safe clickable “Test Broker Preview Lock” button only if we want UI testing for the blocked-only route
 - External Tradier calls remain disabled
+
+## Completed Checkpoint — Broker Preview Lock Test Button
+
+Status: COMPLETE
+
+Verified:
+- PaperOrderPreviewDetailModal includes a clickable “Test Broker Preview Lock” button
+- Button calls only `/api/tradier/orders/sandbox-broker-preview`
+- Route remains `sandbox_broker_preview_blocked_only`
+- Response returns BLOCKED
+- Tradier preview endpoint is not called
+- Tradier order endpoint is not called
+- Live endpoint is not called
+- No Supabase writes are performed
+- Safety locks remain false
+- Returned locked payload displays in the modal
+
+Current dashboard behavior:
+- Users can validate the internal sandbox preview payload
+- Users can test that the broker-preview route is locked
+- Users can view the future Tradier broker-preview payload
+- Users cannot call Tradier’s external preview endpoint
+- Users cannot submit sandbox orders
+- Users cannot submit live orders
+
+Next planned step:
+- Review environment variables required for future Tradier sandbox broker-preview calls
+- Add an env readiness route/check before enabling any external broker call
+- External Tradier calls remain disabled
