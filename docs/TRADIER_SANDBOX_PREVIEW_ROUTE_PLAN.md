@@ -315,3 +315,35 @@ Planned separation:
 
 ```txt
 /api/tradier/orders/preview
+
+## Completed Checkpoint — Blocked-Only Sandbox Broker Preview Route
+
+Status: COMPLETE  
+Route: POST /api/tradier/orders/sandbox-broker-preview  
+Mode: sandbox_broker_preview_blocked_only  
+
+Verified:
+- Route exists and compiles
+- Route reads paper_order_previews
+- Route runs broker-preview safety gates
+- Valid REVIEWED_ONLY + ready_for_sandbox_preview preview still returns BLOCKED
+- External Tradier sandbox preview endpoint is not called
+- Tradier order endpoint is not called
+- Live Tradier endpoint is not called
+- No Supabase writes are performed
+- approved_for_order remains false
+- approved_for_sandbox_order remains false
+- approved_for_live_order remains false
+- submitted_to_broker remains false
+
+Current behavior:
+- Even when all safety gates pass, the route returns:
+  “Tradier sandbox broker preview route is not enabled yet. Safety gates passed, but external broker preview calls remain locked in v1.”
+
+Purpose:
+- This creates a safe future path for official Tradier sandbox broker preview without enabling external broker calls yet.
+
+Next planned step:
+- Add a locked broker-preview indicator to PaperOrderPreviewDetailModal.
+- Do not add an active broker-preview button yet.
+- Do not call Tradier’s preview endpoint yet.
