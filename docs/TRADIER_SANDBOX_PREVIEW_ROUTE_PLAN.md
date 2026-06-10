@@ -420,3 +420,33 @@ quantity=1
 type=limit
 duration=day
 price=0.885
+
+## Completed Checkpoint — Locked Broker Preview Payload Display
+
+Status: COMPLETE
+
+Verified:
+- PaperOrderPreviewDetailModal displays a locked broker-preview payload
+- Payload display maps:
+  - contract_symbol → option_symbol
+  - order_side → lowercase side
+  - order_type → lowercase type
+  - time_in_force → lowercase duration
+  - estimated_limit_price → price
+- Display is informational only
+- No active broker-preview button exists
+- No Tradier preview endpoint is called
+- No Tradier order endpoint is called
+- No Supabase writes are performed
+- Dashboard remains internal-validation-only
+
+Displayed example:
+```txt
+class=option
+symbol=AAPL
+option_symbol=AAPL260610P00287500
+side=buy_to_open
+quantity=1
+type=limit
+duration=day
+price=0.885
