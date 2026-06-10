@@ -1047,6 +1047,9 @@ export default function Home() {
   approveAlert,
   rejectAlert,
   reviewAlert,
+  approvalActionStatus,
+  approvalActionError,
+  isSavingApprovalDecision,
 } = useTradeApprovalAlerts();
 
 const sendSelectedContractToApprovalQueue = () => {
@@ -1068,20 +1071,71 @@ const sendSelectedContractToApprovalQueue = () => {
   const contractGrade = getContractGrade(selectedContract);
 
   createTradeAlert({
-    symbol: selectedSymbol,
-    lane: "OPTIONS_DAY_TRADE",
-    setupName: `${selectedSymbol} ${tradeDirection} approval review`,
-    message: `${selectedSymbol} ${tradeDirection} contract ${
-      optionSymbol || "selected"
-    } is ready for approval review. This does not save a trade or place an order.`,
-    priority: optionRiskCheck.status === "APPROVED" ? "HIGH" : "MEDIUM",
-    riskGuardStatus: optionRiskCheck.status,
-    contractQuality: contractGrade,
-    maxRiskDollars: getNumber(
-      getContractValue(selectedContract, ["max_risk", "maxRisk"]),
-      0
-    ),
-  });
+  symbol: selectedSymbol,
+  lane: "OPTIONS_DAY_TRADE",
+  setupName: `${selectedSymbol} ${tradeDirection} approval review`,
+  message: `${selectedSymbol} ${tradeDirection} contract ${
+    optionSymbol || "selected"
+  } is ready for approval review. This does not save a trade or place an order.`,
+  priority: optionRiskCheck.status === "APPROVED" ? "HIGH" : "MEDIUM",
+
+  riskGuardStatus: optionRiskCheck.status,
+  riskGuardReason: optionRiskCheck.reason ?? null,
+  contractQuality: contractGrade,
+  maxRiskDollars: getNumber(
+    getContractValue(selectedContract, ["max_risk", "maxRisk"]),
+    0
+  ),
+
+  contractSymbol:
+    getContractValue(selectedContract, [
+      "symbol",
+      "option_symbol",
+      "optionSymbol",
+      "contract_symbol",
+      "contractSymbol",
+    ]) ?? optionSymbol ?? null,
+
+  strike: getNumber(
+    getContractValue(selectedContract, ["strike", "strike_price", "strikePrice"]),
+    null
+  ),
+
+  expiration:
+    getContractValue(selectedContract, [
+      "expiration",
+      "expiration_date",
+      "expirationDate",
+      "expiry",
+    ]) ?? null,
+
+  optionType:
+    tradeDirection === "CALL" || tradeDirection === "PUT"
+      ? tradeDirection
+      : getContractValue(selectedContract, ["option_type", "optionType", "type"]) ===
+          "put" ||
+        getContractValue(selectedContract, ["option_type", "optionType", "type"]) ===
+          "PUT"
+      ? "PUT"
+      : "CALL",
+
+  bid: getNumber(getContractValue(selectedContract, ["bid"]), null),
+  ask: getNumber(getContractValue(selectedContract, ["ask"]), null),
+  mid: getNumber(
+    getContractValue(selectedContract, ["mid", "mark", "last", "entryMid"]),
+    null
+  ),
+  volume: getNumber(getContractValue(selectedContract, ["volume"]), null),
+  openInterest: getNumber(
+    getContractValue(selectedContract, [
+      "open_interest",
+      "openInterest",
+      "oi",
+    ]),
+    null
+  ),
+  delta: getNumber(getContractValue(selectedContract, ["delta"]), null),
+});
 
   setStatusMessage(
     `Approval alert created for ${selectedSymbol}. Review it in the Alert Center.`
@@ -1191,11 +1245,14 @@ const sendSelectedContractToApprovalQueue = () => {
   </div>
 
   <AlertPanel
-    alerts={tradeApprovalAlerts}
-    onReviewAlert={reviewAlert}
-    onApproveAlert={approveAlert}
-    onRejectAlert={rejectAlert}
-  />
+  alerts={tradeApprovalAlerts}
+  onReviewAlert={reviewAlert}
+  onApproveAlert={approveAlert}
+  onRejectAlert={rejectAlert}
+  approvalActionStatus={approvalActionStatus}
+  approvalActionError={approvalActionError}
+  isSavingApprovalDecision={isSavingApprovalDecision}
+/>
 </div>
 
 <SystemReadinessCard />
