@@ -98,26 +98,35 @@ export function useTradeApprovalAlerts() {
   const [isSavingApprovalDecision, setIsSavingApprovalDecision] = useState(false);
 
   const createTradeAlert = (input: CreateTradeApprovalAlertInput) => {
-  const duplicatePendingAlert = alerts.find((alert) => {
-    const sameSymbol = alert.symbol === input.symbol;
-    const sameLane = alert.lane === input.lane;
-    const sameContract =
-      (alert.contractSymbol ?? null) === (input.contractSymbol ?? null);
-    const isPending = alert.decision === "PENDING";
+    if (input.riskGuardStatus !== "APPROVED") {
+      setApprovalActionStatus(null);
+      setApprovalActionError(
+        `${input.symbol} was not sent to approval queue because Risk Guard is ${input.riskGuardStatus}.`
+      );
 
-    return sameSymbol && sameLane && sameContract && isPending;
-  });
+      return null;
+    }
 
-  if (duplicatePendingAlert) {
-    setApprovalActionStatus(
-      `${input.symbol} already has a pending approval alert. Duplicate blocked.`
-    );
-    setApprovalActionError(null);
+    const duplicatePendingAlert = alerts.find((alert) => {
+      const sameSymbol = alert.symbol === input.symbol;
+      const sameLane = alert.lane === input.lane;
+      const sameContract =
+        (alert.contractSymbol ?? null) === (input.contractSymbol ?? null);
+      const isPending = alert.decision === "PENDING";
 
-    return duplicatePendingAlert;
-  }
+      return sameSymbol && sameLane && sameContract && isPending;
+    });
 
-  const newAlert: TradeApprovalAlert = {
+    if (duplicatePendingAlert) {
+      setApprovalActionStatus(
+        `${input.symbol} already has a pending approval alert. Duplicate blocked.`
+      );
+      setApprovalActionError(null);
+
+      return duplicatePendingAlert;
+    }
+
+    const newAlert: TradeApprovalAlert = {
       id: createLocalAlertId(input.symbol),
       symbol: input.symbol,
       lane: input.lane,
