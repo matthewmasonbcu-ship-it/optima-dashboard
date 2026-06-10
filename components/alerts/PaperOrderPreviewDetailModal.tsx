@@ -417,9 +417,19 @@ export default function PaperOrderPreviewDetailModal({
               </p>
             </div>
 
-            <span className="rounded-full border border-orange-500/40 bg-orange-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-orange-300">
-              BLOCKED ONLY
-            </span>
+            <div className="flex flex-col gap-2 md:items-end">
+  <span className="rounded-full border border-orange-500/40 bg-orange-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-orange-300">
+    BLOCKED ONLY
+  </span>
+
+  <button
+    type="button"
+    disabled
+    className="cursor-not-allowed rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-500"
+  >
+    Broker Preview Locked
+  </button>
+</div>
           </div>
 
           <div className="mt-4 grid gap-3 md:grid-cols-2">
