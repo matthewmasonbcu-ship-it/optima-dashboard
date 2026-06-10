@@ -43,6 +43,47 @@ function createLocalAlertId(symbol: string) {
   return `local-${symbol.toLowerCase()}-${Date.now()}`;
 }
 
+async function savePhoneAlertEvent(alert: TradeApprovalAlert) {
+  const { error } = await supabase.from("phone_alert_events").insert({
+    source_alert_id: alert.id ?? null,
+
+    symbol: alert.symbol,
+    trade_lane: alert.lane ?? null,
+    setup_name: alert.setupName ?? null,
+    message: alert.message,
+    priority: alert.priority,
+
+    channel: "DASHBOARD",
+    delivery_status: "LOGGED_ONLY",
+    delivery_provider: null,
+    delivery_error: null,
+
+    contract_symbol: alert.contractSymbol ?? null,
+    strike: alert.strike ?? null,
+    expiration: alert.expiration ?? null,
+    option_type: alert.optionType ?? null,
+
+    bid: alert.bid ?? null,
+    ask: alert.ask ?? null,
+    mid: alert.mid ?? null,
+
+    contract_quality: alert.contractQuality ?? null,
+    risk_guard_status: alert.riskGuardStatus ?? null,
+    risk_guard_reason: alert.riskGuardReason ?? null,
+    max_risk_dollars: alert.maxRiskDollars ?? null,
+
+    sent_at: null,
+    opened_at: null,
+
+    approved_for_order: false,
+  });
+
+  if (error) {
+    console.error("Failed to log phone alert event:", error);
+    throw error;
+  }
+}
+
 async function saveApprovalDecision(
   alert: TradeApprovalAlert,
   decision: Extract<ApprovalDecision, "APPROVED" | "REJECTED" | "PENDING">
@@ -78,7 +119,6 @@ async function saveApprovalDecision(
     alert_status: alertStatus,
     decision_reason: decisionReason,
 
-    // Safety lock: approving an alert does NOT approve a broker order yet.
     approved_for_order: false,
     source: "dashboard_approval_queue",
   });
@@ -197,8 +237,17 @@ export function useTradeApprovalAlerts() {
     };
 
     setAlerts((currentAlerts) => [newAlert, ...currentAlerts]);
-    setApprovalActionStatus("Contract sent to approval queue.");
+    setApprovalActionStatus(
+      "Contract sent to approval queue. Phone alert event logged only."
+    );
     setApprovalActionError(null);
+
+    void savePhoneAlertEvent(newAlert).catch(() => {
+      setApprovalActionStatus(null);
+      setApprovalActionError(
+        "Approval alert was created, but phone alert event logging failed."
+      );
+    });
 
     return newAlert;
   };
