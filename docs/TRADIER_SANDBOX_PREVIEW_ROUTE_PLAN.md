@@ -347,3 +347,31 @@ Next planned step:
 - Add a locked broker-preview indicator to PaperOrderPreviewDetailModal.
 - Do not add an active broker-preview button yet.
 - Do not call Tradier’s preview endpoint yet.
+
+## Completed Checkpoint — Locked Broker Preview UI Indicator
+
+Status: COMPLETE
+
+Verified:
+- PaperOrderPreviewDetailModal displays the future Tradier broker-preview route
+- The UI clearly labels the route as BLOCKED ONLY
+- Tradier Preview Call shows DISABLED
+- Tradier Order Call shows DISABLED
+- Live Endpoint shows DISABLED
+- DB Writes shows DISABLED
+- No active broker-preview button exists
+- Dashboard remains internal-validation-only
+- No external Tradier preview endpoint is called
+- No Tradier order endpoint is called
+- No Supabase writes are performed from the locked UI section
+
+Current dashboard behavior:
+- Users can validate the internal sandbox preview payload
+- Users cannot call Tradier’s broker preview endpoint
+- Users cannot submit a sandbox order
+- Users cannot submit a live order
+
+Next planned step:
+- Review official Tradier preview endpoint payload requirements
+- Design the future broker-preview request payload
+- Do not enable external broker-preview calls until the next safety review is complete
