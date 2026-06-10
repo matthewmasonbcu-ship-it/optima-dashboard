@@ -127,6 +127,10 @@ function getPreviewBadgeClass(status: string) {
     return "border-yellow-500/40 bg-yellow-500/10 text-yellow-300";
   }
 
+  if (status === "REVIEWED_ONLY") {
+    return "border-purple-500/40 bg-purple-500/10 text-purple-300";
+  }
+
   if (status === "READY_FOR_SANDBOX") {
     return "border-sky-500/40 bg-sky-500/10 text-sky-300";
   }
@@ -174,6 +178,10 @@ export default function AlertPanel({
   const [paperPreviewHistoryError, setPaperPreviewHistoryError] = useState<
     string | null
   >(null);
+    
+  const [reviewingPreviewId, setReviewingPreviewId] = useState<string | null>(
+    null
+  );
 
   const activeAlerts = alerts.filter((alert) => alert.decision === "PENDING");
 
@@ -263,6 +271,47 @@ export default function AlertPanel({
       isMounted = false;
     };
   }, [alerts]);
+
+  async function markPaperPreviewReviewed(previewId: string) {
+    setReviewingPreviewId(previewId);
+    setPaperPreviewHistoryError(null);
+
+    const { error } = await supabase
+      .from("paper_order_previews")
+      .update({
+        preview_status: "REVIEWED_ONLY",
+        updated_at: new Date().toISOString(),
+        approved_for_sandbox_order: false,
+        approved_for_live_order: false,
+        submitted_to_broker: false,
+        safety_notes:
+          "Preview reviewed by user. No Tradier sandbox order submitted. No live order submitted.",
+      })
+      .eq("id", previewId);
+
+    if (error) {
+      console.error("Failed to mark paper order preview reviewed:", error);
+      setPaperPreviewHistoryError("Could not mark preview as reviewed.");
+      setReviewingPreviewId(null);
+      return;
+    }
+
+    setPaperOrderPreviewHistory((currentRows) =>
+      currentRows.map((row) =>
+        row.id === previewId
+          ? {
+              ...row,
+              preview_status: "REVIEWED_ONLY",
+              approved_for_sandbox_order: false,
+              approved_for_live_order: false,
+              submitted_to_broker: false,
+            }
+          : row
+      )
+    );
+
+    setReviewingPreviewId(null);
+  }
 
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
@@ -677,12 +726,31 @@ export default function AlertPanel({
                         {row.approved_for_sandbox_order ? "YES" : "NO"}
                       </p>
                       <p>
-                        Live Approved: {row.approved_for_live_order ? "YES" : "NO"}
+                        Live Approved:{" "}
+                        {row.approved_for_live_order ? "YES" : "NO"}
                       </p>
                       <p>
-                        Broker Submitted: {row.submitted_to_broker ? "YES" : "NO"}
+                        Broker Submitted:{" "}
+                        {row.submitted_to_broker ? "YES" : "NO"}
                       </p>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => markPaperPreviewReviewed(row.id)}
+                      disabled={
+                        reviewingPreviewId === row.id ||
+                        row.preview_status === "REVIEWED_ONLY" ||
+                        row.submitted_to_broker
+                      }
+                      className="mt-3 rounded-xl border border-purple-500/30 bg-purple-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-purple-300 transition hover:border-purple-400 hover:text-purple-200 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {reviewingPreviewId === row.id
+                        ? "Marking..."
+                        : row.preview_status === "REVIEWED_ONLY"
+                        ? "Reviewed"
+                        : "Mark Reviewed"}
+                    </button>
                   </div>
                 </div>
               </div>
