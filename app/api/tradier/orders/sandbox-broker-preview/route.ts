@@ -35,7 +35,61 @@ type PaperOrderPreviewRow = {
   contract_quality: string | null;
 };
 
+type TradierSandboxPreviewPayload = {
+  class: "option";
+  symbol: string;
+  option_symbol: string;
+  side: string;
+  quantity: number;
+  type: string;
+  duration: string;
+  price: number;
+};
+
 const ALLOWED_CONTRACT_QUALITIES = new Set(["A+", "A", "B"]);
+
+function buildTradierSandboxPreviewPayload(
+  preview: PaperOrderPreviewRow
+): TradierSandboxPreviewPayload {
+  if (!preview.symbol) {
+    throw new Error("Missing symbol.");
+  }
+
+  if (!preview.contract_symbol) {
+    throw new Error("Missing contract_symbol.");
+  }
+
+  if (!preview.order_side) {
+    throw new Error("Missing order_side.");
+  }
+
+  if (!preview.order_type) {
+    throw new Error("Missing order_type.");
+  }
+
+  if (!preview.time_in_force) {
+    throw new Error("Missing time_in_force.");
+  }
+
+  if (!preview.quantity || preview.quantity <= 0) {
+    throw new Error("Quantity must be greater than 0.");
+  }
+
+  if (!preview.estimated_limit_price || preview.estimated_limit_price <= 0) {
+    throw new Error("estimated_limit_price must be greater than 0.");
+  }
+
+  return {
+    class: "option",
+    symbol: preview.symbol,
+    option_symbol: preview.contract_symbol,
+    side: preview.order_side.toLowerCase(),
+    quantity: preview.quantity,
+    type: preview.order_type.toLowerCase(),
+    duration: preview.time_in_force.toLowerCase(),
+    price: preview.estimated_limit_price,
+  };
+}
 
 function blocked(reason: string, row?: PaperOrderPreviewRow | null) {
   return NextResponse.json(
@@ -172,15 +226,58 @@ export async function POST(request: Request) {
       preview.max_risk_dollars === undefined ||
       preview.max_risk_dollars > 100
     ) {
-      return blocked("max_risk_dollars must be less than or equal to 100.", preview);
+      return blocked(
+        "max_risk_dollars must be less than or equal to 100.",
+        preview
+      );
     }
 
-    return blocked(
-      "Tradier sandbox broker preview route is not enabled yet. Safety gates passed, but external broker preview calls remain locked in v1.",
-      preview
+    const tradierSandboxPreviewPayload =
+      buildTradierSandboxPreviewPayload(preview);
+
+    return NextResponse.json(
+      {
+        success: true,
+        route: "/api/tradier/orders/sandbox-broker-preview",
+        mode: "sandbox_broker_preview_blocked_only",
+        status: "BLOCKED",
+        reason:
+          "Tradier sandbox broker preview route is not enabled yet. Safety gates passed, payload was built, but external broker preview calls remain locked in v1.",
+        safetyLocks: {
+          approved_for_order: false,
+          approved_for_sandbox_order: false,
+          approved_for_live_order: false,
+          submitted_to_broker: false,
+        },
+        brokerCall: {
+          tradierPreviewEndpointCalled: false,
+          tradierOrderEndpointCalled: false,
+          liveEndpointCalled: false,
+        },
+        dbWrites: false,
+        tradierSandboxPreviewPayload,
+        preview: {
+          id: preview.id,
+          preview_status: preview.preview_status,
+          ready_for_sandbox_preview: preview.ready_for_sandbox_preview,
+          broker: preview.broker,
+          symbol: preview.symbol,
+          contract_symbol: preview.contract_symbol,
+          risk_guard_status: preview.risk_guard_status,
+          contract_quality: preview.contract_quality,
+          max_risk_dollars: preview.max_risk_dollars,
+          approved_for_sandbox_order: preview.approved_for_sandbox_order,
+          approved_for_live_order: preview.approved_for_live_order,
+          submitted_to_broker: preview.submitted_to_broker,
+        },
+      },
+      { status: 200 }
     );
   } catch (error) {
-    console.error("Tradier sandbox broker preview blocked-only route error:", error);
+    console.error(
+      "Tradier sandbox broker preview blocked-only route error:",
+      error
+    );
 
     return NextResponse.json(
       {
