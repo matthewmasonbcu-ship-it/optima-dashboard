@@ -266,3 +266,33 @@ approved_for_live_order = false
 ```
 
 If that ever changes, the route is unsafe.
+
+## Completed Checkpoint — Sandbox Preview Validation UI
+
+Status: COMPLETE
+
+Verified:
+- POST /api/tradier/orders/preview compiles and runs
+- PREVIEW_ONLY previews return BLOCKED
+- CANCELLED previews return BLOCKED
+- REVIEWED_ONLY + ready_for_sandbox_preview previews return PASSED
+- The route returns a Tradier-style option payload
+- The route does not call Tradier
+- The route does not write to Supabase
+- The route does not approve sandbox orders
+- The route does not approve live orders
+- The route does not set submitted_to_broker
+- PaperOrderPreviewDetailModal includes a Validate Sandbox Preview button
+- The modal displays PASSED/BLOCKED results
+- The modal confirms safety locks remain false
+
+Current safety state:
+- approved_for_order = false
+- approved_for_sandbox_order = false
+- approved_for_live_order = false
+- submitted_to_broker = false
+
+Next locked bridge step:
+- Design the future Tradier sandbox order submission route
+- Do not implement submission until safety plan is reviewed
+- Keep validation-only route separate from submission route
