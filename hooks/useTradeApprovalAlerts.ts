@@ -107,6 +107,22 @@ export function useTradeApprovalAlerts() {
       return null;
     }
 
+    const allowedContractGrades: Array<ContractQuality> = ["A+", "A", "B"];
+
+    if (
+      !input.contractQuality ||
+      !allowedContractGrades.includes(input.contractQuality)
+    ) {
+      setApprovalActionStatus(null);
+      setApprovalActionError(
+        `${input.symbol} was not sent to approval queue because Contract Quality is ${
+          input.contractQuality ?? "UNKNOWN"
+        }.`
+      );
+
+      return null;
+    }
+
     const duplicatePendingAlert = alerts.find((alert) => {
       const sameSymbol = alert.symbol === input.symbol;
       const sameLane = alert.lane === input.lane;
