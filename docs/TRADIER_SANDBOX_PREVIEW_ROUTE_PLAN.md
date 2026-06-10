@@ -450,3 +450,27 @@ quantity=1
 type=limit
 duration=day
 price=0.885
+
+## Completed Checkpoint — Disabled Broker Preview Locked Button
+
+Status: COMPLETE
+
+Verified:
+- PaperOrderPreviewDetailModal displays a disabled “Broker Preview Locked” button
+- Button is intentionally disabled
+- Button does not call the blocked-only route
+- Button does not call Tradier
+- Button does not write to Supabase
+- UI clearly communicates broker-preview is not enabled yet
+- Dashboard remains internal-validation-only
+
+Current behavior:
+- Users can validate internal sandbox preview payloads
+- Users can view the locked future broker-preview payload
+- Users cannot call Tradier broker preview
+- Users cannot submit sandbox orders
+- Users cannot submit live orders
+
+Next planned step:
+- Add a safe clickable “Test Broker Preview Lock” button only if we want UI testing for the blocked-only route
+- External Tradier calls remain disabled
