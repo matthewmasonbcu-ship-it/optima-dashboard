@@ -503,3 +503,33 @@ Next planned step:
 - Review environment variables required for future Tradier sandbox broker-preview calls
 - Add an env readiness route/check before enabling any external broker call
 - External Tradier calls remain disabled
+
+## Completed Checkpoint — Tradier Sandbox Env Readiness Check
+
+Status: COMPLETE  
+Route: GET /api/tradier/orders/sandbox-env-check  
+Mode: sandbox_env_readiness_check_only  
+
+Verified:
+- Route checks TRADIER_ENV is sandbox
+- Route checks Tradier token is present without exposing it
+- Route checks Tradier account ID is present without exposing it
+- Route checks sandbox base URL is sandbox-only
+- Route checks ORDERS_ENABLED is false
+- Route checks LIVE_TRADING_ENABLED is false
+- Route checks TRADIER_LIVE_TRADING_ENABLED is false or missing
+- No Tradier preview endpoint is called
+- No Tradier order endpoint is called
+- No live endpoint is called
+- No Supabase writes are performed
+- Safety locks remain false
+
+Current behavior:
+- The app can verify sandbox env readiness
+- External Tradier broker-preview calls remain disabled
+- Sandbox order submission remains disabled
+- Live trading remains disabled
+
+Next planned step:
+- Add a read-only sandbox env readiness indicator to the dashboard/modal
+- Do not enable external Tradier calls yet
