@@ -379,6 +379,70 @@ export default function PaperOrderPreviewDetailModal({
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
               <h4 className="text-sm font-bold uppercase tracking-[0.18em] text-red-300">
+        <div className="mb-5 rounded-2xl border border-orange-500/30 bg-orange-500/10 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h4 className="text-sm font-bold uppercase tracking-[0.18em] text-orange-300">
+                Tradier Broker Preview Route
+              </h4>
+
+              <p className="mt-2 text-sm text-orange-100/80">
+                LOCKED. The future Tradier sandbox broker-preview route exists,
+                but external Tradier preview calls are blocked in this version.
+                The dashboard currently supports internal validation only.
+              </p>
+            </div>
+
+            <span className="rounded-full border border-orange-500/40 bg-orange-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-orange-300">
+              BLOCKED ONLY
+            </span>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <DetailRow
+              label="Route"
+              value="/api/tradier/orders/sandbox-broker-preview"
+              valueClassName="text-orange-200"
+            />
+
+            <DetailRow
+              label="Mode"
+              value="sandbox_broker_preview_blocked_only"
+              valueClassName="text-orange-200"
+            />
+
+            <DetailRow
+              label="Tradier Preview Call"
+              value="DISABLED"
+              valueClassName="text-emerald-300"
+            />
+
+            <DetailRow
+              label="Tradier Order Call"
+              value="DISABLED"
+              valueClassName="text-emerald-300"
+            />
+
+            <DetailRow
+              label="Live Endpoint"
+              value="DISABLED"
+              valueClassName="text-emerald-300"
+            />
+
+            <DetailRow
+              label="DB Writes"
+              value="DISABLED"
+              valueClassName="text-emerald-300"
+            />
+          </div>
+
+          <div className="mt-4 rounded-xl border border-orange-500/30 bg-black/20 p-3 text-sm text-orange-100/80">
+            Future broker-preview calls will require a separate safety sprint.
+            This section is informational only and cannot contact Tradier.
+          </div>
+        </div>
+
+
                 Sandbox Submit Route
               </h4>
 
