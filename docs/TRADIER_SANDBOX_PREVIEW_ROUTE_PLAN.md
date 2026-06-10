@@ -296,3 +296,22 @@ Next locked bridge step:
 - Design the future Tradier sandbox order submission route
 - Do not implement submission until safety plan is reviewed
 - Keep validation-only route separate from submission route
+
+## Next Research Checkpoint — Official Tradier Sandbox Order Flow
+
+Status: RESEARCH / DESIGN ONLY  
+Implementation: NOT ENABLED  
+Broker submission: DISABLED  
+Live trading: DISABLED  
+
+Official Tradier API notes:
+- Tradier supports separate production and sandbox environments.
+- Sandbox uses the sandbox Tradier host and is intended for paper trading/testing.
+- Order previews should be used before placing orders.
+- Our current app route `/api/tradier/orders/preview` is internal validation only and does not call Tradier.
+- Our future broker preview route must be separate from the future sandbox submit route.
+
+Planned separation:
+
+```txt
+/api/tradier/orders/preview
