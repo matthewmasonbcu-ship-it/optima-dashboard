@@ -43,6 +43,20 @@ function createLocalAlertId(symbol: string) {
   return `local-${symbol.toLowerCase()}-${Date.now()}`;
 }
 
+function getEstimatedLimitPrice(alert: TradeApprovalAlert) {
+  return alert.mid ?? alert.ask ?? alert.bid ?? null;
+}
+
+function getEstimatedOrderCost(alert: TradeApprovalAlert) {
+  const estimatedLimitPrice = getEstimatedLimitPrice(alert);
+
+  if (estimatedLimitPrice === null) {
+    return null;
+  }
+
+  return estimatedLimitPrice * 100;
+}
+
 async function savePhoneAlertEvent(alert: TradeApprovalAlert) {
   const { error } = await supabase.from("phone_alert_events").insert({
     source_alert_id: alert.id ?? null,
@@ -84,6 +98,61 @@ async function savePhoneAlertEvent(alert: TradeApprovalAlert) {
   }
 }
 
+async function savePaperOrderPreview(
+  alert: TradeApprovalAlert,
+  approvalDecisionId: string | null
+) {
+  const estimatedLimitPrice = getEstimatedLimitPrice(alert);
+  const estimatedOrderCost = getEstimatedOrderCost(alert);
+
+  const { error } = await supabase.from("paper_order_previews").insert({
+    source_alert_id: alert.id ?? null,
+    approval_decision_id: approvalDecisionId,
+    phone_alert_event_id: null,
+
+    symbol: alert.symbol,
+    trade_lane: alert.lane ?? null,
+    setup_name: alert.setupName ?? null,
+
+    contract_symbol: alert.contractSymbol ?? null,
+    strike: alert.strike ?? null,
+    expiration: alert.expiration ?? null,
+    option_type: alert.optionType ?? null,
+
+    bid: alert.bid ?? null,
+    ask: alert.ask ?? null,
+    mid: alert.mid ?? null,
+    estimated_limit_price: estimatedLimitPrice,
+    quantity: 1,
+    estimated_order_cost: estimatedOrderCost,
+    max_risk_dollars: alert.maxRiskDollars ?? null,
+
+    contract_quality: alert.contractQuality ?? null,
+    risk_guard_status: alert.riskGuardStatus ?? null,
+    risk_guard_reason: alert.riskGuardReason ?? null,
+
+    preview_status: "PREVIEW_ONLY",
+    broker: "TRADIER_SANDBOX",
+    order_side: "BUY_TO_OPEN",
+    order_type: "LIMIT",
+    time_in_force: "DAY",
+
+    approved_for_sandbox_order: false,
+    approved_for_live_order: false,
+    submitted_to_broker: false,
+    broker_order_id: null,
+    broker_response: null,
+
+    safety_notes:
+      "Preview only. No Tradier sandbox order submitted. No live order submitted.",
+  });
+
+  if (error) {
+    console.error("Failed to save paper order preview:", error);
+    throw error;
+  }
+}
+
 async function saveApprovalDecision(
   alert: TradeApprovalAlert,
   decision: Extract<ApprovalDecision, "APPROVED" | "REJECTED" | "PENDING">
@@ -102,33 +171,40 @@ async function saveApprovalDecision(
       ? "Rejected from dashboard approval queue"
       : "Marked for review from dashboard approval queue";
 
-  const { error } = await supabase.from("trade_approval_decisions").insert({
-    symbol: alert.symbol,
-    direction: alert.lane ?? null,
+  const { data, error } = await supabase
+    .from("trade_approval_decisions")
+    .insert({
+      symbol: alert.symbol,
+      direction: alert.lane ?? null,
 
-    contract_symbol: alert.contractSymbol ?? null,
-    strike: alert.strike ?? null,
-    expiration: alert.expiration ?? null,
-    option_type: alert.optionType ?? null,
+      contract_symbol: alert.contractSymbol ?? null,
+      strike: alert.strike ?? null,
+      expiration: alert.expiration ?? null,
+      option_type: alert.optionType ?? null,
 
-    contract_quality: alert.contractQuality ?? null,
-    risk_guard_status: alert.riskGuardStatus ?? null,
-    risk_guard_reason: alert.riskGuardReason ?? null,
+      contract_quality: alert.contractQuality ?? null,
+      risk_guard_status: alert.riskGuardStatus ?? null,
+      risk_guard_reason: alert.riskGuardReason ?? null,
 
-    scanner_setup_name: alert.setupName ?? null,
-    alert_status: alertStatus,
-    decision_reason: decisionReason,
+      scanner_setup_name: alert.setupName ?? null,
+      alert_status: alertStatus,
+      decision_reason: decisionReason,
 
-    approved_for_order: false,
-    source: "dashboard_approval_queue",
-  });
+      approved_for_order: false,
+      source: "dashboard_approval_queue",
+    })
+    .select("id")
+    .single();
 
   if (error) {
     console.error("Failed to save approval decision:", error);
     throw error;
   }
 
-  return alertStatus;
+  return {
+    alertStatus,
+    decisionId: data?.id ?? null,
+  };
 }
 
 export function useTradeApprovalAlerts() {
@@ -281,19 +357,27 @@ export function useTradeApprovalAlerts() {
     setApprovalActionError(null);
 
     try {
-      const savedStatus = await saveApprovalDecision(alert, decision);
+      const { alertStatus, decisionId } = await saveApprovalDecision(
+        alert,
+        decision
+      );
+
+      if (decision === "APPROVED") {
+        await savePaperOrderPreview(alert, decisionId);
+      }
+
       updateAlertDecision(alertId, decision);
 
       setApprovalActionStatus(
-        savedStatus === "APPROVED"
-          ? "Approval saved to audit trail."
-          : savedStatus === "REJECTED"
+        alertStatus === "APPROVED"
+          ? "Approval saved. Paper order preview created. No broker order placed."
+          : alertStatus === "REJECTED"
           ? "Rejection saved to audit trail."
           : "Review decision saved to audit trail."
       );
     } catch {
       setApprovalActionError(
-        "Decision was not saved. Check Supabase connection and try again."
+        "Decision was not fully saved. Check Supabase connection and try again."
       );
     } finally {
       setIsSavingApprovalDecision(false);
