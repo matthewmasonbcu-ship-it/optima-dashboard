@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 export type PaperOrderPreviewRow = {
   id: string;
   created_at: string;
@@ -31,6 +33,32 @@ export type PaperOrderPreviewRow = {
   ready_for_sandbox_preview_at: string | null;
   sandbox_preview_locked_reason: string | null;
   safety_notes: string | null;
+};
+
+type SandboxPreviewValidationResult = {
+  success: boolean;
+  route: string;
+  mode: string;
+  status: "PASSED" | "BLOCKED" | "ERROR";
+  message?: string;
+  reason?: string;
+  safetyLocks?: {
+    approved_for_order: boolean;
+    approved_for_sandbox_order: boolean;
+    approved_for_live_order: boolean;
+    submitted_to_broker: boolean;
+  };
+  tradierStylePreviewPayload?: {
+    class: string;
+    symbol: string | null;
+    option_symbol: string | null;
+    side: string | null;
+    type: string | null;
+    duration: string | null;
+    quantity: number | null;
+    price: number | null;
+    preview_only: boolean;
+  };
 };
 
 function formatDateTime(value: string) {
@@ -80,6 +108,18 @@ function getSandboxReadyBadgeClass(isReady: boolean) {
   return "border-slate-700 bg-slate-900 text-slate-400";
 }
 
+function getValidationBadgeClass(status: string) {
+  if (status === "PASSED") {
+    return "border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
+  }
+
+  if (status === "BLOCKED") {
+    return "border-red-500/40 bg-red-500/10 text-red-300";
+  }
+
+  return "border-yellow-500/40 bg-yellow-500/10 text-yellow-300";
+}
+
 function DetailRow({
   label,
   value,
@@ -106,6 +146,53 @@ export default function PaperOrderPreviewDetailModal({
   preview: PaperOrderPreviewRow;
   onClose: () => void;
 }) {
+  const [validatingSandboxPreview, setValidatingSandboxPreview] =
+    useState(false);
+  const [validationResult, setValidationResult] =
+    useState<SandboxPreviewValidationResult | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  const canValidateSandboxPreview =
+    preview.preview_status === "REVIEWED_ONLY" &&
+    preview.ready_for_sandbox_preview === true &&
+    preview.approved_for_sandbox_order === false &&
+    preview.approved_for_live_order === false &&
+    preview.submitted_to_broker === false;
+
+  async function validateSandboxPreview() {
+    setValidatingSandboxPreview(true);
+    setValidationResult(null);
+    setValidationError(null);
+
+    try {
+      const response = await fetch("/api/tradier/orders/preview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          paper_order_preview_id: preview.id,
+        }),
+      });
+
+      const result = (await response.json()) as SandboxPreviewValidationResult;
+
+      if (!response.ok) {
+        setValidationError(
+          result.message || "Sandbox preview validation failed."
+        );
+        return;
+      }
+
+      setValidationResult(result);
+    } catch (error) {
+      console.error("Sandbox preview validation UI error:", error);
+      setValidationError("Unexpected UI error while validating preview.");
+    } finally {
+      setValidatingSandboxPreview(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
       <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 p-5 shadow-2xl">
@@ -167,6 +254,126 @@ export default function PaperOrderPreviewDetailModal({
           <span className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs font-bold text-slate-300">
             {preview.broker}
           </span>
+        </div>
+
+        <div className="mb-5 rounded-2xl border border-sky-500/30 bg-sky-500/10 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h4 className="text-sm font-bold uppercase tracking-[0.18em] text-sky-300">
+                Sandbox Preview Validation
+              </h4>
+              <p className="mt-2 text-sm text-sky-100/80">
+                Validates the locked preview payload only. This does not submit
+                to Tradier, does not approve sandbox execution, and does not
+                write to Supabase.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={validateSandboxPreview}
+              disabled={validatingSandboxPreview || !canValidateSandboxPreview}
+              className="rounded-xl border border-sky-400/50 bg-sky-500/20 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-sky-200 transition hover:border-sky-300 hover:bg-sky-500/30 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-900 disabled:text-slate-500"
+            >
+              {validatingSandboxPreview
+                ? "Validating..."
+                : "Validate Sandbox Preview"}
+            </button>
+          </div>
+
+          {!canValidateSandboxPreview && (
+            <p className="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-yellow-300">
+              Locked until preview is REVIEWED_ONLY, ready for sandbox preview,
+              and all broker approval/submission locks are false.
+            </p>
+          )}
+
+          {validationError && (
+            <div className="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
+              {validationError}
+            </div>
+          )}
+
+          {validationResult && (
+            <div
+              className={`mt-4 rounded-xl border p-4 ${getValidationBadgeClass(
+                validationResult.status
+              )}`}
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-current px-3 py-1 text-xs font-bold">
+                  {validationResult.status}
+                </span>
+                <span className="text-xs font-bold uppercase tracking-[0.16em] opacity-80">
+                  {validationResult.mode}
+                </span>
+              </div>
+
+              <p className="mt-3 text-sm">
+                {validationResult.message ||
+                  validationResult.reason ||
+                  "Validation completed."}
+              </p>
+
+              {validationResult.tradierStylePreviewPayload && (
+                <div className="mt-4 grid gap-2 md:grid-cols-2">
+                  <DetailRow
+                    label="Payload Class"
+                    value={validationResult.tradierStylePreviewPayload.class}
+                  />
+                  <DetailRow
+                    label="Payload Symbol"
+                    value={formatValue(
+                      validationResult.tradierStylePreviewPayload.symbol
+                    )}
+                  />
+                  <DetailRow
+                    label="Option Symbol"
+                    value={formatValue(
+                      validationResult.tradierStylePreviewPayload.option_symbol
+                    )}
+                  />
+                  <DetailRow
+                    label="Side"
+                    value={formatValue(
+                      validationResult.tradierStylePreviewPayload.side
+                    )}
+                  />
+                  <DetailRow
+                    label="Type"
+                    value={formatValue(
+                      validationResult.tradierStylePreviewPayload.type
+                    )}
+                  />
+                  <DetailRow
+                    label="Duration"
+                    value={formatValue(
+                      validationResult.tradierStylePreviewPayload.duration
+                    )}
+                  />
+                  <DetailRow
+                    label="Quantity"
+                    value={formatValue(
+                      validationResult.tradierStylePreviewPayload.quantity
+                    )}
+                  />
+                  <DetailRow
+                    label="Limit Price"
+                    value={formatMoney(
+                      validationResult.tradierStylePreviewPayload.price
+                    )}
+                  />
+                </div>
+              )}
+
+              {validationResult.safetyLocks && (
+                <div className="mt-4 rounded-xl border border-emerald-500/30 bg-black/20 p-3 text-sm text-emerald-200">
+                  Safety locks confirmed false: sandbox approval, live
+                  approval, and broker submitted all remain locked.
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
