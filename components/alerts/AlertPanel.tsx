@@ -90,7 +90,6 @@ function formatDateTime(value: string) {
 
 function formatMoney(value: number | null) {
   if (value === null) return "N/A";
-
   return `$${value.toFixed(2)}`;
 }
 
@@ -129,6 +128,10 @@ function getPreviewBadgeClass(status: string) {
 
   if (status === "REVIEWED_ONLY") {
     return "border-purple-500/40 bg-purple-500/10 text-purple-300";
+  }
+
+  if (status === "CANCELLED") {
+    return "border-red-500/40 bg-red-500/10 text-red-300";
   }
 
   if (status === "READY_FOR_SANDBOX") {
@@ -178,8 +181,11 @@ export default function AlertPanel({
   const [paperPreviewHistoryError, setPaperPreviewHistoryError] = useState<
     string | null
   >(null);
-    
+
   const [reviewingPreviewId, setReviewingPreviewId] = useState<string | null>(
+    null
+  );
+  const [cancellingPreviewId, setCancellingPreviewId] = useState<string | null>(
     null
   );
 
@@ -254,7 +260,9 @@ export default function AlertPanel({
 
       if (error) {
         console.error("Failed to load paper order preview history:", error);
-        setPaperPreviewHistoryError("Could not load paper order preview history.");
+        setPaperPreviewHistoryError(
+          "Could not load paper order preview history."
+        );
         setPaperOrderPreviewHistory([]);
       } else {
         setPaperOrderPreviewHistory((data ?? []) as PaperOrderPreviewRow[]);
@@ -313,6 +321,47 @@ export default function AlertPanel({
     setReviewingPreviewId(null);
   }
 
+  async function cancelPaperPreview(previewId: string) {
+    setCancellingPreviewId(previewId);
+    setPaperPreviewHistoryError(null);
+
+    const { error } = await supabase
+      .from("paper_order_previews")
+      .update({
+        preview_status: "CANCELLED",
+        updated_at: new Date().toISOString(),
+        approved_for_sandbox_order: false,
+        approved_for_live_order: false,
+        submitted_to_broker: false,
+        safety_notes:
+          "Preview cancelled by user. No Tradier sandbox order submitted. No live order submitted.",
+      })
+      .eq("id", previewId);
+
+    if (error) {
+      console.error("Failed to cancel paper order preview:", error);
+      setPaperPreviewHistoryError("Could not cancel preview.");
+      setCancellingPreviewId(null);
+      return;
+    }
+
+    setPaperOrderPreviewHistory((currentRows) =>
+      currentRows.map((row) =>
+        row.id === previewId
+          ? {
+              ...row,
+              preview_status: "CANCELLED",
+              approved_for_sandbox_order: false,
+              approved_for_live_order: false,
+              submitted_to_broker: false,
+            }
+          : row
+      )
+    );
+
+    setCancellingPreviewId(null);
+  }
+
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
       <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
@@ -364,7 +413,9 @@ export default function AlertPanel({
           <button
             type="button"
             onClick={onClearResolvedAlerts}
-            disabled={!onClearResolvedAlerts || alerts.length === activeAlerts.length}
+            disabled={
+              !onClearResolvedAlerts || alerts.length === activeAlerts.length
+            }
             className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-300 transition hover:border-slate-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
             Clear Resolved
@@ -480,9 +531,7 @@ export default function AlertPanel({
 
                     <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
                       {row.strike !== null && <span>Strike: {row.strike}</span>}
-
                       {row.expiration && <span>Exp: {row.expiration}</span>}
-
                       {row.risk_guard_status && (
                         <span>Risk Guard: {row.risk_guard_status}</span>
                       )}
@@ -577,15 +626,14 @@ export default function AlertPanel({
 
                     <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
                       {row.strike !== null && <span>Strike: {row.strike}</span>}
-
                       {row.expiration && <span>Exp: {row.expiration}</span>}
-
                       {row.risk_guard_status && (
                         <span>Risk Guard: {row.risk_guard_status}</span>
                       )}
-
                       {row.max_risk_dollars !== null && (
-                        <span>Max Risk: {formatMoney(row.max_risk_dollars)}</span>
+                        <span>
+                          Max Risk: {formatMoney(row.max_risk_dollars)}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -678,13 +726,10 @@ export default function AlertPanel({
 
                     <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
                       {row.strike !== null && <span>Strike: {row.strike}</span>}
-
                       {row.expiration && <span>Exp: {row.expiration}</span>}
-
                       {row.risk_guard_status && (
                         <span>Risk Guard: {row.risk_guard_status}</span>
                       )}
-
                       <span>Side: {row.order_side}</span>
                       <span>Type: {row.order_type}</span>
                       <span>TIF: {row.time_in_force}</span>
@@ -735,22 +780,44 @@ export default function AlertPanel({
                       </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => markPaperPreviewReviewed(row.id)}
-                      disabled={
-                        reviewingPreviewId === row.id ||
-                        row.preview_status === "REVIEWED_ONLY" ||
-                        row.submitted_to_broker
-                      }
-                      className="mt-3 rounded-xl border border-purple-500/30 bg-purple-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-purple-300 transition hover:border-purple-400 hover:text-purple-200 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      {reviewingPreviewId === row.id
-                        ? "Marking..."
-                        : row.preview_status === "REVIEWED_ONLY"
-                        ? "Reviewed"
-                        : "Mark Reviewed"}
-                    </button>
+                    <div className="mt-3 flex flex-wrap justify-start gap-2 md:justify-end">
+                      <button
+                        type="button"
+                        onClick={() => markPaperPreviewReviewed(row.id)}
+                        disabled={
+                          reviewingPreviewId === row.id ||
+                          cancellingPreviewId === row.id ||
+                          row.preview_status === "REVIEWED_ONLY" ||
+                          row.preview_status === "CANCELLED" ||
+                          row.submitted_to_broker
+                        }
+                        className="rounded-xl border border-purple-500/30 bg-purple-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-purple-300 transition hover:border-purple-400 hover:text-purple-200 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {reviewingPreviewId === row.id
+                          ? "Marking..."
+                          : row.preview_status === "REVIEWED_ONLY"
+                          ? "Reviewed"
+                          : "Mark Reviewed"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => cancelPaperPreview(row.id)}
+                        disabled={
+                          reviewingPreviewId === row.id ||
+                          cancellingPreviewId === row.id ||
+                          row.preview_status === "CANCELLED" ||
+                          row.submitted_to_broker
+                        }
+                        className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-red-300 transition hover:border-red-400 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {cancellingPreviewId === row.id
+                          ? "Cancelling..."
+                          : row.preview_status === "CANCELLED"
+                          ? "Cancelled"
+                          : "Cancel Preview"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
