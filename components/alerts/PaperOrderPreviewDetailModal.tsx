@@ -375,6 +375,56 @@ export default function PaperOrderPreviewDetailModal({
             </div>
           )}
         </div>
+                <div className="mb-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h4 className="text-sm font-bold uppercase tracking-[0.18em] text-red-300">
+                Sandbox Submit Route
+              </h4>
+
+              <p className="mt-2 text-sm text-red-100/80">
+                LOCKED. The sandbox submit route exists, but it is blocked-only
+                in this version. No Tradier sandbox order submission is enabled
+                from the dashboard yet.
+              </p>
+            </div>
+
+            <span className="rounded-full border border-red-500/40 bg-red-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-red-300">
+              BLOCKED ONLY
+            </span>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <DetailRow
+              label="Route"
+              value="/api/tradier/orders/sandbox-submit"
+              valueClassName="text-red-200"
+            />
+
+            <DetailRow
+              label="Mode"
+              value="sandbox_submit_blocked_only"
+              valueClassName="text-red-200"
+            />
+
+            <DetailRow
+              label="Broker Call"
+              value="DISABLED"
+              valueClassName="text-emerald-300"
+            />
+
+            <DetailRow
+              label="DB Writes"
+              value="DISABLED"
+              valueClassName="text-emerald-300"
+            />
+          </div>
+
+          <div className="mt-4 rounded-xl border border-red-500/30 bg-black/20 p-3 text-sm text-red-100/80">
+            Future sandbox order submission will require a separate reviewed
+            safety sprint. This modal currently supports validation only.
+          </div>
+        </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-2xl border border-slate-800 bg-black/20 p-4">
