@@ -1,6 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import {
+  APPROVED_CONTRACT_GRADES,
+  DEFAULT_RISK_LIMITS,
+} from "@/constants/riskLimits";
 import { supabase } from "@/lib/supabaseClient";
 import type {
   AlertPriority,
@@ -107,17 +111,38 @@ export function useTradeApprovalAlerts() {
       return null;
     }
 
-    const allowedContractGrades: Array<ContractQuality> = ["A+", "A", "B"];
-
     if (
       !input.contractQuality ||
-      !allowedContractGrades.includes(input.contractQuality)
+      !APPROVED_CONTRACT_GRADES.includes(input.contractQuality)
     ) {
       setApprovalActionStatus(null);
       setApprovalActionError(
         `${input.symbol} was not sent to approval queue because Contract Quality is ${
           input.contractQuality ?? "UNKNOWN"
         }.`
+      );
+
+      return null;
+    }
+
+    const maxRiskLimit = DEFAULT_RISK_LIMITS.maxRiskPerTradeDollars;
+    const maxRiskDollars = input.maxRiskDollars ?? null;
+
+    if (maxRiskDollars === null || maxRiskDollars <= 0) {
+      setApprovalActionStatus(null);
+      setApprovalActionError(
+        `${input.symbol} was not sent to approval queue because max risk is missing.`
+      );
+
+      return null;
+    }
+
+    if (maxRiskDollars > maxRiskLimit) {
+      setApprovalActionStatus(null);
+      setApprovalActionError(
+        `${input.symbol} was not sent to approval queue because max risk is $${maxRiskDollars.toFixed(
+          2
+        )}, above the $${maxRiskLimit.toFixed(2)} limit.`
       );
 
       return null;
@@ -155,7 +180,7 @@ export function useTradeApprovalAlerts() {
       riskGuardStatus: input.riskGuardStatus,
       riskGuardReason: input.riskGuardReason ?? null,
       contractQuality: input.contractQuality ?? null,
-      maxRiskDollars: input.maxRiskDollars ?? null,
+      maxRiskDollars,
 
       contractSymbol: input.contractSymbol ?? null,
       strike: input.strike ?? null,
