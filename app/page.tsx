@@ -1047,6 +1047,7 @@ export default function Home() {
   approveAlert,
   rejectAlert,
   reviewAlert,
+  clearResolvedAlerts,
   approvalActionStatus,
   approvalActionError,
   isSavingApprovalDecision,
@@ -1249,6 +1250,7 @@ const sendSelectedContractToApprovalQueue = () => {
   onReviewAlert={reviewAlert}
   onApproveAlert={approveAlert}
   onRejectAlert={rejectAlert}
+  onClearResolvedAlerts={clearResolvedAlerts}
   approvalActionStatus={approvalActionStatus}
   approvalActionError={approvalActionError}
   isSavingApprovalDecision={isSavingApprovalDecision}

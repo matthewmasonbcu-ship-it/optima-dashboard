@@ -10,6 +10,7 @@ type AlertPanelProps = {
   onApproveAlert?: (alertId: string) => void | Promise<void>;
   onRejectAlert?: (alertId: string) => void | Promise<void>;
   onReviewAlert?: (alertId: string) => void | Promise<void>;
+  onClearResolvedAlerts?: () => void;
   approvalActionStatus?: string | null;
   approvalActionError?: string | null;
   isSavingApprovalDecision?: boolean;
@@ -146,6 +147,7 @@ export default function AlertPanel({
   onApproveAlert,
   onRejectAlert,
   onReviewAlert,
+  onClearResolvedAlerts,
   approvalActionStatus,
   approvalActionError,
   isSavingApprovalDecision,
@@ -302,9 +304,22 @@ export default function AlertPanel({
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-700 px-4 py-3 text-sm">
-          <p className="text-xs text-slate-500">Pending Alerts</p>
-          <p className="text-2xl font-bold text-white">{activeAlerts.length}</p>
+        <div className="flex flex-col gap-2">
+          <div className="rounded-xl border border-slate-700 px-4 py-3 text-sm">
+            <p className="text-xs text-slate-500">Pending Alerts</p>
+            <p className="text-2xl font-bold text-white">
+              {activeAlerts.length}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClearResolvedAlerts}
+            disabled={!onClearResolvedAlerts || alerts.length === activeAlerts.length}
+            className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-300 transition hover:border-slate-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Clear Resolved
+          </button>
         </div>
       </div>
 
