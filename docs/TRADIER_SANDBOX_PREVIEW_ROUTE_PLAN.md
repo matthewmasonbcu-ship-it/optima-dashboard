@@ -375,3 +375,16 @@ Next planned step:
 - Review official Tradier preview endpoint payload requirements
 - Design the future broker-preview request payload
 - Do not enable external broker-preview calls until the next safety review is complete
+
+## Planned Tradier Sandbox Broker Preview Payload
+
+Status: DESIGN ONLY  
+Implementation: NOT ENABLED  
+External Tradier call: DISABLED  
+Order submission: DISABLED  
+Live trading: DISABLED  
+
+Future route:
+
+```txt
+POST /api/tradier/orders/sandbox-broker-preview
