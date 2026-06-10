@@ -19,23 +19,7 @@ type CreateTradeApprovalAlertInput = {
   maxRiskDollars?: number | null;
 };
 
-const initialTestAlerts: TradeApprovalAlert[] = [
-  {
-    id: "test-aapl-alert-1",
-    symbol: "AAPL",
-    lane: "OPTIONS_DAY_TRADE",
-    setupName: "Test B-grade options setup",
-    message:
-      "AAPL has a test trade candidate ready for review. This is a fake local alert and does not save trades or place orders.",
-    priority: "HIGH",
-    channels: ["DASHBOARD"],
-    decision: "PENDING",
-    riskGuardStatus: "APPROVED",
-    contractQuality: "B",
-    maxRiskDollars: 85,
-    createdAt: new Date().toISOString(),
-  },
-];
+const initialTestAlerts: TradeApprovalAlert[] = [];
 
 function createLocalAlertId(symbol: string) {
   return `local-${symbol.toLowerCase()}-${Date.now()}`;

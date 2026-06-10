@@ -16,7 +16,6 @@ import SystemReadinessCard from "../components/SystemReadinessCard";
 import PaperTradingControlCenter from "../components/PaperTradingControlCenter";
 import TradingDashboardHeader from "../components/TradingDashboardHeader";
 import AlertPanel from "@/components/alerts/AlertPanel";
-import type { TradeApprovalAlert } from "@/types/alerts";
 import { useTradeApprovalAlerts } from "@/hooks/useTradeApprovalAlerts";
 
 type MarketCondition = "BULLISH" | "BEARISH" | "CHOPPY" | "UNKNOWN";
@@ -1042,7 +1041,7 @@ export default function Home() {
       ? `${selectedSymbol} NO TRADE`
       : "None selected";
 
-const {
+  const {
   alerts: tradeApprovalAlerts,
   createTradeAlert,
   approveAlert,
@@ -1050,18 +1049,43 @@ const {
   reviewAlert,
 } = useTradeApprovalAlerts();
 
-const createTestTradeAlert = () => {
+const sendSelectedContractToApprovalQueue = () => {
+  if (!selectedSetup || !selectedContract) {
+    setStatusMessage(
+      "Approval alert blocked: Select a scanner setup and option contract first."
+    );
+    return;
+  }
+
+  const optionSymbol = String(
+    getContractValue(
+      selectedContract,
+      ["option_symbol", "optionSymbol", "symbol"],
+      ""
+    )
+  );
+
+  const contractGrade = getContractGrade(selectedContract);
+
   createTradeAlert({
-    symbol: "NVDA",
+    symbol: selectedSymbol,
     lane: "OPTIONS_DAY_TRADE",
-    setupName: "Test dynamic options alert",
-    message:
-      "NVDA has a dynamic test trade candidate. This proves the dashboard can create approval alerts without saving trades or placing orders.",
-    priority: "HIGH",
-    riskGuardStatus: "APPROVED",
-    contractQuality: "A",
-    maxRiskDollars: 95,
+    setupName: `${selectedSymbol} ${tradeDirection} approval review`,
+    message: `${selectedSymbol} ${tradeDirection} contract ${
+      optionSymbol || "selected"
+    } is ready for approval review. This does not save a trade or place an order.`,
+    priority: optionRiskCheck.status === "APPROVED" ? "HIGH" : "MEDIUM",
+    riskGuardStatus: optionRiskCheck.status,
+    contractQuality: contractGrade,
+    maxRiskDollars: getNumber(
+      getContractValue(selectedContract, ["max_risk", "maxRisk"]),
+      0
+    ),
   });
+
+  setStatusMessage(
+    `Approval alert created for ${selectedSymbol}. Review it in the Alert Center.`
+  );
 };
 
   return (
@@ -1154,26 +1178,27 @@ const createTestTradeAlert = () => {
 
 <BrokerStatusCard />
 
-
+<div className="space-y-3">
   <div className="flex justify-end">
-  <button
-    type="button"
-    onClick={createTestTradeAlert}
-    className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-300 transition hover:bg-emerald-500/20"
-  >
-    Create Test Trade Alert
-  </button>
+    <button
+      type="button"
+      onClick={sendSelectedContractToApprovalQueue}
+      disabled={!selectedSetup || !selectedContract}
+      className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500"
+    >
+      Send Selected Contract to Approval Queue
+    </button>
+  </div>
+
+  <AlertPanel
+    alerts={tradeApprovalAlerts}
+    onReviewAlert={reviewAlert}
+    onApproveAlert={approveAlert}
+    onRejectAlert={rejectAlert}
+  />
 </div>
 
-<AlertPanel
-  alerts={tradeApprovalAlerts}
-  onReviewAlert={reviewAlert}
-  onApproveAlert={approveAlert}
-  onRejectAlert={rejectAlert}
-/>
-
 <SystemReadinessCard />
-
 <PaperTradingControlCenter />
       
         
