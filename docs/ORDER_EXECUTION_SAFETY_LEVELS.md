@@ -378,3 +378,27 @@ Next planned step:
 - Add a disabled/locked UI indicator for future sandbox submission.
 - Do not add an active submit button yet.
 - Do not call Tradier order endpoint yet.
+
+## Completed Checkpoint — Locked Sandbox Submit UI Indicator
+
+Status: COMPLETE
+
+Verified:
+- PaperOrderPreviewDetailModal displays the future sandbox submit route
+- The UI clearly labels the route as BLOCKED ONLY
+- Broker Call shows DISABLED
+- DB Writes shows DISABLED
+- No active sandbox submit button exists
+- Dashboard remains validation-only
+- No Tradier broker order endpoint is called
+- No Supabase writes are performed from the locked UI section
+
+Current dashboard behavior:
+- Users can validate a sandbox preview payload
+- Users cannot submit a sandbox order
+- Users cannot submit a live order
+
+Next planned step:
+- Review Tradier sandbox order endpoint requirements
+- Design sandbox submit request payload
+- Do not enable submission until the next safety review is complete
