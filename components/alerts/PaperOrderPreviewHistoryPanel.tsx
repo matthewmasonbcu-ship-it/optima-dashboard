@@ -30,6 +30,9 @@ type PaperOrderPreviewRow = {
   approved_for_sandbox_order: boolean;
   approved_for_live_order: boolean;
   submitted_to_broker: boolean;
+  ready_for_sandbox_preview: boolean;
+  ready_for_sandbox_preview_at: string | null;
+  sandbox_preview_locked_reason: string | null;
 };
 
 type PaperOrderPreviewHistoryPanelProps = {
@@ -63,19 +66,15 @@ function getPreviewBadgeClass(status: string) {
     return "border-red-500/40 bg-red-500/10 text-red-300";
   }
 
-  if (status === "READY_FOR_SANDBOX") {
+  return "border-slate-600 bg-slate-900 text-slate-300";
+}
+
+function getSandboxReadyBadgeClass(isReady: boolean) {
+  if (isReady) {
     return "border-sky-500/40 bg-sky-500/10 text-sky-300";
   }
 
-  if (status === "SUBMITTED") {
-    return "border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
-  }
-
-  if (status === "FAILED") {
-    return "border-red-500/40 bg-red-500/10 text-red-300";
-  }
-
-  return "border-slate-600 bg-slate-900 text-slate-300";
+  return "border-slate-700 bg-slate-900 text-slate-400";
 }
 
 export default function PaperOrderPreviewHistoryPanel({
@@ -96,6 +95,9 @@ export default function PaperOrderPreviewHistoryPanel({
   const [cancellingPreviewId, setCancellingPreviewId] = useState<string | null>(
     null
   );
+  const [markingSandboxReadyId, setMarkingSandboxReadyId] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -107,7 +109,7 @@ export default function PaperOrderPreviewHistoryPanel({
       const { data, error } = await supabase
         .from("paper_order_previews")
         .select(
-          "id, created_at, symbol, trade_lane, setup_name, contract_symbol, strike, expiration, option_type, bid, ask, mid, estimated_limit_price, quantity, estimated_order_cost, max_risk_dollars, contract_quality, risk_guard_status, preview_status, broker, order_side, order_type, time_in_force, approved_for_sandbox_order, approved_for_live_order, submitted_to_broker"
+          "id, created_at, symbol, trade_lane, setup_name, contract_symbol, strike, expiration, option_type, bid, ask, mid, estimated_limit_price, quantity, estimated_order_cost, max_risk_dollars, contract_quality, risk_guard_status, preview_status, broker, order_side, order_type, time_in_force, approved_for_sandbox_order, approved_for_live_order, submitted_to_broker, ready_for_sandbox_preview, ready_for_sandbox_preview_at, sandbox_preview_locked_reason"
         )
         .order("created_at", { ascending: false })
         .limit(8);
@@ -175,6 +177,88 @@ export default function PaperOrderPreviewHistoryPanel({
     setReviewingPreviewId(null);
   }
 
+  async function markReadyForSandboxPreview(previewId: string) {
+    const targetPreview = paperOrderPreviewHistory.find(
+      (row) => row.id === previewId
+    );
+
+    if (!targetPreview) {
+      setPaperPreviewHistoryError("Could not find this preview.");
+      return;
+    }
+
+    if (targetPreview.preview_status !== "REVIEWED_ONLY") {
+      setPaperPreviewHistoryError(
+        "Preview must be REVIEWED_ONLY before it can be marked ready for sandbox preview."
+      );
+      return;
+    }
+
+    if (
+      targetPreview.submitted_to_broker ||
+      targetPreview.approved_for_sandbox_order ||
+      targetPreview.approved_for_live_order
+    ) {
+      setPaperPreviewHistoryError(
+        "Safety lock blocked this action because this preview is not fully locked."
+      );
+      return;
+    }
+
+    setMarkingSandboxReadyId(previewId);
+    setPaperPreviewHistoryError(null);
+
+    const readyAt = new Date().toISOString();
+    const lockedReason =
+      "Manually marked ready for future Tradier sandbox preview. No broker order submitted.";
+
+    const { error } = await supabase
+      .from("paper_order_previews")
+      .update({
+        ready_for_sandbox_preview: true,
+        ready_for_sandbox_preview_at: readyAt,
+        sandbox_preview_locked_reason: lockedReason,
+        updated_at: readyAt,
+        approved_for_sandbox_order: false,
+        approved_for_live_order: false,
+        submitted_to_broker: false,
+        safety_notes:
+          "Ready for future Tradier sandbox preview route only. No broker order submitted. No live order submitted.",
+      })
+      .eq("id", previewId)
+      .eq("preview_status", "REVIEWED_ONLY")
+      .eq("approved_for_sandbox_order", false)
+      .eq("approved_for_live_order", false)
+      .eq("submitted_to_broker", false);
+
+    if (error) {
+      console.error("Failed to mark ready for sandbox preview:", error);
+      setPaperPreviewHistoryError(
+        "Could not mark preview ready for sandbox preview."
+      );
+      setMarkingSandboxReadyId(null);
+      return;
+    }
+
+    setPaperOrderPreviewHistory((currentRows) =>
+      currentRows.map((row) =>
+        row.id === previewId
+          ? {
+              ...row,
+              ready_for_sandbox_preview: true,
+              ready_for_sandbox_preview_at: readyAt,
+              sandbox_preview_locked_reason: lockedReason,
+              approved_for_sandbox_order: false,
+              approved_for_live_order: false,
+              submitted_to_broker: false,
+            }
+          : row
+      )
+    );
+
+    setMarkingSandboxReadyId(null);
+  }
+
   async function cancelPaperPreview(previewId: string) {
     setCancellingPreviewId(previewId);
     setPaperPreviewHistoryError(null);
@@ -187,6 +271,10 @@ export default function PaperOrderPreviewHistoryPanel({
         approved_for_sandbox_order: false,
         approved_for_live_order: false,
         submitted_to_broker: false,
+        ready_for_sandbox_preview: false,
+        ready_for_sandbox_preview_at: null,
+        sandbox_preview_locked_reason:
+          "Preview cancelled. Sandbox preview readiness removed.",
         safety_notes:
           "Preview cancelled by user. No Tradier sandbox order submitted. No live order submitted.",
       })
@@ -208,6 +296,10 @@ export default function PaperOrderPreviewHistoryPanel({
               approved_for_sandbox_order: false,
               approved_for_live_order: false,
               submitted_to_broker: false,
+              ready_for_sandbox_preview: false,
+              ready_for_sandbox_preview_at: null,
+              sandbox_preview_locked_reason:
+                "Preview cancelled. Sandbox preview readiness removed.",
             }
           : row
       )
@@ -248,143 +340,198 @@ export default function PaperOrderPreviewHistoryPanel({
         </div>
       ) : (
         <div className="space-y-3">
-          {paperOrderPreviewHistory.map((row) => (
-            <div
-              key={row.id}
-              className="rounded-xl border border-slate-800 bg-slate-950/70 p-4"
-            >
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-bold text-white">{row.symbol}</p>
+          {paperOrderPreviewHistory.map((row) => {
+            const canMarkReadyForSandboxPreview =
+              row.preview_status === "REVIEWED_ONLY" &&
+              !row.ready_for_sandbox_preview &&
+              !row.submitted_to_broker &&
+              !row.approved_for_sandbox_order &&
+              !row.approved_for_live_order;
 
-                    {row.option_type && (
+            return (
+              <div
+                key={row.id}
+                className="rounded-xl border border-slate-800 bg-slate-950/70 p-4"
+              >
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-bold text-white">{row.symbol}</p>
+
+                      {row.option_type && (
+                        <span className="rounded-full border border-slate-700 px-2 py-1 text-xs font-bold text-slate-300">
+                          {row.option_type}
+                        </span>
+                      )}
+
+                      <span
+                        className={`rounded-full border px-2 py-1 text-xs font-bold ${getPreviewBadgeClass(
+                          row.preview_status
+                        )}`}
+                      >
+                        {row.preview_status}
+                      </span>
+
+                      <span
+                        className={`rounded-full border px-2 py-1 text-xs font-bold ${getSandboxReadyBadgeClass(
+                          row.ready_for_sandbox_preview
+                        )}`}
+                      >
+                        {row.ready_for_sandbox_preview
+                          ? "READY FOR SANDBOX PREVIEW"
+                          : "SANDBOX PREVIEW LOCKED"}
+                      </span>
+
+                      {row.contract_quality && (
+                        <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-1 text-xs font-bold text-sky-300">
+                          Grade {row.contract_quality}
+                        </span>
+                      )}
+
                       <span className="rounded-full border border-slate-700 px-2 py-1 text-xs font-bold text-slate-300">
-                        {row.option_type}
+                        {row.broker}
                       </span>
+                    </div>
+
+                    <p className="mt-2 text-sm text-slate-400">
+                      {row.contract_symbol || "No contract symbol saved"}
+                    </p>
+
+                    <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
+                      {row.strike !== null && <span>Strike: {row.strike}</span>}
+                      {row.expiration && <span>Exp: {row.expiration}</span>}
+                      {row.risk_guard_status && (
+                        <span>Risk Guard: {row.risk_guard_status}</span>
+                      )}
+                      <span>Side: {row.order_side}</span>
+                      <span>Type: {row.order_type}</span>
+                      <span>TIF: {row.time_in_force}</span>
+                      <span>Qty: {row.quantity}</span>
+                    </div>
+
+                    <div className="mt-3 grid gap-2 text-xs text-slate-400 md:grid-cols-3">
+                      <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-2">
+                        <p className="text-slate-500">Limit Price</p>
+                        <p className="font-bold text-white">
+                          {formatMoney(row.estimated_limit_price)}
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-2">
+                        <p className="text-slate-500">Estimated Cost</p>
+                        <p className="font-bold text-white">
+                          {formatMoney(row.estimated_order_cost)}
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-2">
+                        <p className="text-slate-500">Max Risk</p>
+                        <p className="font-bold text-white">
+                          {formatMoney(row.max_risk_dollars)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {row.ready_for_sandbox_preview && (
+                      <div className="mt-3 rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-sky-200">
+                        <p className="font-bold">Sandbox preview ready lock</p>
+                        <p className="mt-1 text-sky-300/80">
+                          {row.sandbox_preview_locked_reason ||
+                            "Ready for future sandbox preview. No broker order submitted."}
+                        </p>
+                        {row.ready_for_sandbox_preview_at && (
+                          <p className="mt-1 text-sky-300/70">
+                            Marked ready:{" "}
+                            {formatDateTime(row.ready_for_sandbox_preview_at)}
+                          </p>
+                        )}
+                      </div>
                     )}
-
-                    <span
-                      className={`rounded-full border px-2 py-1 text-xs font-bold ${getPreviewBadgeClass(
-                        row.preview_status
-                      )}`}
-                    >
-                      {row.preview_status}
-                    </span>
-
-                    {row.contract_quality && (
-                      <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-1 text-xs font-bold text-sky-300">
-                        Grade {row.contract_quality}
-                      </span>
-                    )}
-
-                    <span className="rounded-full border border-slate-700 px-2 py-1 text-xs font-bold text-slate-300">
-                      {row.broker}
-                    </span>
                   </div>
 
-                  <p className="mt-2 text-sm text-slate-400">
-                    {row.contract_symbol || "No contract symbol saved"}
-                  </p>
+                  <div className="text-left md:text-right">
+                    <p className="text-xs text-slate-500">
+                      {formatDateTime(row.created_at)}
+                    </p>
 
-                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
-                    {row.strike !== null && <span>Strike: {row.strike}</span>}
-                    {row.expiration && <span>Exp: {row.expiration}</span>}
-                    {row.risk_guard_status && (
-                      <span>Risk Guard: {row.risk_guard_status}</span>
-                    )}
-                    <span>Side: {row.order_side}</span>
-                    <span>Type: {row.order_type}</span>
-                    <span>TIF: {row.time_in_force}</span>
-                    <span>Qty: {row.quantity}</span>
-                  </div>
-
-                  <div className="mt-3 grid gap-2 text-xs text-slate-400 md:grid-cols-3">
-                    <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-2">
-                      <p className="text-slate-500">Limit Price</p>
-                      <p className="font-bold text-white">
-                        {formatMoney(row.estimated_limit_price)}
+                    <div className="mt-2 space-y-1 text-xs font-bold text-slate-400">
+                      <p>
+                        Sandbox Approved:{" "}
+                        {row.approved_for_sandbox_order ? "YES" : "NO"}
+                      </p>
+                      <p>
+                        Live Approved:{" "}
+                        {row.approved_for_live_order ? "YES" : "NO"}
+                      </p>
+                      <p>
+                        Broker Submitted:{" "}
+                        {row.submitted_to_broker ? "YES" : "NO"}
                       </p>
                     </div>
 
-                    <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-2">
-                      <p className="text-slate-500">Estimated Cost</p>
-                      <p className="font-bold text-white">
-                        {formatMoney(row.estimated_order_cost)}
-                      </p>
+                    <div className="mt-3 flex flex-wrap justify-start gap-2 md:justify-end">
+                      <button
+                        type="button"
+                        onClick={() => markPaperPreviewReviewed(row.id)}
+                        disabled={
+                          reviewingPreviewId === row.id ||
+                          cancellingPreviewId === row.id ||
+                          markingSandboxReadyId === row.id ||
+                          row.preview_status === "REVIEWED_ONLY" ||
+                          row.preview_status === "CANCELLED" ||
+                          row.submitted_to_broker
+                        }
+                        className="rounded-xl border border-purple-500/30 bg-purple-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-purple-300 transition hover:border-purple-400 hover:text-purple-200 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {reviewingPreviewId === row.id
+                          ? "Marking..."
+                          : row.preview_status === "REVIEWED_ONLY"
+                          ? "Reviewed"
+                          : "Mark Reviewed"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => markReadyForSandboxPreview(row.id)}
+                        disabled={
+                          !canMarkReadyForSandboxPreview ||
+                          reviewingPreviewId === row.id ||
+                          cancellingPreviewId === row.id ||
+                          markingSandboxReadyId === row.id
+                        }
+                        className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-sky-300 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {markingSandboxReadyId === row.id
+                          ? "Locking..."
+                          : row.ready_for_sandbox_preview
+                          ? "Sandbox Ready"
+                          : "Mark Sandbox Ready"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => cancelPaperPreview(row.id)}
+                        disabled={
+                          reviewingPreviewId === row.id ||
+                          cancellingPreviewId === row.id ||
+                          markingSandboxReadyId === row.id ||
+                          row.preview_status === "CANCELLED" ||
+                          row.submitted_to_broker
+                        }
+                        className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-red-300 transition hover:border-red-400 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {cancellingPreviewId === row.id
+                          ? "Cancelling..."
+                          : row.preview_status === "CANCELLED"
+                          ? "Cancelled"
+                          : "Cancel Preview"}
+                      </button>
                     </div>
-
-                    <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-2">
-                      <p className="text-slate-500">Max Risk</p>
-                      <p className="font-bold text-white">
-                        {formatMoney(row.max_risk_dollars)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="text-left md:text-right">
-                  <p className="text-xs text-slate-500">
-                    {formatDateTime(row.created_at)}
-                  </p>
-
-                  <div className="mt-2 space-y-1 text-xs font-bold text-slate-400">
-                    <p>
-                      Sandbox Approved:{" "}
-                      {row.approved_for_sandbox_order ? "YES" : "NO"}
-                    </p>
-                    <p>
-                      Live Approved:{" "}
-                      {row.approved_for_live_order ? "YES" : "NO"}
-                    </p>
-                    <p>
-                      Broker Submitted:{" "}
-                      {row.submitted_to_broker ? "YES" : "NO"}
-                    </p>
-                  </div>
-
-                  <div className="mt-3 flex flex-wrap justify-start gap-2 md:justify-end">
-                    <button
-                      type="button"
-                      onClick={() => markPaperPreviewReviewed(row.id)}
-                      disabled={
-                        reviewingPreviewId === row.id ||
-                        cancellingPreviewId === row.id ||
-                        row.preview_status === "REVIEWED_ONLY" ||
-                        row.preview_status === "CANCELLED" ||
-                        row.submitted_to_broker
-                      }
-                      className="rounded-xl border border-purple-500/30 bg-purple-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-purple-300 transition hover:border-purple-400 hover:text-purple-200 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      {reviewingPreviewId === row.id
-                        ? "Marking..."
-                        : row.preview_status === "REVIEWED_ONLY"
-                        ? "Reviewed"
-                        : "Mark Reviewed"}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => cancelPaperPreview(row.id)}
-                      disabled={
-                        reviewingPreviewId === row.id ||
-                        cancellingPreviewId === row.id ||
-                        row.preview_status === "CANCELLED" ||
-                        row.submitted_to_broker
-                      }
-                      className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-red-300 transition hover:border-red-400 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      {cancellingPreviewId === row.id
-                        ? "Cancelling..."
-                        : row.preview_status === "CANCELLED"
-                        ? "Cancelled"
-                        : "Cancel Preview"}
-                    </button>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
