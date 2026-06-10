@@ -347,3 +347,34 @@ Planned route:
 
 ```txt
 POST /api/tradier/orders/sandbox-submit
+
+## Completed Checkpoint — Blocked-Only Sandbox Submit Skeleton
+
+Status: COMPLETE  
+Route: POST /api/tradier/orders/sandbox-submit  
+Mode: sandbox_submit_blocked_only  
+
+Verified:
+- Route exists and compiles
+- Route reads paper_order_previews
+- Route runs sandbox submission safety gates
+- Valid reviewed + ready preview still returns BLOCKED
+- Cancelled preview returns BLOCKED
+- No Tradier broker endpoint is called
+- No Supabase writes are performed
+- approved_for_order remains false
+- approved_for_sandbox_order remains false
+- approved_for_live_order remains false
+- submitted_to_broker remains false
+
+Current behavior:
+- Even when all safety gates pass, the route returns:
+  “Sandbox submission route is not enabled yet. Safety gates passed, but broker submission remains locked in v1.”
+
+Purpose:
+- This creates a safe future path for sandbox submission without enabling broker execution yet.
+
+Next planned step:
+- Add a disabled/locked UI indicator for future sandbox submission.
+- Do not add an active submit button yet.
+- Do not call Tradier order endpoint yet.
