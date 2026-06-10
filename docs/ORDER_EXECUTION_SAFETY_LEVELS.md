@@ -335,3 +335,15 @@ Scanner
 ```
 
 Never skip a level.
+
+## Next Planned Level — Tradier Sandbox Submit Route
+
+Status: PLANNING ONLY  
+Implementation: NOT STARTED  
+Live trading: DISABLED  
+Real orders: DISABLED  
+
+Planned route:
+
+```txt
+POST /api/tradier/orders/sandbox-submit
