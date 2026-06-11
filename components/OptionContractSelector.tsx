@@ -484,6 +484,136 @@ if (
 return "C";
 }
 
+function getTradierQualityDiagnostics(
+  contract: OptionContract,
+  params: {
+    accountSize: number;
+    maxRiskPercent: number;
+    maxSpreadPercent: number;
+  }
+) {
+  const bid = getBid(contract);
+  const ask = getAsk(contract);
+  const mid = getMid(contract);
+  const spread = getSpreadPercent(contract);
+  const maxRisk = getMaxRisk(contract);
+  const allowedRisk = params.accountSize * (params.maxRiskPercent / 100);
+  const volume = getVolume(contract);
+  const openInterest = getOpenInterest(contract);
+  const liquidityScore = getTradierLiquidityScore(contract);
+  const deltaAbs = getDeltaAbs(contract);
+  const deltaFitScore = getDeltaFitScore(contract);
+  const expirationDays = getTradierExpirationDays(contract);
+  const expirationFitScore = getExpirationFitScore(contract);
+  const hasLiquidityData = volume > 0 || openInterest > 0;
+  const qualityGrade = getTradierQualityGrade(contract, params);
+
+  const failReasons: string[] = [];
+  const notes: string[] = [];
+
+  if (bid <= 0 || ask <= 0 || mid <= 0) {
+    failReasons.push("Invalid bid/ask/mid pricing.");
+  }
+
+  if (ask < bid) {
+    failReasons.push("Ask is below bid, so pricing is invalid.");
+  }
+
+  if (maxRisk > allowedRisk) {
+    failReasons.push(
+      `Max risk $${maxRisk.toFixed(2)} is above allowed $${allowedRisk.toFixed(2)}.`
+    );
+  }
+
+  if (spread > params.maxSpreadPercent * 1.5) {
+    failReasons.push(
+      `Spread ${spread.toFixed(1)}% is severely above the hard block limit ${(
+        params.maxSpreadPercent * 1.5
+      ).toFixed(1)}%.`
+    );
+  }
+
+  if (qualityGrade === "C") {
+    if (spread > params.maxSpreadPercent) {
+      failReasons.push(
+        `Spread ${spread.toFixed(1)}% is above the clean B-grade max ${params.maxSpreadPercent}%.`
+      );
+    }
+
+    if (deltaFitScore < 35) {
+      failReasons.push(
+        deltaAbs === null
+          ? "Delta unavailable and did not help the quality score."
+          : `Delta ${deltaAbs.toFixed(2)} is outside the preferred funded-account range.`
+      );
+    }
+
+    if (expirationFitScore < 35) {
+      failReasons.push(
+        expirationDays === null
+          ? "Expiration distance unavailable and did not help the quality score."
+          : `${expirationDays} days to expiration is outside the preferred window.`
+      );
+    }
+
+    if (failReasons.length === 0) {
+      failReasons.push(
+        "Contract missed A/B quality thresholds. It is watch-only unless Testing Override is intentionally armed."
+      );
+    }
+  }
+
+  notes.push(
+    `Spread ${spread.toFixed(1)}% ${
+      spread <= params.maxSpreadPercent ? "within" : "above"
+    } max ${params.maxSpreadPercent}%.`
+  );
+
+  notes.push(
+    `Max risk $${maxRisk.toFixed(2)} ${
+      maxRisk <= allowedRisk ? "within" : "above"
+    } allowed $${allowedRisk.toFixed(2)}.`
+  );
+
+  notes.push(
+    hasLiquidityData
+      ? `Liquidity score ${liquidityScore} from ${volume} volume / ${openInterest} OI.`
+      : "Tradier liquidity data missing or stale; no A/A+ liquidity reward."
+  );
+
+  notes.push(
+    deltaAbs === null
+      ? `Delta unavailable. Delta fit score ${deltaFitScore}.`
+      : `Delta ${deltaAbs.toFixed(2)}. Delta fit score ${deltaFitScore}.`
+  );
+
+  notes.push(
+    expirationDays === null
+      ? `Expiration distance unavailable. Expiration fit score ${expirationFitScore}.`
+      : `${expirationDays} days to expiration. Expiration fit score ${expirationFitScore}.`
+  );
+
+  notes.push("Read-only market data only. Paper save remains controlled by Risk Guard.");
+
+  const reason =
+    qualityGrade === "BLOCKED"
+      ? `Tradier contract blocked. ${failReasons[0] || "Hard safety filter failed."}`
+      : qualityGrade === "C"
+      ? `Tradier contract is C quality. ${failReasons[0]}`
+      : qualityGrade === "B"
+      ? "Tradier contract is B quality: acceptable for clean paper testing if Risk Guard is APPROVED."
+      : qualityGrade === "A"
+      ? "Tradier contract is A quality: good setup with clean pricing, risk, and minimum liquidity confirmation."
+      : qualityGrade === "A+"
+      ? "Tradier contract is A+ quality: elite setup with strong liquidity, spread, delta, expiration, and risk fit."
+      : "Tradier contract quality is unknown.";
+
+  return {
+    reason,
+    why: [...failReasons, ...notes],
+  };
+}
+
 function getTradierRecommendationScore(
   contract: OptionContract,
   params: {
@@ -562,25 +692,7 @@ function enrichTradierContract(
   const liquidityScore = getTradierLiquidityScore(contract);
   const recommendationScore = getTradierRecommendationScore(contract, params);
   const qualityGrade = getTradierQualityGrade(contract, params);
-  const deltaAbs = getDeltaAbs(contract);
-  const expirationDays = getTradierExpirationDays(contract);
-  const riskStatus = getRiskStatus(
-    {
-      ...contract,
-      qualityGrade,
-      contractQualityGrade: qualityGrade,
-      grade: qualityGrade,
-      contract_quality: qualityGrade,
-      quality_grade: qualityGrade,
-      contract_quality_grade: qualityGrade,
-    },
-    {
-      accountSize: params.accountSize,
-      maxRiskPercent: params.maxRiskPercent,
-      maxSpreadPercent: params.maxSpreadPercent,
-    }
-  );
-
+  const qualityDiagnostics = getTradierQualityDiagnostics(contract, params);
   return {
     ...contract,
     source: "tradier",
@@ -618,21 +730,10 @@ function enrichTradierContract(
     quality_grade: qualityGrade,
     contract_quality_grade: qualityGrade,
 
-    recommendationReason:
-      qualityGrade === "BLOCKED"
-        ? `Tradier contract blocked by safety filters. ${riskStatus.reason}`
-        : qualityGrade === "C"
-        ? "Tradier contract is weak quality. Testing Override required before saving."
-        : qualityGrade === "B"
-        ? "Tradier contract is acceptable, but not ideal. Confirm Risk Guard before saving."
-        : "Tradier contract passes current read-only quality filters.",
+    recommendationReason: qualityDiagnostics.reason,
     whyThisContract: [
       "Loaded from Tradier sandbox option chain.",
-      `Spread ${spread.toFixed(1)}%.`,
-      `Liquidity score ${liquidityScore}.`,
-      deltaAbs === null ? "Delta unavailable." : `Delta ${deltaAbs.toFixed(2)} absolute.`,
-      expirationDays === null ? "Expiration distance unavailable." : `${expirationDays} days to expiration.`,
-      "Read-only market data only. Paper trade save remains controlled by Risk Guard.",
+      ...qualityDiagnostics.why,
     ],
   };
 }
