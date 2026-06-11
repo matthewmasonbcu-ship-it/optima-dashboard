@@ -692,7 +692,25 @@ function enrichTradierContract(
   const liquidityScore = getTradierLiquidityScore(contract);
   const recommendationScore = getTradierRecommendationScore(contract, params);
   const qualityGrade = getTradierQualityGrade(contract, params);
-  const qualityDiagnostics = getTradierQualityDiagnostics(contract, params);
+  const deltaAbs = getDeltaAbs(contract);
+  const expirationDays = getTradierExpirationDays(contract);
+  const riskStatus = getRiskStatus(
+    {
+      ...contract,
+      qualityGrade,
+      contractQualityGrade: qualityGrade,
+      grade: qualityGrade,
+      contract_quality: qualityGrade,
+      quality_grade: qualityGrade,
+      contract_quality_grade: qualityGrade,
+    },
+    {
+      accountSize: params.accountSize,
+      maxRiskPercent: params.maxRiskPercent,
+      maxSpreadPercent: params.maxSpreadPercent,
+    }
+  );
+
   return {
     ...contract,
     source: "tradier",
@@ -730,10 +748,21 @@ function enrichTradierContract(
     quality_grade: qualityGrade,
     contract_quality_grade: qualityGrade,
 
-    recommendationReason: qualityDiagnostics.reason,
+    recommendationReason:
+      qualityGrade === "BLOCKED"
+        ? `Tradier contract blocked by safety filters. ${riskStatus.reason}`
+        : qualityGrade === "C"
+        ? "Tradier contract is weak quality. Testing Override required before saving."
+        : qualityGrade === "B"
+        ? "Tradier contract is acceptable, but not ideal. Confirm Risk Guard before saving."
+        : "Tradier contract passes current read-only quality filters.",
     whyThisContract: [
       "Loaded from Tradier sandbox option chain.",
-      ...qualityDiagnostics.why,
+      `Spread ${spread.toFixed(1)}%.`,
+      `Liquidity score ${liquidityScore}.`,
+      deltaAbs === null ? "Delta unavailable." : `Delta ${deltaAbs.toFixed(2)} absolute.`,
+      expirationDays === null ? "Expiration distance unavailable." : `${expirationDays} days to expiration.`,
+      "Read-only market data only. Paper trade save remains controlled by Risk Guard.",
     ],
   };
 }
@@ -1227,7 +1256,7 @@ export default function OptionContractSelector({
                 </span>
               </div>
               <p className="mt-1 font-mono text-[9px] leading-4 text-slate-500">
-                {recommendedContract.recommendationReason || "Recommended based on grade, spread, liquidity, risk, and score."}
+                {recommendedContract.recommendationReason || "Recommended based on clean grade, approved risk, spread, liquidity, and score."}
               </p>
             </div>
             <button
