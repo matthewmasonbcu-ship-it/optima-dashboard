@@ -195,3 +195,40 @@ The current working AutoTrader should not be rewritten all at once.
 Every future module must be built separately, tested, and only connected after it works.
 
 No broker execution route should be connected until the full preview, approval, safety-lock, and paper-proof workflow is verified over time.
+
+## Current Checkpoint — Tradier Sandbox Order Safety Bridge
+
+Status: ACTIVE / VALIDATION ONLY
+
+Completed:
+- Internal sandbox preview validation route
+- Validate Sandbox Preview button in PaperOrderPreviewDetailModal
+- Blocked-only sandbox broker-preview route
+- Broker-preview payload builder
+- Locked broker-preview payload display in modal
+- Broker Preview Lock test button
+- Sandbox env readiness route
+- Sandbox env readiness UI indicator
+- Blocked-only sandbox submit route
+- Hardened sandbox-submit route with Supabase source-of-truth read
+
+Safety status:
+- No external Tradier broker-preview call enabled
+- No Tradier order endpoint call enabled
+- No sandbox order submission enabled
+- No live trading enabled
+- No Supabase writes from validation/lock-test routes
+- approved_for_order remains false
+- approved_for_sandbox_order remains false
+- approved_for_live_order remains false
+- submitted_to_broker remains false
+
+Current route states:
+- POST /api/tradier/orders/preview = internal validation only
+- POST /api/tradier/orders/sandbox-broker-preview = blocked-only
+- GET /api/tradier/orders/sandbox-env-check = readiness check only
+- POST /api/tradier/orders/sandbox-submit = blocked-only
+
+Next decision:
+- Continue toward official Tradier sandbox broker-preview call
+- Or pause broker execution and improve alert quality / funded-account trade filtering
