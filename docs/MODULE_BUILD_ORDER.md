@@ -261,3 +261,52 @@ Do not connect broker execution until:
 * Safety flags are proven
 * User has months of paper data
 * Risk Guard blocks bad trades correctly
+
+## Next Build Module — Funded Account Safety Filter v1
+
+Status: NEXT
+
+Purpose:
+Prevent low-quality alerts from reaching the order-preview workflow.
+
+This module should filter alerts before they become paper order previews.
+
+Required checks:
+- Risk Guard must be APPROVED
+- Contract Quality must be A+, A, or B
+- Max risk must be <= 100
+- Setup must not be chop / low-conviction
+- Contract spread must be acceptable
+- Contract bid and ask must exist
+- Contract mid must exist
+- Quantity must be 1 for v1
+- Estimated limit price must be > 0
+- Trade must have setup_name
+- Trade must have symbol
+- Trade must have contract_symbol
+- Trade must have order_side
+- Trade must have order_type
+- Trade must have time_in_force
+
+Blocked examples:
+- C / BLOCKED / UNKNOWN contract quality
+- Risk Guard BLOCKED or CAUTION
+- Max risk > 100
+- Missing contract symbol
+- Missing setup name
+- Missing pricing
+- Wide spread
+- Quantity above 1
+- Choppy setup
+
+Output:
+- status: PASSED or BLOCKED
+- score: 0-100
+- reasons: string[]
+- warnings: string[]
+
+Safety rule:
+This module does not submit orders.
+This module does not call Tradier.
+This module does not write broker fields.
+This module only decides whether an alert/order preview candidate is high quality enough to continue.
