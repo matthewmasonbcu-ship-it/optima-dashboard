@@ -125,20 +125,21 @@ const fundedSafety = evaluateFundedAccountSafety({
   market_regime: alert.lane ?? null,
 });
 
+const fundedSafetyNote =
+  fundedSafety.status === "PASSED"
+    ? `Funded Account Safety Filter: PASSED. Score: ${fundedSafety.score}.`
+    : `Funded Account Safety Filter: BLOCKED FOR FUNDED FLOW ONLY. Score: ${
+        fundedSafety.score
+      }. Reasons: ${fundedSafety.reasons.join(" ")}`;
+
 if (fundedSafety.status === "BLOCKED") {
-  console.warn("Funded Account Safety Filter blocked preview creation:", {
+  console.warn("Funded Account Safety Filter blocked funded flow only:", {
     alertId: alert.id,
     symbol: alert.symbol,
     score: fundedSafety.score,
     reasons: fundedSafety.reasons,
     warnings: fundedSafety.warnings,
   });
-
-  throw new Error(
-    `Funded Account Safety Filter BLOCKED preview creation: ${fundedSafety.reasons.join(
-      " "
-    )}`
-  );
 }
 
 const { error } = await supabase.from("paper_order_previews").insert({
@@ -179,9 +180,7 @@ const { error } = await supabase.from("paper_order_previews").insert({
     broker_order_id: null,
     broker_response: null,
 
-    safety_notes:
-      "Preview only. No Tradier sandbox order submitted. No live order submitted.",
-  });
+    safety_notes: `Preview only. No Tradier sandbox order submitted. No live order submitted. ${fundedSafetyNote}`,
 
   if (error) {
     console.error("Failed to save paper order preview:", error);
