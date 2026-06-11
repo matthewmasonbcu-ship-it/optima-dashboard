@@ -443,39 +443,45 @@ function getTradierQualityGrade(
   if (maxRisk > allowedRisk) return "BLOCKED";
   if (spread > params.maxSpreadPercent * 1.5) return "BLOCKED";
 
-  // Real option chains can include stale/no-market contracts. Keep those out of clean saves.
-  if (volume === 0 && openInterest === 0) return "C";
+ const hasLiquidityData = volume > 0 || openInterest > 0;
 
-  if (
-    spread <= 8 &&
-    liquidityScore >= 80 &&
-    deltaFitScore >= 85 &&
-    expirationFitScore >= 65 &&
-    maxRisk <= allowedRisk * 0.75
-  ) {
-    return "A+";
-  }
+// A+ should still require real liquidity confirmation.
+if (
+  hasLiquidityData &&
+  spread <= 8 &&
+  liquidityScore >= 80 &&
+  deltaFitScore >= 85 &&
+  expirationFitScore >= 65 &&
+  maxRisk <= allowedRisk * 0.75
+) {
+  return "A+";
+}
 
-  if (
-    spread <= 12 &&
-    liquidityScore >= 55 &&
-    deltaFitScore >= 60 &&
-    expirationFitScore >= 50 &&
-    maxRisk <= allowedRisk
-  ) {
-    return "A";
-  }
+// A should still require decent liquidity confirmation.
+if (
+  hasLiquidityData &&
+  spread <= 12 &&
+  liquidityScore >= 55 &&
+  deltaFitScore >= 60 &&
+  expirationFitScore >= 50 &&
+  maxRisk <= allowedRisk
+) {
+  return "A";
+}
 
-  if (
-    spread <= params.maxSpreadPercent &&
-    liquidityScore >= 20 &&
-    deltaFitScore >= 45 &&
-    maxRisk <= allowedRisk
-  ) {
-    return "B";
-  }
+// B is acceptable for paper/funded-filter testing when pricing is clean,
+// risk is within limits, and spread is acceptable, even if sandbox liquidity
+// data is missing or stale.
+if (
+  spread <= params.maxSpreadPercent &&
+  deltaFitScore >= 35 &&
+  expirationFitScore >= 35 &&
+  maxRisk <= allowedRisk
+) {
+  return "B";
+}
 
-  return "C";
+return "C";
 }
 
 function getTradierRecommendationScore(
