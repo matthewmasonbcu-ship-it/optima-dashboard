@@ -6,6 +6,7 @@ import {
   DEFAULT_RISK_LIMITS,
 } from "@/constants/riskLimits";
 import { supabase } from "@/lib/supabaseClient";
+import { evaluateFundedAccountSafety } from "@/lib/fundedAccountSafetyFilter";
 import type {
   AlertPriority,
   ApprovalDecision,
@@ -103,9 +104,44 @@ async function savePaperOrderPreview(
   approvalDecisionId: string | null
 ) {
   const estimatedLimitPrice = getEstimatedLimitPrice(alert);
-  const estimatedOrderCost = getEstimatedOrderCost(alert);
+const estimatedOrderCost = getEstimatedOrderCost(alert);
 
-  const { error } = await supabase.from("paper_order_previews").insert({
+const fundedSafety = evaluateFundedAccountSafety({
+  symbol: alert.symbol ?? null,
+  setup_name: alert.setupName ?? null,
+  contract_symbol: alert.contractSymbol ?? null,
+  bid: alert.bid ?? null,
+  ask: alert.ask ?? null,
+  mid: alert.mid ?? null,
+  estimated_limit_price: estimatedLimitPrice,
+  quantity: 1,
+  max_risk_dollars: alert.maxRiskDollars ?? null,
+  contract_quality: alert.contractQuality ?? null,
+  risk_guard_status: alert.riskGuardStatus ?? null,
+  order_side: "BUY_TO_OPEN",
+  order_type: "LIMIT",
+  time_in_force: "DAY",
+  setup_confidence: alert.setupName ?? null,
+  market_regime: alert.lane ?? null,
+});
+
+if (fundedSafety.status === "BLOCKED") {
+  console.warn("Funded Account Safety Filter blocked preview creation:", {
+    alertId: alert.id,
+    symbol: alert.symbol,
+    score: fundedSafety.score,
+    reasons: fundedSafety.reasons,
+    warnings: fundedSafety.warnings,
+  });
+
+  throw new Error(
+    `Funded Account Safety Filter BLOCKED preview creation: ${fundedSafety.reasons.join(
+      " "
+    )}`
+  );
+}
+
+const { error } = await supabase.from("paper_order_previews").insert({
     source_alert_id: alert.id ?? null,
     approval_decision_id: approvalDecisionId,
     phone_alert_event_id: null,
