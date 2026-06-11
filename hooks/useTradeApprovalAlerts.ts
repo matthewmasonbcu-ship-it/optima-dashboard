@@ -181,6 +181,7 @@ const { error } = await supabase.from("paper_order_previews").insert({
     broker_response: null,
 
     safety_notes: `Preview only. No Tradier sandbox order submitted. No live order submitted. ${fundedSafetyNote}`,
+  });
 
   if (error) {
     console.error("Failed to save paper order preview:", error);
