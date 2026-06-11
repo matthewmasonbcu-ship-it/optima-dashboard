@@ -238,24 +238,32 @@ export default function PaperOrderPreviewQualityAnalytics({
   );
 
   return (
-    <section className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-lg shadow-black/20">
-      <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+    <section className="relative overflow-hidden rounded-2xl border border-slate-800/80 bg-gradient-to-b from-slate-950/90 to-slate-950/60 p-4 shadow-[0_0_32px_-14px_rgba(8,47,73,0.6)] sm:p-5">
+      {/* Ambient top edge */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent"
+      />
+
+      <div className="relative mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-300">
+          <p className="flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-[0.3em] text-cyan-400/80">
+            <span className="h-1 w-1 rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.9)]" />
             Preview Quality Analytics
           </p>
 
-          <h2 className="text-lg font-semibold text-slate-100">
+          <h2 className="mt-1 text-lg font-bold tracking-tight text-slate-100">
             Paper Order Preview Stats
           </h2>
         </div>
 
-        <p className="text-xs text-slate-400">
-          Read-only analytics. No broker order actions enabled.
+        <p className="inline-flex items-center gap-1.5 self-start rounded-full border border-slate-700/60 bg-slate-900/70 px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-400 sm:self-auto">
+          <span className="h-1 w-1 rounded-full bg-slate-500" />
+          Read-only — no broker order actions enabled
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="relative grid grid-cols-2 gap-2 sm:grid-cols-2 sm:gap-3 xl:grid-cols-5">
         <StatCard label="Total Previews" value={totalPreviews} />
 
         <StatCard
@@ -296,8 +304,9 @@ export default function PaperOrderPreviewQualityAnalytics({
         <StatCard label="Cancelled" value={statusCounts.CANCELLED} />
       </div>
 
-      <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900/40 p-3">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+      <div className="relative mt-4 rounded-xl border border-slate-800/80 bg-black/25 p-3 sm:p-4">
+        <p className="mb-3 flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-400">
+          <span className="h-px w-4 bg-gradient-to-r from-cyan-500/60 to-transparent" />
           Contract Grade Distribution
         </p>
 
@@ -334,10 +343,27 @@ function StatCard({
             ? "text-slate-300"
             : "text-slate-100";
 
+  const hoverGlowClass =
+    tone === "good"
+      ? "hover:border-emerald-500/30 hover:shadow-[0_0_18px_-8px_rgba(52,211,153,0.35)]"
+      : tone === "warn"
+        ? "hover:border-amber-500/30 hover:shadow-[0_0_18px_-8px_rgba(252,211,77,0.35)]"
+        : tone === "danger"
+          ? "hover:border-rose-500/30 hover:shadow-[0_0_18px_-8px_rgba(251,113,133,0.35)]"
+          : "hover:border-cyan-500/25 hover:shadow-[0_0_18px_-8px_rgba(34,211,238,0.25)]";
+
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className={`mt-1 text-2xl font-semibold ${toneClass}`}>{value}</p>
+    <div
+      className={`group rounded-xl border border-slate-800/80 bg-slate-900/40 p-3 transition-all duration-300 hover:bg-slate-900/70 ${hoverGlowClass}`}
+    >
+      <p className="font-mono text-[10px] uppercase tracking-wider text-slate-500 transition-colors duration-300 group-hover:text-slate-400">
+        {label}
+      </p>
+      <p
+        className={`mt-1 font-mono text-2xl font-bold tabular-nums ${toneClass}`}
+      >
+        {value}
+      </p>
     </div>
   );
 }
@@ -345,20 +371,42 @@ function StatCard({
 function GradePill({ grade, count }: { grade: GradeKey; count: number }) {
   const gradeClass =
     grade === "A+" || grade === "A"
-      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+      ? "border-emerald-500/25 bg-emerald-500/[0.08] text-emerald-300 hover:border-emerald-400/50 hover:shadow-[0_0_16px_-6px_rgba(52,211,153,0.4)]"
       : grade === "B"
-        ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-300"
+        ? "border-cyan-500/25 bg-cyan-500/[0.08] text-cyan-300 hover:border-cyan-400/50 hover:shadow-[0_0_16px_-6px_rgba(34,211,238,0.4)]"
         : grade === "C"
-          ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+          ? "border-amber-500/25 bg-amber-500/[0.08] text-amber-300 hover:border-amber-400/50 hover:shadow-[0_0_16px_-6px_rgba(252,211,77,0.4)]"
           : grade === "BLOCKED"
-            ? "border-rose-500/30 bg-rose-500/10 text-rose-300"
-            : "border-slate-700 bg-slate-800/60 text-slate-300";
+            ? "border-rose-500/25 bg-rose-500/[0.08] text-rose-300 hover:border-rose-400/50 hover:shadow-[0_0_16px_-6px_rgba(251,113,133,0.4)]"
+            : "border-slate-700/70 bg-slate-800/40 text-slate-300 hover:border-slate-600";
+
+  const dotClass =
+    grade === "A+" || grade === "A"
+      ? "bg-emerald-400 shadow-[0_0_5px_rgba(52,211,153,0.9)]"
+      : grade === "B"
+        ? "bg-cyan-400 shadow-[0_0_5px_rgba(34,211,238,0.9)]"
+        : grade === "C"
+          ? "bg-amber-400 shadow-[0_0_5px_rgba(252,211,77,0.9)]"
+          : grade === "BLOCKED"
+            ? "bg-rose-400 shadow-[0_0_5px_rgba(251,113,133,0.9)]"
+            : "bg-slate-500";
+
+  const isEmpty = count === 0;
 
   return (
-    <div className={`rounded-lg border px-3 py-2 ${gradeClass}`}>
+    <div
+      className={`rounded-lg border px-3 py-2 transition-all duration-300 ${gradeClass} ${
+        isEmpty ? "opacity-50" : ""
+      }`}
+    >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold">{grade}</span>
-        <span className="text-lg font-bold">{count}</span>
+        <span className="flex items-center gap-1.5 font-mono text-xs font-semibold">
+          <span className={`h-1 w-1 rounded-full ${dotClass}`} />
+          {grade}
+        </span>
+        <span className="font-mono text-lg font-bold tabular-nums">
+          {count}
+        </span>
       </div>
     </div>
   );
