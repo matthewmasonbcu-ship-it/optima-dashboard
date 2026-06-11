@@ -38,6 +38,8 @@ type Props = {
 
 type GradeKey = "A+" | "A" | "B" | "C" | "BLOCKED" | "UNKNOWN";
 
+type FundedFilterKey = "PASSED" | "BLOCKED" | "UNKNOWN";
+
 type PreviewStatusKey =
   | "PREVIEW_ONLY"
   | "REVIEWED_ONLY"
@@ -74,9 +76,7 @@ function getSafetyNotes(preview: PaperPreviewLike): string {
   return String(preview.safety_notes ?? preview.safetyNotes ?? "");
 }
 
-function getFundedFilterStatus(
-  preview: PaperPreviewLike
-): "PASSED" | "BLOCKED" | "UNKNOWN" {
+function getFundedFilterStatus(preview: PaperPreviewLike): FundedFilterKey {
   const direct = normalizeUpper(
     preview.funded_filter_status ??
       preview.fundedFilterStatus ??
@@ -184,13 +184,11 @@ export default function PaperOrderPreviewQualityAnalytics({
 }: Props) {
   const totalPreviews = previews.length;
 
-  const fundedPassed = previews.filter(
-    (preview) => getFundedFilterStatus(preview) === "PASSED"
-  ).length;
-
-  const fundedBlocked = previews.filter(
-    (preview) => getFundedFilterStatus(preview) === "BLOCKED"
-  ).length;
+  const fundedFilterCounts: Record<FundedFilterKey, number> = {
+    PASSED: 0,
+    BLOCKED: 0,
+    UNKNOWN: 0,
+  };
 
   const gradeCounts: Record<GradeKey, number> = {
     "A+": 0,
@@ -209,6 +207,7 @@ export default function PaperOrderPreviewQualityAnalytics({
   };
 
   for (const preview of previews) {
+    fundedFilterCounts[getFundedFilterStatus(preview)] += 1;
     gradeCounts[getGrade(preview)] += 1;
 
     const status = getPreviewStatus(preview);
@@ -256,26 +255,44 @@ export default function PaperOrderPreviewQualityAnalytics({
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard label="Total Previews" value={totalPreviews} />
-        <StatCard label="Funded Filter Passed" value={fundedPassed} tone="good" />
+
+        <StatCard
+          label="Funded Filter Passed"
+          value={fundedFilterCounts.PASSED}
+          tone="good"
+        />
+
         <StatCard
           label="Funded Filter Blocked"
-          value={fundedBlocked}
+          value={fundedFilterCounts.BLOCKED}
           tone="danger"
         />
+
+        <StatCard
+          label="Funded Filter Unknown"
+          value={fundedFilterCounts.UNKNOWN}
+          tone="muted"
+        />
+
         <StatCard label="Average Max Risk" value={formatMoney(averageMaxRisk)} />
+
         <StatCard
           label="Average Estimated Limit"
           value={formatMoney(averageEstimatedLimitPrice)}
         />
+
         <StatCard label="Preview Only" value={statusCounts.PREVIEW_ONLY} />
+
         <StatCard label="Reviewed Only" value={statusCounts.REVIEWED_ONLY} />
+
         <StatCard
-          label="Ready for Sandbox Preview"
+          label="Sandbox Ready Lock"
           value={statusCounts.READY_FOR_SANDBOX_PREVIEW}
           tone="warn"
         />
+
         <StatCard label="Cancelled" value={statusCounts.CANCELLED} />
       </div>
 
@@ -304,7 +321,7 @@ function StatCard({
 }: {
   label: string;
   value: string | number;
-  tone?: "neutral" | "good" | "warn" | "danger";
+  tone?: "neutral" | "good" | "warn" | "danger" | "muted";
 }) {
   const toneClass =
     tone === "good"
@@ -313,7 +330,9 @@ function StatCard({
         ? "text-amber-300"
         : tone === "danger"
           ? "text-rose-300"
-          : "text-slate-100";
+          : tone === "muted"
+            ? "text-slate-300"
+            : "text-slate-100";
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
