@@ -30,7 +30,6 @@ type PaperOrderPreviewRow = {
   time_in_force: string | null;
   quantity: number | null;
   estimated_limit_price: number | null;
-  estimated_total_cost: number | null;
   max_risk_dollars: number | null;
   risk_guard_status: string | null;
   contract_quality: string | null;
@@ -52,6 +51,12 @@ function blocked(reason: string, row?: PaperOrderPreviewRow | null) {
         approved_for_live_order: false,
         submitted_to_broker: false,
       },
+      brokerCall: {
+        tradierPreviewEndpointCalled: false,
+        tradierOrderEndpointCalled: false,
+        liveEndpointCalled: false,
+      },
+      dbWrites: false,
       preview: row
         ? {
             id: row.id,
@@ -96,14 +101,14 @@ export async function POST(request: Request) {
 
     if (preview.preview_status !== "REVIEWED_ONLY") {
       return blocked(
-        "Preview must be REVIEWED_ONLY before sandbox submission.",
+        "Preview must be REVIEWED_ONLY before sandbox submit.",
         preview
       );
     }
 
     if (preview.ready_for_sandbox_preview !== true) {
       return blocked(
-        "Preview must be marked ready_for_sandbox_preview before sandbox submission.",
+        "Preview must be marked ready_for_sandbox_preview before sandbox submit.",
         preview
       );
     }
@@ -113,7 +118,7 @@ export async function POST(request: Request) {
     }
 
     if (preview.approved_for_sandbox_order === true) {
-      return blocked("approved_for_sandbox_order must be false before submit.", preview);
+      return blocked("approved_for_sandbox_order must remain false.", preview);
     }
 
     if (preview.approved_for_live_order === true) {
@@ -121,7 +126,7 @@ export async function POST(request: Request) {
     }
 
     if (preview.submitted_to_broker === true) {
-      return blocked("submitted_to_broker must be false before submit.", preview);
+      return blocked("submitted_to_broker must remain false.", preview);
     }
 
     const normalizedBroker = (preview.broker ?? "").toLowerCase();
@@ -167,12 +172,51 @@ export async function POST(request: Request) {
       preview.max_risk_dollars === undefined ||
       preview.max_risk_dollars > 100
     ) {
-      return blocked("max_risk_dollars must be less than or equal to 100.", preview);
+      return blocked(
+        "max_risk_dollars must be less than or equal to 100.",
+        preview
+      );
     }
 
-    return blocked(
-      "Sandbox submission route is not enabled yet. Safety gates passed, but broker submission remains locked in v1.",
-      preview
+    // All safety gates passed — route is still BLOCKED.
+    // Sandbox order submission is not enabled in v1.
+    // No Tradier API call. No DB writes. submitted_to_broker stays false.
+    return NextResponse.json(
+      {
+        success: true,
+        route: "/api/tradier/orders/sandbox-submit",
+        mode: "sandbox_submit_blocked_only",
+        status: "BLOCKED",
+        reason:
+          "Tradier sandbox submit route is not enabled yet. Safety gates passed, but sandbox order submission remains locked in v1.",
+        safetyLocks: {
+          approved_for_order: false,
+          approved_for_sandbox_order: false,
+          approved_for_live_order: false,
+          submitted_to_broker: false,
+        },
+        brokerCall: {
+          tradierPreviewEndpointCalled: false,
+          tradierOrderEndpointCalled: false,
+          liveEndpointCalled: false,
+        },
+        dbWrites: false,
+        preview: {
+          id: preview.id,
+          preview_status: preview.preview_status,
+          ready_for_sandbox_preview: preview.ready_for_sandbox_preview,
+          broker: preview.broker,
+          symbol: preview.symbol,
+          contract_symbol: preview.contract_symbol,
+          risk_guard_status: preview.risk_guard_status,
+          contract_quality: preview.contract_quality,
+          max_risk_dollars: preview.max_risk_dollars,
+          approved_for_sandbox_order: preview.approved_for_sandbox_order,
+          approved_for_live_order: preview.approved_for_live_order,
+          submitted_to_broker: preview.submitted_to_broker,
+        },
+      },
+      { status: 200 }
     );
   } catch (error) {
     console.error("Tradier sandbox submit blocked-only route error:", error);
@@ -183,13 +227,20 @@ export async function POST(request: Request) {
         route: "/api/tradier/orders/sandbox-submit",
         mode: "sandbox_submit_blocked_only",
         status: "ERROR",
-        message: "Unexpected server error during sandbox submit blocked-only check.",
+        message:
+          "Unexpected server error during sandbox submit blocked-only check.",
         safetyLocks: {
           approved_for_order: false,
           approved_for_sandbox_order: false,
           approved_for_live_order: false,
           submitted_to_broker: false,
         },
+        brokerCall: {
+          tradierPreviewEndpointCalled: false,
+          tradierOrderEndpointCalled: false,
+          liveEndpointCalled: false,
+        },
+        dbWrites: false,
       },
       { status: 500 }
     );
