@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import PaperOrderPreviewQualityAnalytics from "./PaperOrderPreviewQualityAnalytics";
 import PaperOrderPreviewDetailModal, {
   type PaperOrderPreviewRow,
 } from "./PaperOrderPreviewDetailModal";
@@ -396,6 +397,12 @@ export default function PaperOrderPreviewHistoryPanel({
           </p>
         </div>
 
+        <div className="mb-4">
+          <PaperOrderPreviewQualityAnalytics
+            previews={paperOrderPreviewHistory}
+          />
+        </div>
+
         {isLoadingPaperPreviewHistory ? (
           <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
             Loading paper order previews...
@@ -411,7 +418,9 @@ export default function PaperOrderPreviewHistoryPanel({
         ) : (
           <div className="space-y-3">
             {paperOrderPreviewHistory.map((row) => {
-              const fundedFilterStatus = getFundedFilterStatus(row.safety_notes);
+              const fundedFilterStatus = getFundedFilterStatus(
+                row.safety_notes
+              );
 
               const canMarkReadyForSandboxPreview =
                 row.preview_status === "REVIEWED_ONLY" &&
@@ -582,8 +591,8 @@ export default function PaperOrderPreviewHistoryPanel({
                           {reviewingPreviewId === row.id
                             ? "Marking..."
                             : row.preview_status === "REVIEWED_ONLY"
-                            ? "Reviewed"
-                            : "Mark Reviewed"}
+                              ? "Reviewed"
+                              : "Mark Reviewed"}
                         </button>
 
                         <button
@@ -600,8 +609,8 @@ export default function PaperOrderPreviewHistoryPanel({
                           {markingSandboxReadyId === row.id
                             ? "Locking..."
                             : row.ready_for_sandbox_preview
-                            ? "Sandbox Ready"
-                            : "Mark Sandbox Ready"}
+                              ? "Sandbox Ready"
+                              : "Mark Sandbox Ready"}
                         </button>
 
                         <button
@@ -619,8 +628,8 @@ export default function PaperOrderPreviewHistoryPanel({
                           {cancellingPreviewId === row.id
                             ? "Cancelling..."
                             : row.preview_status === "CANCELLED"
-                            ? "Cancelled"
-                            : "Cancel Preview"}
+                              ? "Cancelled"
+                              : "Cancel Preview"}
                         </button>
                       </div>
                     </div>
