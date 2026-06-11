@@ -402,3 +402,34 @@ Next planned step:
 - Review Tradier sandbox order endpoint requirements
 - Design sandbox submit request payload
 - Do not enable submission until the next safety review is complete
+
+## Completed Checkpoint — Hardened Blocked-Only Sandbox Submit Route
+
+Status: COMPLETE  
+Route: POST /api/tradier/orders/sandbox-submit  
+Mode: sandbox_submit_blocked_only  
+
+Verified:
+- Route accepts paper_order_preview_id
+- Route reads paper_order_previews from Supabase as source of truth
+- Route preserves response shape with success, route, mode, status, reason, safetyLocks, brokerCall, dbWrites, and preview summary
+- Route runs all sandbox submit safety gates
+- Valid reviewed + ready preview still returns BLOCKED
+- Cancelled / preview-only previews return BLOCKED before final submit lock
+- No Tradier preview endpoint is called
+- No Tradier order endpoint is called
+- Live endpoint is not called
+- No Supabase writes are performed
+- approved_for_order remains false
+- approved_for_sandbox_order remains false
+- approved_for_live_order remains false
+- submitted_to_broker remains false
+
+Current behavior:
+- Even when all safety gates pass, the route returns:
+  “Tradier sandbox submit route is not enabled yet. Safety gates passed, but sandbox order submission remains locked in v1.”
+
+Shared helper refactor:
+- Attempted but paused.
+- Empty lib/tradierOrderSafety.ts was removed.
+- Current routes remain explicit and working.
