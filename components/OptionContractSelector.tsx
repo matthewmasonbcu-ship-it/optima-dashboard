@@ -1254,7 +1254,7 @@ export default function OptionContractSelector({
                           : "border-slate-700/80 bg-slate-900/80 text-slate-300 hover:border-cyan-500/30 hover:text-cyan-300"
                       }`}
                     >
-                      {isWeak ? "Select for Override Test &gt;" : isSelected ? "Selected" : "Select Contract &gt;"}
+                      {isWeak ? "Select for Override Test >" : isSelected ? "Selected" : "Select Contract >"}
                     </button>
 
                     {isWeak && (
