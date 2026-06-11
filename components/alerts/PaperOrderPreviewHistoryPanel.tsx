@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -52,11 +52,19 @@ function getSandboxReadyBadgeClass(isReady: boolean) {
 function getFundedFilterStatus(safetyNotes: string | null | undefined) {
   const notes = String(safetyNotes || "").toUpperCase();
 
-  if (notes.includes("FUNDED ACCOUNT SAFETY FILTER: PASSED")) {
+  if (
+    notes.includes("FUNDED ACCOUNT SAFETY FILTER: PASSED") ||
+    notes.includes("FUNDED FILTER PASSED") ||
+    notes.includes("FUNDED FILTER: PASSED")
+  ) {
     return "PASSED";
   }
 
-  if (notes.includes("FUNDED ACCOUNT SAFETY FILTER: BLOCKED")) {
+  if (
+    notes.includes("FUNDED ACCOUNT SAFETY FILTER: BLOCKED") ||
+    notes.includes("FUNDED FILTER BLOCKED") ||
+    notes.includes("FUNDED FILTER: BLOCKED")
+  ) {
     return "BLOCKED";
   }
 

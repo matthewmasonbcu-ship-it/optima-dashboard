@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 export type PaperOrderPreviewRow = {
   id: string;
@@ -80,6 +80,38 @@ function getSandboxReadyBadgeClass(isReady: boolean) {
   return "border-slate-700 bg-slate-900 text-slate-400";
 }
 
+function getFundedFilterStatus(
+  safetyNotes: string | null | undefined
+): "PASSED" | "BLOCKED" | null {
+  const notes = String(safetyNotes || "").toUpperCase();
+
+  if (
+    notes.includes("FUNDED ACCOUNT SAFETY FILTER: PASSED") ||
+    notes.includes("FUNDED FILTER PASSED") ||
+    notes.includes("FUNDED FILTER: PASSED")
+  ) {
+    return "PASSED";
+  }
+
+  if (
+    notes.includes("FUNDED ACCOUNT SAFETY FILTER: BLOCKED") ||
+    notes.includes("FUNDED FILTER BLOCKED") ||
+    notes.includes("FUNDED FILTER: BLOCKED")
+  ) {
+    return "BLOCKED";
+  }
+
+  return null;
+}
+
+function getFundedFilterBadgeClass(status: "PASSED" | "BLOCKED") {
+  if (status === "PASSED") {
+    return "border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
+  }
+
+  return "border-orange-500/40 bg-orange-500/10 text-orange-300";
+}
+
 function DetailRow({
   label,
   value,
@@ -106,6 +138,8 @@ export default function PaperOrderPreviewDetailModal({
   preview: PaperOrderPreviewRow;
   onClose: () => void;
 }) {
+  const fundedFilterStatus = getFundedFilterStatus(preview.safety_notes);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
       <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 p-5 shadow-2xl">
@@ -158,13 +192,13 @@ export default function PaperOrderPreviewDetailModal({
             </span>
           )}
 
-          {getFundedFilterStatus(preview.safety_notes) && (
+          {fundedFilterStatus && (
             <span
               className={`rounded-full border px-3 py-1 text-xs font-bold ${getFundedFilterBadgeClass(
-                getFundedFilterStatus(preview.safety_notes) as "PASSED" | "BLOCKED"
+                fundedFilterStatus
               )}`}
             >
-              Funded Filter {getFundedFilterStatus(preview.safety_notes)}
+              Funded Filter {fundedFilterStatus}
             </span>
           )}
 
