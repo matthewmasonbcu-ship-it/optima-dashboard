@@ -48,6 +48,40 @@ function getSandboxReadyBadgeClass(isReady: boolean) {
   return "border-slate-700 bg-slate-900 text-slate-400";
 }
 
+function getFundedFilterStatus(safetyNotes: string | null | undefined) {
+  const notes = String(safetyNotes || "").toUpperCase();
+
+  if (notes.includes("FUNDED ACCOUNT SAFETY FILTER: PASSED")) {
+    return "PASSED";
+  }
+
+  if (notes.includes("FUNDED ACCOUNT SAFETY FILTER: BLOCKED")) {
+    return "BLOCKED";
+  }
+
+  return null;
+}
+
+function getFundedFilterBadgeClass(status: "PASSED" | "BLOCKED") {
+  if (status === "PASSED") {
+    return "border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
+  }
+
+  return "border-orange-500/40 bg-orange-500/10 text-orange-300";
+}
+
+function getFundedFilterNoteSuffix(safetyNotes: string | null | undefined) {
+  const notes = String(safetyNotes || "");
+
+  if (!notes.includes("Funded Account Safety Filter:")) {
+    return "";
+  }
+
+  const fundedNote = notes.slice(notes.indexOf("Funded Account Safety Filter:"));
+
+  return ` ${fundedNote}`;
+}
+
 export default function PaperOrderPreviewHistoryPanel({
   refreshKey,
 }: PaperOrderPreviewHistoryPanelProps) {
@@ -113,6 +147,14 @@ export default function PaperOrderPreviewHistoryPanel({
     setReviewingPreviewId(previewId);
     setPaperPreviewHistoryError(null);
 
+    const targetPreview = paperOrderPreviewHistory.find(
+      (row) => row.id === previewId
+    );
+
+    const safetyNotes = `Preview reviewed by user. No Tradier sandbox order submitted. No live order submitted.${getFundedFilterNoteSuffix(
+      targetPreview?.safety_notes
+    )}`;
+
     const { error } = await supabase
       .from("paper_order_previews")
       .update({
@@ -121,8 +163,7 @@ export default function PaperOrderPreviewHistoryPanel({
         approved_for_sandbox_order: false,
         approved_for_live_order: false,
         submitted_to_broker: false,
-        safety_notes:
-          "Preview reviewed by user. No Tradier sandbox order submitted. No live order submitted.",
+        safety_notes: safetyNotes,
       })
       .eq("id", previewId);
 
@@ -142,8 +183,7 @@ export default function PaperOrderPreviewHistoryPanel({
               approved_for_sandbox_order: false,
               approved_for_live_order: false,
               submitted_to_broker: false,
-              safety_notes:
-                "Preview reviewed by user. No Tradier sandbox order submitted. No live order submitted.",
+              safety_notes: safetyNotes,
             }
           : row
       )
@@ -157,8 +197,7 @@ export default function PaperOrderPreviewHistoryPanel({
             approved_for_sandbox_order: false,
             approved_for_live_order: false,
             submitted_to_broker: false,
-            safety_notes:
-              "Preview reviewed by user. No Tradier sandbox order submitted. No live order submitted.",
+            safety_notes: safetyNotes,
           }
         : currentPreview
     );
@@ -200,8 +239,9 @@ export default function PaperOrderPreviewHistoryPanel({
     const readyAt = new Date().toISOString();
     const lockedReason =
       "Manually marked ready for future Tradier sandbox preview. No broker order submitted.";
-    const safetyNotes =
-      "Ready for future Tradier sandbox preview route only. No broker order submitted. No live order submitted.";
+    const safetyNotes = `Ready for future Tradier sandbox preview route only. No broker order submitted. No live order submitted.${getFundedFilterNoteSuffix(
+      targetPreview.safety_notes
+    )}`;
 
     const { error } = await supabase
       .from("paper_order_previews")
@@ -269,8 +309,13 @@ export default function PaperOrderPreviewHistoryPanel({
     setCancellingPreviewId(previewId);
     setPaperPreviewHistoryError(null);
 
-    const safetyNotes =
-      "Preview cancelled by user. No Tradier sandbox order submitted. No live order submitted.";
+    const targetPreview = paperOrderPreviewHistory.find(
+      (row) => row.id === previewId
+    );
+
+    const safetyNotes = `Preview cancelled by user. No Tradier sandbox order submitted. No live order submitted.${getFundedFilterNoteSuffix(
+      targetPreview?.safety_notes
+    )}`;
     const lockedReason = "Preview cancelled. Sandbox preview readiness removed.";
 
     const { error } = await supabase
@@ -366,6 +411,8 @@ export default function PaperOrderPreviewHistoryPanel({
         ) : (
           <div className="space-y-3">
             {paperOrderPreviewHistory.map((row) => {
+              const fundedFilterStatus = getFundedFilterStatus(row.safety_notes);
+
               const canMarkReadyForSandboxPreview =
                 row.preview_status === "REVIEWED_ONLY" &&
                 !row.ready_for_sandbox_preview &&
@@ -410,6 +457,16 @@ export default function PaperOrderPreviewHistoryPanel({
                         {row.contract_quality && (
                           <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-1 text-xs font-bold text-sky-300">
                             Grade {row.contract_quality}
+                          </span>
+                        )}
+
+                        {fundedFilterStatus && (
+                          <span
+                            className={`rounded-full border px-2 py-1 text-xs font-bold ${getFundedFilterBadgeClass(
+                              fundedFilterStatus
+                            )}`}
+                          >
+                            Funded Filter {fundedFilterStatus}
                           </span>
                         )}
 
