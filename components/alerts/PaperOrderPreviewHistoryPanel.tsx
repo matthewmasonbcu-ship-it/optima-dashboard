@@ -20,33 +20,33 @@ function formatDateTime(value: string) {
   });
 }
 
-function formatMoney(value: number | null) {
-  if (value === null) return "N/A";
+function formatMoney(value: number | null | undefined) {
+  if (value === null || value === undefined) return "N/A";
   return `$${value.toFixed(2)}`;
 }
 
-function getPreviewBadgeClass(status: string) {
+function getPreviewBadgeClass(status: string | null | undefined) {
   if (status === "PREVIEW_ONLY") {
-    return "border-yellow-500/40 bg-yellow-500/10 text-yellow-300";
+    return "border-yellow-500/30 bg-yellow-500/[0.08] text-yellow-300";
   }
 
   if (status === "REVIEWED_ONLY") {
-    return "border-purple-500/40 bg-purple-500/10 text-purple-300";
+    return "border-purple-500/30 bg-purple-500/[0.08] text-purple-300";
   }
 
   if (status === "CANCELLED") {
-    return "border-red-500/40 bg-red-500/10 text-red-300";
+    return "border-red-500/30 bg-red-500/[0.08] text-red-300";
   }
 
-  return "border-slate-600 bg-slate-900 text-slate-300";
+  return "border-slate-600/60 bg-slate-900/80 text-slate-300";
 }
 
-function getSandboxReadyBadgeClass(isReady: boolean) {
+function getSandboxReadyBadgeClass(isReady: boolean | null | undefined) {
   if (isReady) {
-    return "border-sky-500/40 bg-sky-500/10 text-sky-300";
+    return "border-sky-500/30 bg-sky-500/[0.08] text-sky-300";
   }
 
-  return "border-slate-700 bg-slate-900 text-slate-400";
+  return "border-slate-700/70 bg-slate-900/80 text-slate-400";
 }
 
 function getFundedFilterStatus(safetyNotes: string | null | undefined) {
@@ -73,10 +73,42 @@ function getFundedFilterStatus(safetyNotes: string | null | undefined) {
 
 function getFundedFilterBadgeClass(status: "PASSED" | "BLOCKED") {
   if (status === "PASSED") {
-    return "border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
+    return "border-emerald-500/30 bg-emerald-500/[0.08] text-emerald-300";
   }
 
-  return "border-orange-500/40 bg-orange-500/10 text-orange-300";
+  return "border-orange-500/30 bg-orange-500/[0.08] text-orange-300";
+}
+
+function getQualityBadgeClass(quality: string | null | undefined) {
+  const q = String(quality || "").trim().toUpperCase();
+
+  if (q === "A+" || q === "A") {
+    return "border-emerald-500/30 bg-emerald-500/[0.08] text-emerald-300 shadow-[0_0_10px_-4px_rgba(52,211,153,0.5)]";
+  }
+
+  if (q === "B") {
+    return "border-sky-500/30 bg-sky-500/[0.08] text-sky-300 shadow-[0_0_10px_-4px_rgba(56,189,248,0.5)]";
+  }
+
+  if (q === "C") {
+    return "border-orange-500/30 bg-orange-500/[0.08] text-orange-300 shadow-[0_0_10px_-4px_rgba(251,146,60,0.45)]";
+  }
+
+  if (q === "BLOCKED") {
+    return "border-red-500/30 bg-red-500/[0.08] text-red-300 shadow-[0_0_10px_-4px_rgba(248,113,113,0.45)]";
+  }
+
+  return "border-slate-700/70 bg-slate-900/80 text-slate-400";
+}
+
+function getRiskGuardTextClass(status: string | null | undefined) {
+  const s = String(status || "").toUpperCase();
+
+  if (s === "APPROVED") return "text-emerald-300";
+  if (s === "CAUTION") return "text-yellow-300";
+  if (s === "BLOCKED") return "text-red-300";
+
+  return "text-slate-300";
 }
 
 function getFundedFilterNoteSuffix(safetyNotes: string | null | undefined) {
@@ -94,26 +126,28 @@ function getFundedFilterNoteSuffix(safetyNotes: string | null | undefined) {
 export default function PaperOrderPreviewHistoryPanel({
   refreshKey,
 }: PaperOrderPreviewHistoryPanelProps) {
-  const [paperOrderPreviewHistory, setPaperOrderPreviewHistory] = useState<
-    PaperOrderPreviewRow[]
-  >([]);
+  const [paperOrderPreviewHistory, setPaperOrderPreviewHistory] =
+    useState<PaperOrderPreviewRow[]>([]);
+
   const [selectedPreview, setSelectedPreview] =
     useState<PaperOrderPreviewRow | null>(null);
+
   const [isLoadingPaperPreviewHistory, setIsLoadingPaperPreviewHistory] =
     useState(false);
-  const [paperPreviewHistoryError, setPaperPreviewHistoryError] = useState<
-    string | null
-  >(null);
+
+  const [paperPreviewHistoryError, setPaperPreviewHistoryError] =
+    useState<string | null>(null);
 
   const [reviewingPreviewId, setReviewingPreviewId] = useState<string | null>(
     null
   );
+
   const [cancellingPreviewId, setCancellingPreviewId] = useState<string | null>(
     null
   );
-  const [markingSandboxReadyId, setMarkingSandboxReadyId] = useState<
-    string | null
-  >(null);
+
+  const [markingSandboxReadyId, setMarkingSandboxReadyId] =
+    useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -388,39 +422,49 @@ export default function PaperOrderPreviewHistoryPanel({
 
   return (
     <>
-      <div className="mt-6 rounded-2xl border border-slate-800 bg-black/20 p-4">
-        <div className="mb-4 flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+      <div className="relative mt-6 overflow-hidden rounded-2xl border border-slate-800/80 bg-gradient-to-b from-black/40 to-slate-950/60 p-4 sm:p-5">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-yellow-500/40 to-transparent"
+        />
+
+        <div className="relative mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.25em] text-slate-500">
+            <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-yellow-400/70">
               Paper Order Layer
             </p>
 
-            <h3 className="mt-1 text-lg font-bold text-white">
+            <h3 className="mt-1 text-lg font-bold tracking-tight text-white">
               Recent Paper Order Previews
             </h3>
           </div>
 
-          <p className="text-xs text-slate-500">
+          <p className="inline-flex items-center gap-1.5 self-start rounded-full border border-yellow-500/20 bg-yellow-500/[0.06] px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-yellow-300/90 md:self-auto">
+            <span className="h-1 w-1 rounded-full bg-yellow-400 shadow-[0_0_5px_rgba(250,204,21,0.9)]" />
             Preview only — no Tradier order submitted
           </p>
         </div>
 
-        <div className="mb-4">
+        <div className="relative mb-4">
           <PaperOrderPreviewQualityAnalytics
             previews={paperOrderPreviewHistory}
           />
         </div>
 
         {isLoadingPaperPreviewHistory ? (
-          <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
+          <div className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
+            <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-slate-600 border-t-slate-300" />
             Loading paper order previews...
           </div>
         ) : paperPreviewHistoryError ? (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+          <div className="flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/[0.08] p-4 text-sm text-red-300 shadow-[0_0_20px_-8px_rgba(248,113,113,0.35)]">
+            <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-red-500/20 font-mono text-[9px]">
+              !
+            </span>
             {paperPreviewHistoryError}
           </div>
         ) : paperOrderPreviewHistory.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/50 p-4 text-sm text-slate-500">
+          <div className="rounded-xl border border-dashed border-slate-700/70 bg-slate-950/50 p-6 text-center text-sm text-slate-500 transition-colors duration-300 hover:border-slate-600/70">
             No paper order previews created yet.
           </div>
         ) : (
@@ -440,21 +484,23 @@ export default function PaperOrderPreviewHistoryPanel({
               return (
                 <div
                   key={row.id}
-                  className="rounded-xl border border-slate-800 bg-slate-950/70 p-4"
+                  className="group relative overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/70 p-4 transition-all duration-300 hover:border-slate-700 hover:bg-slate-950/90 hover:shadow-[0_0_28px_-10px_rgba(34,211,238,0.15)]"
                 >
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-bold text-white">{row.symbol}</p>
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="font-mono text-base font-bold tracking-tight text-white">
+                          {row.symbol}
+                        </p>
 
                         {row.option_type && (
-                          <span className="rounded-full border border-slate-700 px-2 py-1 text-xs font-bold text-slate-300">
+                          <span className="rounded-full border border-slate-700/80 bg-slate-900/80 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-300">
                             {row.option_type}
                           </span>
                         )}
 
                         <span
-                          className={`rounded-full border px-2 py-1 text-xs font-bold ${getPreviewBadgeClass(
+                          className={`rounded-full border px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider ${getPreviewBadgeClass(
                             row.preview_status
                           )}`}
                         >
@@ -462,7 +508,7 @@ export default function PaperOrderPreviewHistoryPanel({
                         </span>
 
                         <span
-                          className={`rounded-full border px-2 py-1 text-xs font-bold ${getSandboxReadyBadgeClass(
+                          className={`rounded-full border px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider ${getSandboxReadyBadgeClass(
                             row.ready_for_sandbox_preview
                           )}`}
                         >
@@ -472,14 +518,18 @@ export default function PaperOrderPreviewHistoryPanel({
                         </span>
 
                         {row.contract_quality && (
-                          <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-1 text-xs font-bold text-sky-300">
+                          <span
+                            className={`rounded-full border px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider ${getQualityBadgeClass(
+                              row.contract_quality
+                            )}`}
+                          >
                             Grade {row.contract_quality}
                           </span>
                         )}
 
                         {fundedFilterStatus && (
                           <span
-                            className={`rounded-full border px-2 py-1 text-xs font-bold ${getFundedFilterBadgeClass(
+                            className={`rounded-full border px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider ${getFundedFilterBadgeClass(
                               fundedFilterStatus
                             )}`}
                           >
@@ -487,63 +537,113 @@ export default function PaperOrderPreviewHistoryPanel({
                           </span>
                         )}
 
-                        <span className="rounded-full border border-slate-700 px-2 py-1 text-xs font-bold text-slate-300">
+                        <span className="rounded-full border border-slate-700/80 bg-slate-900/80 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-300">
                           {row.broker}
                         </span>
                       </div>
 
-                      <p className="mt-2 text-sm text-slate-400">
+                      <p className="mt-2 break-all font-mono text-sm text-slate-400">
                         {row.contract_symbol || "No contract symbol saved"}
                       </p>
 
-                      <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
-                        {row.strike !== null && (
-                          <span>Strike: {row.strike}</span>
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[11px] text-slate-500">
+                        {row.strike !== null && row.strike !== undefined && (
+                          <span>
+                            Strike:{" "}
+                            <span className="text-slate-300">{row.strike}</span>
+                          </span>
                         )}
-                        {row.expiration && <span>Exp: {row.expiration}</span>}
+
+                        {row.expiration && (
+                          <span>
+                            Exp:{" "}
+                            <span className="text-slate-300">
+                              {row.expiration}
+                            </span>
+                          </span>
+                        )}
+
                         {row.risk_guard_status && (
-                          <span>Risk Guard: {row.risk_guard_status}</span>
+                          <span>
+                            Risk Guard:{" "}
+                            <span
+                              className={getRiskGuardTextClass(
+                                row.risk_guard_status
+                              )}
+                            >
+                              {row.risk_guard_status}
+                            </span>
+                          </span>
                         )}
-                        <span>Side: {row.order_side}</span>
-                        <span>Type: {row.order_type}</span>
-                        <span>TIF: {row.time_in_force}</span>
-                        <span>Qty: {row.quantity}</span>
+
+                        <span>
+                          Side:{" "}
+                          <span className="text-slate-300">
+                            {row.order_side}
+                          </span>
+                        </span>
+
+                        <span>
+                          Type:{" "}
+                          <span className="text-slate-300">
+                            {row.order_type}
+                          </span>
+                        </span>
+
+                        <span>
+                          TIF:{" "}
+                          <span className="text-slate-300">
+                            {row.time_in_force}
+                          </span>
+                        </span>
+
+                        <span>
+                          Qty:{" "}
+                          <span className="text-slate-300">{row.quantity}</span>
+                        </span>
                       </div>
 
-                      <div className="mt-3 grid gap-2 text-xs text-slate-400 md:grid-cols-3">
-                        <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-2">
-                          <p className="text-slate-500">Limit Price</p>
-                          <p className="font-bold text-white">
+                      <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                        <div className="rounded-lg border border-slate-800 bg-black/30 p-2 transition-colors duration-300 group-hover:border-slate-700/80">
+                          <p className="font-mono text-[10px] uppercase tracking-wider text-slate-500">
+                            Limit Price
+                          </p>
+                          <p className="mt-0.5 font-mono text-sm font-bold tabular-nums text-white">
                             {formatMoney(row.estimated_limit_price)}
                           </p>
                         </div>
 
-                        <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-2">
-                          <p className="text-slate-500">Estimated Cost</p>
-                          <p className="font-bold text-white">
+                        <div className="rounded-lg border border-slate-800 bg-black/30 p-2 transition-colors duration-300 group-hover:border-slate-700/80">
+                          <p className="font-mono text-[10px] uppercase tracking-wider text-slate-500">
+                            Est. Cost
+                          </p>
+                          <p className="mt-0.5 font-mono text-sm font-bold tabular-nums text-white">
                             {formatMoney(row.estimated_order_cost)}
                           </p>
                         </div>
 
-                        <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-2">
-                          <p className="text-slate-500">Max Risk</p>
-                          <p className="font-bold text-white">
+                        <div className="rounded-lg border border-slate-800 bg-black/30 p-2 transition-colors duration-300 group-hover:border-slate-700/80">
+                          <p className="font-mono text-[10px] uppercase tracking-wider text-slate-500">
+                            Max Risk
+                          </p>
+                          <p className="mt-0.5 font-mono text-sm font-bold tabular-nums text-yellow-300">
                             {formatMoney(row.max_risk_dollars)}
                           </p>
                         </div>
                       </div>
 
                       {row.ready_for_sandbox_preview && (
-                        <div className="mt-3 rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-sky-200">
-                          <p className="font-bold">
+                        <div className="mt-3 rounded-xl border border-sky-500/25 bg-sky-500/[0.07] p-3 text-xs text-sky-200 shadow-[0_0_18px_-8px_rgba(56,189,248,0.35)]">
+                          <p className="flex items-center gap-1.5 font-bold">
+                            <span className="h-1 w-1 rounded-full bg-sky-400 shadow-[0_0_5px_rgba(56,189,248,0.9)]" />
                             Sandbox preview ready lock
                           </p>
-                          <p className="mt-1 text-sky-300/80">
+                          <p className="mt-1 leading-relaxed text-sky-300/80">
                             {row.sandbox_preview_locked_reason ||
                               "Ready for future sandbox preview. No broker order submitted."}
                           </p>
                           {row.ready_for_sandbox_preview_at && (
-                            <p className="mt-1 text-sky-300/70">
+                            <p className="mt-1 font-mono text-sky-300/70">
                               Marked ready:{" "}
                               {formatDateTime(
                                 row.ready_for_sandbox_preview_at
@@ -554,31 +654,57 @@ export default function PaperOrderPreviewHistoryPanel({
                       )}
                     </div>
 
-                    <div className="text-left md:text-right">
-                      <p className="text-xs text-slate-500">
+                    <div className="shrink-0 border-t border-slate-800/80 pt-3 text-left lg:w-56 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0 lg:text-right">
+                      <p className="font-mono text-xs text-slate-500">
                         {formatDateTime(row.created_at)}
                       </p>
 
-                      <div className="mt-2 space-y-1 text-xs font-bold text-slate-400">
-                        <p>
+                      <div className="mt-2 space-y-1 font-mono text-[11px] font-bold">
+                        <p className="text-slate-500">
                           Sandbox Approved:{" "}
-                          {row.approved_for_sandbox_order ? "YES" : "NO"}
+                          <span
+                            className={
+                              row.approved_for_sandbox_order
+                                ? "text-yellow-300"
+                                : "text-slate-300"
+                            }
+                          >
+                            {row.approved_for_sandbox_order ? "YES" : "NO"}
+                          </span>
                         </p>
-                        <p>
+
+                        <p className="text-slate-500">
                           Live Approved:{" "}
-                          {row.approved_for_live_order ? "YES" : "NO"}
+                          <span
+                            className={
+                              row.approved_for_live_order
+                                ? "text-red-300"
+                                : "text-slate-300"
+                            }
+                          >
+                            {row.approved_for_live_order ? "YES" : "NO"}
+                          </span>
                         </p>
-                        <p>
+
+                        <p className="text-slate-500">
                           Broker Submitted:{" "}
-                          {row.submitted_to_broker ? "YES" : "NO"}
+                          <span
+                            className={
+                              row.submitted_to_broker
+                                ? "text-red-300"
+                                : "text-slate-300"
+                            }
+                          >
+                            {row.submitted_to_broker ? "YES" : "NO"}
+                          </span>
                         </p>
                       </div>
 
-                      <div className="mt-3 flex flex-wrap justify-start gap-2 md:justify-end">
+                      <div className="mt-3 flex flex-wrap justify-start gap-2 lg:justify-end">
                         <button
                           type="button"
                           onClick={() => setSelectedPreview(row)}
-                          className="rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-300 transition hover:border-slate-400 hover:text-white"
+                          className="rounded-xl border border-slate-600/80 bg-slate-900/80 px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-slate-300 transition-all duration-300 hover:border-cyan-500/40 hover:text-cyan-200 hover:shadow-[0_0_14px_-6px_rgba(34,211,238,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 active:scale-[0.97]"
                         >
                           View Details
                         </button>
@@ -594,13 +720,13 @@ export default function PaperOrderPreviewHistoryPanel({
                             row.preview_status === "CANCELLED" ||
                             row.submitted_to_broker
                           }
-                          className="rounded-xl border border-purple-500/30 bg-purple-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-purple-300 transition hover:border-purple-400 hover:text-purple-200 disabled:cursor-not-allowed disabled:opacity-40"
+                          className="rounded-xl border border-purple-500/30 bg-purple-500/[0.08] px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-purple-300 transition-all duration-300 hover:border-purple-400/60 hover:text-purple-200 hover:shadow-[0_0_14px_-6px_rgba(192,132,252,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-400 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-purple-500/30 disabled:hover:text-purple-300 disabled:hover:shadow-none disabled:active:scale-100"
                         >
                           {reviewingPreviewId === row.id
                             ? "Marking..."
                             : row.preview_status === "REVIEWED_ONLY"
-                              ? "Reviewed"
-                              : "Mark Reviewed"}
+                            ? "Reviewed"
+                            : "Mark Reviewed"}
                         </button>
 
                         <button
@@ -612,13 +738,13 @@ export default function PaperOrderPreviewHistoryPanel({
                             cancellingPreviewId === row.id ||
                             markingSandboxReadyId === row.id
                           }
-                          className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-sky-300 transition hover:border-sky-400 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-40"
+                          className="rounded-xl border border-sky-500/30 bg-sky-500/[0.08] px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-sky-300 transition-all duration-300 hover:border-sky-400/60 hover:text-sky-200 hover:shadow-[0_0_14px_-6px_rgba(56,189,248,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-sky-500/30 disabled:hover:text-sky-300 disabled:hover:shadow-none disabled:active:scale-100"
                         >
                           {markingSandboxReadyId === row.id
                             ? "Locking..."
                             : row.ready_for_sandbox_preview
-                              ? "Sandbox Ready"
-                              : "Mark Sandbox Ready"}
+                            ? "Sandbox Ready"
+                            : "Mark Sandbox Ready"}
                         </button>
 
                         <button
@@ -631,13 +757,13 @@ export default function PaperOrderPreviewHistoryPanel({
                             row.preview_status === "CANCELLED" ||
                             row.submitted_to_broker
                           }
-                          className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-red-300 transition hover:border-red-400 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
+                          className="rounded-xl border border-red-500/30 bg-red-500/[0.08] px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-red-300 transition-all duration-300 hover:border-red-400/60 hover:text-red-200 hover:shadow-[0_0_14px_-6px_rgba(248,113,113,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-red-500/30 disabled:hover:text-red-300 disabled:hover:shadow-none disabled:active:scale-100"
                         >
                           {cancellingPreviewId === row.id
                             ? "Cancelling..."
                             : row.preview_status === "CANCELLED"
-                              ? "Cancelled"
-                              : "Cancel Preview"}
+                            ? "Cancelled"
+                            : "Cancel Preview"}
                         </button>
                       </div>
                     </div>
