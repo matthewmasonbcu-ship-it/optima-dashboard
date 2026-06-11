@@ -968,32 +968,40 @@ export default function OptionContractSelector({
   }, [contracts, hideBlockedContracts, sortMode]);
 
   const recommendedContract = useMemo(() => {
-    const approvedOrCaution = visibleContracts.filter((contract) => {
-      const risk = getRiskStatus(contract, { accountSize, maxRiskPercent, maxSpreadPercent });
-      return risk.status === "APPROVED" || risk.status === "CAUTION";
+    const cleanApproved = visibleContracts.filter((contract) => {
+      const grade = getGrade(contract);
+      const risk = getRiskStatus(contract, {
+        accountSize,
+        maxRiskPercent,
+        maxSpreadPercent,
+      });
+
+      return (
+        (grade === "A+" || grade === "A" || grade === "B") &&
+        risk.status === "APPROVED"
+      );
     });
-    if (approvedOrCaution.length > 0) {
-      return [...approvedOrCaution].sort((a, b) => {
-        const riskA = getRiskStatus(a, { accountSize, maxRiskPercent, maxSpreadPercent });
-        const riskB = getRiskStatus(b, { accountSize, maxRiskPercent, maxSpreadPercent });
-        const riskRankA = riskA.status === "APPROVED" ? 2 : 1;
-        const riskRankB = riskB.status === "APPROVED" ? 2 : 1;
-        if (riskRankB !== riskRankA) return riskRankB - riskRankA;
 
-        const scoreDiff = getRecommendationScore(b) - getRecommendationScore(a);
-        if (scoreDiff !== 0) return scoreDiff;
+    if (cleanApproved.length === 0) return null;
 
-        const gradeDiff = getGradeRank(getGrade(b)) - getGradeRank(getGrade(a));
-        if (gradeDiff !== 0) return gradeDiff;
+    return [...cleanApproved].sort((a, b) => {
+      const gradeDiff = getGradeRank(getGrade(b)) - getGradeRank(getGrade(a));
+      if (gradeDiff !== 0) return gradeDiff;
 
-        const liquidityDiff = getLiquidityScore(b) - getLiquidityScore(a);
-        if (liquidityDiff !== 0) return liquidityDiff;
+      const scoreDiff = getRecommendationScore(b) - getRecommendationScore(a);
+      if (scoreDiff !== 0) return scoreDiff;
 
-        return getSpreadPercent(a) - getSpreadPercent(b);
-      })[0];
-    }
-    return visibleContracts[0] || null;
+      const liquidityDiff = getLiquidityScore(b) - getLiquidityScore(a);
+      if (liquidityDiff !== 0) return liquidityDiff;
+
+      const riskDiff = getMaxRisk(a) - getMaxRisk(b);
+      if (riskDiff !== 0) return riskDiff;
+
+      return getSpreadPercent(a) - getSpreadPercent(b);
+    })[0];
   }, [visibleContracts, accountSize, maxRiskPercent, maxSpreadPercent]);
+
+  const noCleanRecommendation = visibleContracts.length > 0 && !recommendedContract;
 
   const selectedOptionSymbol = getOptionSymbol(selectedContract);
 
@@ -1208,7 +1216,7 @@ export default function OptionContractSelector({
           <div className="flex flex-col gap-3 px-5 py-4 pl-6 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0 flex-1">
               <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-emerald-600">
-                Best Contract Recommendation
+                Best Clean Contract Recommendation
               </p>
               <div className="mt-1 flex flex-wrap items-center gap-2">
                 <p className="break-all font-mono text-xs font-black text-white">
@@ -1232,6 +1240,30 @@ export default function OptionContractSelector({
               />
               Select Recommended &gt;
             </button>
+          </div>
+        </div>
+      )}
+
+      {noCleanRecommendation && (
+        <div className="relative overflow-hidden rounded-xl border border-orange-500/25 bg-orange-500/5 ring-1 ring-orange-500/10">
+          <div
+            className="absolute inset-x-0 top-0 h-px opacity-60"
+            style={{
+              background:
+                "linear-gradient(90deg, transparent, #f97316, transparent)",
+            }}
+          />
+          <div className="absolute inset-y-0 left-0 w-[3px] bg-orange-500" />
+          <div className="px-5 py-4 pl-6">
+            <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-orange-500">
+              No Clean Recommendation
+            </p>
+            <p className="mt-1 font-mono text-xs font-black text-white">
+              No A+, A, or B contract has Risk Guard APPROVED.
+            </p>
+            <p className="mt-1 font-mono text-[9px] leading-4 text-slate-500">
+              C and BLOCKED contracts remain available for override testing only, but they will not be promoted as the best recommendation.
+            </p>
           </div>
         </div>
       )}
