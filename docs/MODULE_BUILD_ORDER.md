@@ -310,3 +310,32 @@ This module does not submit orders.
 This module does not call Tradier.
 This module does not write broker fields.
 This module only decides whether an alert/order preview candidate is high quality enough to continue.
+
+## Completed Checkpoint — Funded Account Safety Filter Test Route
+
+Status: COMPLETE  
+Route: POST /api/safety/funded-account-filter  
+Mode: funded_account_safety_filter_test_only  
+
+Completed:
+- Created lib/fundedAccountSafetyFilter.ts
+- Created test-only API route for filter validation
+- Clean setup returns PASSED
+- Bad setup returns BLOCKED with reasons
+- Route does not call Tradier
+- Route does not write to Supabase
+- Route does not create order previews
+- Route keeps all broker safety locks false
+
+Current behavior:
+- The filter evaluates alert/order-preview candidate quality before broker workflow.
+- It returns:
+  - status: PASSED or BLOCKED
+  - score: 0-100
+  - reasons
+  - warnings
+
+Next integration:
+- Wire filter into paper order preview creation path.
+- If filter is BLOCKED, do not create a preview.
+- If filter is PASSED, allow preview creation to continue.
