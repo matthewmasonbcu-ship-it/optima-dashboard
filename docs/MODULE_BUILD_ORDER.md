@@ -339,3 +339,23 @@ Next integration:
 - Wire filter into paper order preview creation path.
 - If filter is BLOCKED, do not create a preview.
 - If filter is PASSED, allow preview creation to continue.
+
+## Completed Checkpoint — Funded Filter Preview Visibility
+
+Status: COMPLETE
+
+Completed:
+- Funded Account Safety Filter now runs during paper order preview creation
+- Filter is warning-only during preview creation so testing data is not blocked too early
+- Preview safety_notes store Funded Account Safety Filter result
+- Paper order preview cards can display Funded Filter PASSED / BLOCKED
+- Preview detail modal can display Funded Filter PASSED / BLOCKED
+- Funded filter notes are preserved through review, sandbox-ready, and cancel states
+- Contract grading was adjusted so clean B-grade sandbox contracts can pass despite missing sandbox liquidity data
+
+Safety:
+- No Tradier order endpoint calls
+- No live trading
+- No sandbox order submission
+- No broker approval flags set true
+- Weak trades may be previewed for testing, but remain blocked from broker flow by later validation gates
