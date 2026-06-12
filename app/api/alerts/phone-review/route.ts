@@ -22,10 +22,11 @@ type PhoneReviewRequestBody = {
 type PaperOrderPreviewRow = {
   id: string;
   source_alert_id: string | null;
+  phone_alert_event_id: string | null;
+
   symbol: string | null;
   trade_lane: string | null;
   setup_name: string | null;
-  message?: string | null;
 
   contract_symbol: string | null;
   strike: number | null;
@@ -38,11 +39,21 @@ type PaperOrderPreviewRow = {
   sandbox_preview_validation_status: string | null;
   sandbox_preview_human_review_decision: string | null;
 
+  phone_review_alert_status: string | null;
+  phone_review_alert_sent_at: string | null;
+
   approved_for_order: boolean | null;
   approved_for_sandbox_order: boolean | null;
   approved_for_live_order: boolean | null;
   submitted_to_broker: boolean | null;
 };
+
+type PhoneAlertEventRow = {
+  id: string;
+  created_at: string;
+};
+
+const ROUTE = "/api/alerts/phone-review";
 
 const SAFETY_LOCKS = {
   approved_for_order: false,
@@ -51,26 +62,30 @@ const SAFETY_LOCKS = {
   submitted_to_broker: false,
 };
 
+const BROKER_CALL_LOCKS = {
+  tradierPreviewEndpointCalled: false,
+  tradierOrderEndpointCalled: false,
+  liveEndpointCalled: false,
+};
+
+const DELIVERY_LOCKS = {
+  smsSent: false,
+  pushSent: false,
+  emailSent: false,
+  dashboardLogOnly: true,
+};
+
 function blockedResponse(reason: string, status = 400) {
   return NextResponse.json(
     {
       success: false,
-      route: "/api/alerts/phone-review",
+      route: ROUTE,
       mode: "phone_review_alert_log_only",
       message: reason,
       reason,
       safetyLocks: SAFETY_LOCKS,
-      brokerCall: {
-        tradierPreviewEndpointCalled: false,
-        tradierOrderEndpointCalled: false,
-        liveEndpointCalled: false,
-      },
-      delivery: {
-        smsSent: false,
-        pushSent: false,
-        emailSent: false,
-        dashboardLogOnly: true,
-      },
+      brokerCall: BROKER_CALL_LOCKS,
+      delivery: DELIVERY_LOCKS,
     },
     { status }
   );
@@ -86,7 +101,69 @@ function buildPhoneMessage(preview: PaperOrderPreviewRow) {
       ? `$${preview.max_risk_dollars.toFixed(2)}`
       : "N/A";
 
-  return `PHONE REVIEW: ${symbol} WATCH setup ready. Contract: ${contract}. Grade: ${grade}. Risk Guard: ${riskGuard}. Max Risk: ${maxRisk}. Dashboard log only — no broker order submitted.`;
+  return [
+    `PHONE REVIEW: ${symbol} WATCH setup ready.`,
+    `Contract: ${contract}.`,
+    `Grade: ${grade}.`,
+    `Risk Guard: ${riskGuard}.`,
+    `Max Risk: ${maxRisk}.`,
+    "Dashboard simulation only — no SMS, push, broker order, or live order submitted.",
+  ].join(" ");
+}
+
+async function linkExistingPhoneAlertToPreview({
+  preview,
+  phoneAlertEventId,
+  sentAt,
+}: {
+  preview: PaperOrderPreviewRow;
+  phoneAlertEventId: string;
+  sentAt: string;
+}) {
+  const { data, error } = await supabase
+    .from("paper_order_previews")
+    .update({
+      phone_alert_event_id: phoneAlertEventId,
+      phone_review_alert_status: "LOGGED_ONLY",
+      phone_review_alert_sent_at: sentAt,
+
+      // Safety locks stay false. This route never unlocks execution.
+      approved_for_order: false,
+      approved_for_sandbox_order: false,
+      approved_for_live_order: false,
+      submitted_to_broker: false,
+    })
+    .eq("id", preview.id)
+    .eq("approved_for_order", false)
+    .eq("approved_for_sandbox_order", false)
+    .eq("approved_for_live_order", false)
+    .eq("submitted_to_broker", false)
+    .select(
+      [
+        "id",
+        "symbol",
+        "phone_alert_event_id",
+        "phone_review_alert_status",
+        "phone_review_alert_sent_at",
+        "approved_for_order",
+        "approved_for_sandbox_order",
+        "approved_for_live_order",
+        "submitted_to_broker",
+      ].join(",")
+    )
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    throw new Error(
+      "Phone alert link was not saved because safety locks did not match."
+    );
+  }
+
+  return data;
 }
 
 export async function POST(request: Request) {
@@ -107,6 +184,7 @@ export async function POST(request: Request) {
         [
           "id",
           "source_alert_id",
+          "phone_alert_event_id",
           "symbol",
           "trade_lane",
           "setup_name",
@@ -119,6 +197,8 @@ export async function POST(request: Request) {
           "max_risk_dollars",
           "sandbox_preview_validation_status",
           "sandbox_preview_human_review_decision",
+          "phone_review_alert_status",
+          "phone_review_alert_sent_at",
           "approved_for_order",
           "approved_for_sandbox_order",
           "approved_for_live_order",
@@ -165,12 +245,74 @@ export async function POST(request: Request) {
       return blockedResponse("submitted_to_broker must remain false.");
     }
 
+    if (preview.phone_alert_event_id) {
+      return NextResponse.json(
+        {
+          success: true,
+          duplicatePrevented: true,
+          route: ROUTE,
+          mode: "phone_review_alert_log_only",
+          message:
+            "Phone review alert was already logged for this preview. Duplicate dispatch prevented.",
+          previewId: preview.id,
+          phoneAlertEventId: preview.phone_alert_event_id,
+          safetyLocks: SAFETY_LOCKS,
+          brokerCall: BROKER_CALL_LOCKS,
+          delivery: DELIVERY_LOCKS,
+        },
+        { status: 200 }
+      );
+    }
+
+    const { data: existingEvent, error: existingEventError } = await supabase
+      .from("phone_alert_events")
+      .select("id, created_at")
+      .eq("paper_order_preview_id", preview.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<PhoneAlertEventRow>();
+
+    if (existingEventError) {
+      console.error(
+        "Failed to check existing phone review alert:",
+        existingEventError
+      );
+      return blockedResponse(existingEventError.message, 500);
+    }
+
+    if (existingEvent) {
+      const updatedPreview = await linkExistingPhoneAlertToPreview({
+        preview,
+        phoneAlertEventId: existingEvent.id,
+        sentAt: existingEvent.created_at,
+      });
+
+      return NextResponse.json(
+        {
+          success: true,
+          duplicatePrevented: true,
+          route: ROUTE,
+          mode: "phone_review_alert_log_only",
+          message:
+            "Existing phone review alert found and linked. Duplicate dispatch prevented.",
+          previewId: preview.id,
+          phoneAlertEventId: existingEvent.id,
+          preview: updatedPreview,
+          safetyLocks: SAFETY_LOCKS,
+          brokerCall: BROKER_CALL_LOCKS,
+          delivery: DELIVERY_LOCKS,
+        },
+        { status: 200 }
+      );
+    }
+
     const phoneMessage = buildPhoneMessage(preview);
 
     const { data: phoneAlertEvent, error: insertError } = await supabase
       .from("phone_alert_events")
       .insert({
         source_alert_id: preview.source_alert_id ?? null,
+        paper_order_preview_id: preview.id,
 
         symbol: preview.symbol ?? "UNKNOWN",
         trade_lane: preview.trade_lane ?? "SANDBOX_PREVIEW",
@@ -179,6 +321,7 @@ export async function POST(request: Request) {
 
         priority: "HIGH",
         channel: "DASHBOARD_SIMULATION",
+        delivery_mode: "DASHBOARD_SIMULATION",
         delivery_status: "LOGGED_ONLY",
 
         contract_symbol: preview.contract_symbol ?? null,
@@ -192,34 +335,37 @@ export async function POST(request: Request) {
         approved_for_order: false,
       })
       .select("id, created_at")
-      .maybeSingle();
+      .maybeSingle<PhoneAlertEventRow>();
 
     if (insertError) {
       console.error("Failed to log phone review alert:", insertError);
       return blockedResponse(insertError.message, 500);
     }
 
+    if (!phoneAlertEvent) {
+      return blockedResponse("Phone alert event was not created.", 500);
+    }
+
+    const updatedPreview = await linkExistingPhoneAlertToPreview({
+      preview,
+      phoneAlertEventId: phoneAlertEvent.id,
+      sentAt: phoneAlertEvent.created_at,
+    });
+
     return NextResponse.json(
       {
         success: true,
-        route: "/api/alerts/phone-review",
+        duplicatePrevented: false,
+        route: ROUTE,
         mode: "phone_review_alert_log_only",
         message:
-          "Phone review alert logged in dashboard history. No SMS, push, broker order, or live order was sent.",
+          "Phone review alert logged and linked to preview. No SMS, push, broker order, or live order was sent.",
         phoneAlertEvent,
         previewId: preview.id,
+        preview: updatedPreview,
         safetyLocks: SAFETY_LOCKS,
-        brokerCall: {
-          tradierPreviewEndpointCalled: false,
-          tradierOrderEndpointCalled: false,
-          liveEndpointCalled: false,
-        },
-        delivery: {
-          smsSent: false,
-          pushSent: false,
-          emailSent: false,
-          dashboardLogOnly: true,
-        },
+        brokerCall: BROKER_CALL_LOCKS,
+        delivery: DELIVERY_LOCKS,
       },
       { status: 200 }
     );
@@ -234,22 +380,13 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: false,
-        route: "/api/alerts/phone-review",
+        route: ROUTE,
         mode: "phone_review_alert_log_only",
         message,
         reason: message,
         safetyLocks: SAFETY_LOCKS,
-        brokerCall: {
-          tradierPreviewEndpointCalled: false,
-          tradierOrderEndpointCalled: false,
-          liveEndpointCalled: false,
-        },
-        delivery: {
-          smsSent: false,
-          pushSent: false,
-          emailSent: false,
-          dashboardLogOnly: true,
-        },
+        brokerCall: BROKER_CALL_LOCKS,
+        delivery: DELIVERY_LOCKS,
       },
       { status: 500 }
     );
