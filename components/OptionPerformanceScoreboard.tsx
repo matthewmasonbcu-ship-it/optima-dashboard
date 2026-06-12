@@ -260,14 +260,20 @@ function SummaryCell({
   );
 }
 
-export default function OptionPerformanceScoreboard() {
+type OptionPerformanceScoreboardProps = {
+  refreshKey?: number;
+};
+
+export default function OptionPerformanceScoreboard({
+  refreshKey,
+}: OptionPerformanceScoreboardProps) {
   const [details, setDetails] = useState<OptionTradeDetail[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("Loading option performance...");
 
   useEffect(() => {
     loadOptionDetails();
-  }, []);
+  }, [refreshKey]);
 
   async function loadOptionDetails() {
     setLoading(true);
