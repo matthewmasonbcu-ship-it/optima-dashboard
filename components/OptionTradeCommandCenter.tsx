@@ -821,17 +821,14 @@ export default function OptionTradeCommandCenter({
             }
           >
             <PreTradeChecklist
-              selectedSetup={selectedSetup}
               selectedSymbol={symbol}
-              stockSymbol={symbol}
               tradeDirection={direction}
-              scannerDirection={direction}
               selectedContract={selectedContract}
               riskGuardStatus={riskGuardStatus}
               riskGuardReason={riskGuardReason}
-              preTradeStatus={preTradeStatus}
-              preTradeWarnings={preTradeWarnings}
-              preTradeBlocks={preTradeBlocks}
+              status={preTradeStatus}
+              warnings={preTradeWarnings}
+              blocks={preTradeBlocks}
               marketCondition={marketCondition}
             />
           </SectionCard>

@@ -34,12 +34,12 @@ type QuoteData = {
 
 type ScanResult = {
   symbol: string;
-  price: number;
-  changePercent: number;
-  direction: TradeDirection;
+  price?: number;
+  changePercent?: number;
+  direction?: TradeDirection;
   tradeDirection?: TradeDirection;
   directionBias?: "BULLISH" | "BEARISH" | "NEUTRAL";
-  setupScore: number;
+  setupScore?: number;
   confidenceScore?: number;
   confidence_score?: number;
   trendStrength?: number;
@@ -137,7 +137,9 @@ const MAX_SPREAD_PERCENT = 20;
 
 const DEFAULT_WATCHLIST = ["SPY", "AAPL", "MSFT", "NVDA", "TSLA"];
 
-function getNumber(value: any, fallback = 0) {
+function getNumber(value: any, fallback?: number): number;
+function getNumber(value: any, fallback: null): number | null;
+function getNumber(value: any, fallback: number | null = 0): number | null {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -357,7 +359,7 @@ function getPreTradeEnforcementStatus(params: {
   if (selectedContract) {
     const grade = getContractGrade(selectedContract);
 
-    if (!grade || grade === "N/A" || grade === "UNKNOWN") {
+    if (!grade || grade === "UNKNOWN") {
       blocks.push(
         "No contract quality grade found. Contract must have A+, A, B, C, or BLOCKED grade before saving."
       );
@@ -809,7 +811,9 @@ export default function Home() {
         results.push(result);
       }
 
-      const sorted = results.sort((a, b) => b.setupScore - a.setupScore);
+      const sorted = results.sort(
+        (a, b) => (b.setupScore ?? 0) - (a.setupScore ?? 0)
+      );
 
       setScannerResults(sorted);
 
