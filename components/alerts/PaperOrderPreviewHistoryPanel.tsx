@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import PaperOrderPreviewQualityAnalytics from "./PaperOrderPreviewQualityAnalytics";
 import PaperOrderPreviewDetailModal, {
@@ -19,6 +19,28 @@ type SandboxPreviewRunResult = {
   message: string | null;
   safetyLocks: unknown;
   checkedAt: string;
+};
+
+type HumanReviewDecision = "WATCH" | "HOLD" | "REJECT";
+
+type HumanReviewRouteResponse = {
+  success?: boolean;
+  message?: string;
+  reason?: string;
+  preview?: PaperOrderPreviewHistoryRow;
+};
+
+type PaperOrderPreviewHistoryRow = PaperOrderPreviewRow & {
+  sandbox_preview_validation_status?: string | null;
+  sandbox_preview_validation_message?: string | null;
+  sandbox_preview_validation_reason?: string | null;
+  sandbox_preview_validation_checked_at?: string | null;
+  sandbox_preview_validation_payload?: unknown | null;
+  sandbox_preview_validation_safety_locks?: unknown | null;
+  sandbox_preview_human_review_status?: string | null;
+  sandbox_preview_human_review_decision?: HumanReviewDecision | string | null;
+  sandbox_preview_human_review_notes?: string | null;
+  sandbox_preview_human_reviewed_at?: string | null;
 };
 
 function formatDateTime(value: string) {
@@ -57,6 +79,62 @@ function getSandboxReadyBadgeClass(isReady: boolean | null | undefined) {
   }
 
   return "border-slate-700/70 bg-slate-900/80 text-slate-400";
+}
+
+function getValidationBadgeClass(status: string | null | undefined) {
+  const normalized = String(status || "").trim().toUpperCase();
+
+  if (normalized === "PASSED") {
+    return "border-emerald-500/30 bg-emerald-500/[0.08] text-emerald-300";
+  }
+
+  if (normalized === "BLOCKED") {
+    return "border-orange-500/30 bg-orange-500/[0.08] text-orange-300";
+  }
+
+  if (normalized === "FAILED" || normalized === "ERROR") {
+    return "border-red-500/30 bg-red-500/[0.08] text-red-300";
+  }
+
+  return "border-slate-700/70 bg-slate-900/80 text-slate-400";
+}
+
+function getHumanReviewBadgeClass(
+  decision: string | null | undefined,
+  status: string | null | undefined
+) {
+  const normalizedDecision = String(decision || "").trim().toUpperCase();
+  const normalizedStatus = String(status || "").trim().toUpperCase();
+
+  if (normalizedDecision === "WATCH") {
+    return "border-emerald-500/30 bg-emerald-500/[0.08] text-emerald-300";
+  }
+
+  if (normalizedDecision === "HOLD") {
+    return "border-yellow-500/30 bg-yellow-500/[0.08] text-yellow-300";
+  }
+
+  if (normalizedDecision === "REJECT") {
+    return "border-red-500/30 bg-red-500/[0.08] text-red-300";
+  }
+
+  if (normalizedStatus === "REVIEWED") {
+    return "border-sky-500/30 bg-sky-500/[0.08] text-sky-300";
+  }
+
+  return "border-slate-700/70 bg-slate-900/80 text-slate-400";
+}
+
+function getHumanReviewButtonClass(decision: HumanReviewDecision) {
+  if (decision === "WATCH") {
+    return "border-emerald-500/30 bg-emerald-500/[0.08] text-emerald-300 hover:border-emerald-400/60 hover:text-emerald-200 hover:shadow-[0_0_14px_-6px_rgba(52,211,153,0.4)] focus-visible:outline-emerald-400 disabled:hover:border-emerald-500/30 disabled:hover:text-emerald-300";
+  }
+
+  if (decision === "HOLD") {
+    return "border-yellow-500/30 bg-yellow-500/[0.08] text-yellow-300 hover:border-yellow-400/60 hover:text-yellow-200 hover:shadow-[0_0_14px_-6px_rgba(250,204,21,0.4)] focus-visible:outline-yellow-400 disabled:hover:border-yellow-500/30 disabled:hover:text-yellow-300";
+  }
+
+  return "border-red-500/30 bg-red-500/[0.08] text-red-300 hover:border-red-400/60 hover:text-red-200 hover:shadow-[0_0_14px_-6px_rgba(248,113,113,0.4)] focus-visible:outline-red-400 disabled:hover:border-red-500/30 disabled:hover:text-red-300";
 }
 
 function getFundedFilterStatus(safetyNotes: string | null | undefined) {
@@ -204,10 +282,10 @@ export default function PaperOrderPreviewHistoryPanel({
   refreshKey,
 }: PaperOrderPreviewHistoryPanelProps) {
   const [paperOrderPreviewHistory, setPaperOrderPreviewHistory] =
-    useState<PaperOrderPreviewRow[]>([]);
+    useState<PaperOrderPreviewHistoryRow[]>([]);
 
   const [selectedPreview, setSelectedPreview] =
-    useState<PaperOrderPreviewRow | null>(null);
+    useState<PaperOrderPreviewHistoryRow | null>(null);
 
   const [isLoadingPaperPreviewHistory, setIsLoadingPaperPreviewHistory] =
     useState(false);
@@ -230,44 +308,48 @@ export default function PaperOrderPreviewHistoryPanel({
     useState<string | null>(null);
 
   const [sandboxPreviewResults, setSandboxPreviewResults] =
-  useState<Record<string, SandboxPreviewRunResult>>({});
+    useState<Record<string, SandboxPreviewRunResult>>({});
 
-  useEffect(() => {
-    let isMounted = true;
+  const [humanReviewingPreviewId, setHumanReviewingPreviewId] =
+    useState<string | null>(null);
 
-    async function loadPaperOrderPreviewHistory() {
-      setIsLoadingPaperPreviewHistory(true);
-      setPaperPreviewHistoryError(null);
+  const [humanReviewNotesByPreviewId, setHumanReviewNotesByPreviewId] =
+    useState<Record<string, string>>({});
 
-      const { data, error } = await supabase
-        .from("paper_order_previews")
-        .select(
-          "id, created_at, symbol, trade_lane, setup_name, contract_symbol, strike, expiration, option_type, bid, ask, mid, estimated_limit_price, quantity, estimated_order_cost, max_risk_dollars, contract_quality, risk_guard_status, preview_status, broker, order_side, order_type, time_in_force, approved_for_sandbox_order, approved_for_live_order, submitted_to_broker, ready_for_sandbox_preview, ready_for_sandbox_preview_at, sandbox_preview_locked_reason, safety_notes"
-        )
-        .order("created_at", { ascending: false })
-        .limit(8);
+  const loadPaperOrderPreviewHistory = useCallback(async () => {
+    setIsLoadingPaperPreviewHistory(true);
+    setPaperPreviewHistoryError(null);
 
-      if (!isMounted) return;
+    const { data, error } = await supabase
+      .from("paper_order_previews")
+      .select(
+        "id, created_at, symbol, trade_lane, setup_name, contract_symbol, strike, expiration, option_type, bid, ask, mid, estimated_limit_price, quantity, estimated_order_cost, max_risk_dollars, contract_quality, risk_guard_status, preview_status, broker, order_side, order_type, time_in_force, approved_for_sandbox_order, approved_for_live_order, submitted_to_broker, ready_for_sandbox_preview, ready_for_sandbox_preview_at, sandbox_preview_locked_reason, safety_notes, sandbox_preview_validation_status, sandbox_preview_validation_message, sandbox_preview_validation_reason, sandbox_preview_validation_checked_at, sandbox_preview_validation_payload, sandbox_preview_validation_safety_locks, sandbox_preview_human_review_status, sandbox_preview_human_review_decision, sandbox_preview_human_review_notes, sandbox_preview_human_reviewed_at"
+      )
+      .order("created_at", { ascending: false })
+      .limit(8);
 
-      if (error) {
-        console.error("Failed to load paper order preview history:", error);
-        setPaperPreviewHistoryError(
-          "Could not load paper order preview history."
-        );
-        setPaperOrderPreviewHistory([]);
-      } else {
-        setPaperOrderPreviewHistory((data ?? []) as PaperOrderPreviewRow[]);
-      }
-
-      setIsLoadingPaperPreviewHistory(false);
+    if (error) {
+      console.error("Failed to load paper order preview history:", error);
+      setPaperPreviewHistoryError("Could not load paper order preview history.");
+      setPaperOrderPreviewHistory([]);
+    } else {
+      setPaperOrderPreviewHistory(
+        (data ?? []) as PaperOrderPreviewHistoryRow[]
+      );
     }
 
-    loadPaperOrderPreviewHistory();
+    setIsLoadingPaperPreviewHistory(false);
+  }, []);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void loadPaperOrderPreviewHistory();
+    }, 0);
 
     return () => {
-      isMounted = false;
+      window.clearTimeout(timeoutId);
     };
-  }, [refreshKey]);
+  }, [loadPaperOrderPreviewHistory, refreshKey]);
 
   async function runSandboxPreview(previewId: string) {
     setRunningSandboxPreviewId(previewId);
@@ -334,7 +416,116 @@ export default function PaperOrderPreviewHistoryPanel({
       }));
     }
 
+    await loadPaperOrderPreviewHistory();
     setRunningSandboxPreviewId(null);
+  }
+
+  async function saveHumanReviewDecision(
+    previewId: string,
+    decision: HumanReviewDecision
+  ) {
+    const targetPreview = paperOrderPreviewHistory.find(
+      (row) => row.id === previewId
+    );
+
+    if (!targetPreview) {
+      setPaperPreviewHistoryError("Could not find this preview.");
+      return;
+    }
+
+    if (targetPreview.sandbox_preview_validation_status !== "PASSED") {
+      setPaperPreviewHistoryError(
+        "Sandbox preview validation must be PASSED before saving a human review decision."
+      );
+      return;
+    }
+
+    if (
+      targetPreview.submitted_to_broker ||
+      targetPreview.approved_for_sandbox_order ||
+      targetPreview.approved_for_live_order
+    ) {
+      setPaperPreviewHistoryError(
+        "Safety lock blocked human review because this preview is not fully locked."
+      );
+      return;
+    }
+
+    setHumanReviewingPreviewId(previewId);
+    setPaperPreviewHistoryError(null);
+
+    try {
+      const response = await fetch(
+        "/api/tradier/orders/preview/human-review",
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            previewId,
+            decision,
+            notes:
+              humanReviewNotesByPreviewId[previewId] ??
+              targetPreview.sandbox_preview_human_review_notes ??
+              "",
+          }),
+        }
+      );
+
+      const data: HumanReviewRouteResponse = await response
+        .json()
+        .catch(() => ({}));
+
+      if (!response.ok || data.success === false) {
+        throw new Error(
+          data.message || data.reason || "Could not save human review decision."
+        );
+      }
+
+      const fallbackReviewedAt = new Date().toISOString();
+      const updatedPreview: PaperOrderPreviewHistoryRow = {
+        ...targetPreview,
+        ...(data.preview ?? {}),
+        sandbox_preview_human_review_status:
+          data.preview?.sandbox_preview_human_review_status ?? "REVIEWED",
+        sandbox_preview_human_review_decision:
+          data.preview?.sandbox_preview_human_review_decision ?? decision,
+        sandbox_preview_human_review_notes:
+          data.preview?.sandbox_preview_human_review_notes ??
+          humanReviewNotesByPreviewId[previewId] ??
+          targetPreview.sandbox_preview_human_review_notes ??
+          null,
+        sandbox_preview_human_reviewed_at:
+          data.preview?.sandbox_preview_human_reviewed_at ?? fallbackReviewedAt,
+        approved_for_sandbox_order: false,
+        approved_for_live_order: false,
+        submitted_to_broker: false,
+      };
+
+      setPaperOrderPreviewHistory((currentRows) =>
+        currentRows.map((row) => (row.id === previewId ? updatedPreview : row))
+      );
+
+      setSelectedPreview((currentPreview) =>
+        currentPreview?.id === previewId ? updatedPreview : currentPreview
+      );
+
+      setHumanReviewNotesByPreviewId((currentNotes) => {
+        const nextNotes = { ...currentNotes };
+        delete nextNotes[previewId];
+        return nextNotes;
+      });
+
+      await loadPaperOrderPreviewHistory();
+    } catch (error) {
+      console.error("Failed to save human review decision:", error);
+      setPaperPreviewHistoryError(
+        error instanceof Error
+          ? error.message
+          : "Could not save human review decision."
+      );
+    }
+
+    setHumanReviewingPreviewId(null);
   }
 
   async function markPaperPreviewReviewed(previewId: string) {
@@ -640,6 +831,27 @@ export default function PaperOrderPreviewHistoryPanel({
                 !row.submitted_to_broker;
 
               const sandboxPreviewResult = sandboxPreviewResults[row.id];
+              const savedValidationStatus =
+                row.sandbox_preview_validation_status ??
+                sandboxPreviewResult?.status ??
+                null;
+              const humanReviewDecision =
+                row.sandbox_preview_human_review_decision ?? null;
+              const humanReviewStatus =
+                row.sandbox_preview_human_review_status ??
+                "PENDING_REVIEW";
+              const humanReviewNotesValue =
+                humanReviewNotesByPreviewId[row.id] ??
+                row.sandbox_preview_human_review_notes ??
+                "";
+              const isHumanReviewing = humanReviewingPreviewId === row.id;
+              const canSaveHumanReviewDecision =
+                savedValidationStatus === "PASSED" &&
+                row.preview_status !== "CANCELLED" &&
+                !row.approved_for_sandbox_order &&
+                !row.approved_for_live_order &&
+                !row.submitted_to_broker &&
+                !isHumanReviewing;
 
               return (
                 <div
@@ -675,6 +887,23 @@ export default function PaperOrderPreviewHistoryPanel({
                           {row.ready_for_sandbox_preview
                             ? "READY FOR SANDBOX PREVIEW"
                             : "SANDBOX PREVIEW LOCKED"}
+                        </span>
+
+                        <span
+                          className={`rounded-full border px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider ${getValidationBadgeClass(
+                            savedValidationStatus
+                          )}`}
+                        >
+                          Validation {savedValidationStatus || "NOT RUN"}
+                        </span>
+
+                        <span
+                          className={`rounded-full border px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider ${getHumanReviewBadgeClass(
+                            humanReviewDecision,
+                            humanReviewStatus
+                          )}`}
+                        >
+                          Review {humanReviewDecision || humanReviewStatus}
                         </span>
 
                         {row.contract_quality && (
@@ -792,6 +1021,46 @@ export default function PaperOrderPreviewHistoryPanel({
                         </div>
                       </div>
 
+                      {row.sandbox_preview_validation_status && (
+                        <div
+                          className={`mt-3 rounded-xl border p-3 text-xs ${getValidationBadgeClass(
+                            row.sandbox_preview_validation_status
+                          )}`}
+                        >
+                          <p className="flex items-center gap-1.5 font-bold uppercase tracking-wider">
+                            <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
+                            Saved Sandbox Preview Validation: {" "}
+                            {row.sandbox_preview_validation_status}
+                          </p>
+
+                          {row.sandbox_preview_validation_message && (
+                            <p className="mt-1 leading-relaxed opacity-90">
+                              {row.sandbox_preview_validation_message}
+                            </p>
+                          )}
+
+                          {row.sandbox_preview_validation_reason && (
+                            <p className="mt-1 leading-relaxed opacity-90">
+                              Reason: {row.sandbox_preview_validation_reason}
+                            </p>
+                          )}
+
+                          {renderSafetyLocks(
+                            row.sandbox_preview_validation_safety_locks
+                          )}
+
+                          {row.sandbox_preview_validation_checked_at && (
+                            <p className="mt-2 font-mono text-[10px] opacity-70">
+                              Saved at {" "}
+                              {formatDateTime(
+                                row.sandbox_preview_validation_checked_at
+                              )} {" "}
+                              — no broker order submitted.
+                            </p>
+                          )}
+                        </div>
+                      )}
+
                       {row.ready_for_sandbox_preview && (
                         <div className="mt-3 rounded-xl border border-sky-500/25 bg-sky-500/[0.07] p-3 text-xs text-sky-200 shadow-[0_0_18px_-8px_rgba(56,189,248,0.35)]">
                           <p className="flex items-center gap-1.5 font-bold">
@@ -850,6 +1119,74 @@ export default function PaperOrderPreviewHistoryPanel({
                             {formatDateTime(sandboxPreviewResult.checkedAt)} —
                             no broker order submitted.
                           </p>
+    
+
+                      {(row.sandbox_preview_human_review_decision ||
+                        row.sandbox_preview_human_review_status) && (
+                        <div
+                          className={`mt-3 rounded-xl border p-3 text-xs ${getHumanReviewBadgeClass(
+                            row.sandbox_preview_human_review_decision,
+                            row.sandbox_preview_human_review_status
+                          )}`}
+                        >
+                          <p className="flex items-center gap-1.5 font-bold uppercase tracking-wider">
+                            <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
+                            Human Review: {" "}
+                            {row.sandbox_preview_human_review_decision ||
+                              row.sandbox_preview_human_review_status}
+                          </p>
+
+                          {row.sandbox_preview_human_review_notes && (
+                            <p className="mt-1 leading-relaxed opacity-90">
+                              Notes: {row.sandbox_preview_human_review_notes}
+                            </p>
+                          )}
+
+                          {row.sandbox_preview_human_reviewed_at && (
+                            <p className="mt-2 font-mono text-[10px] opacity-70">
+                              Reviewed at {" "}
+                              {formatDateTime(
+                                row.sandbox_preview_human_reviewed_at
+                              )} {" "}
+                              — safety locks remained false.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                      )}
+
+
+                      {(row.sandbox_preview_human_review_decision ||
+                        row.sandbox_preview_human_review_status) && (
+                        <div
+                          className={`mt-3 rounded-xl border p-3 text-xs ${getHumanReviewBadgeClass(
+                            row.sandbox_preview_human_review_decision,
+                            row.sandbox_preview_human_review_status
+                          )}`}
+                        >
+                          <p className="flex items-center gap-1.5 font-bold uppercase tracking-wider">
+                            <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
+                            Human Review: {" "}
+                            {row.sandbox_preview_human_review_decision ||
+                              row.sandbox_preview_human_review_status}
+                          </p>
+
+                          {row.sandbox_preview_human_review_notes && (
+                            <p className="mt-1 leading-relaxed opacity-90">
+                              Notes: {row.sandbox_preview_human_review_notes}
+                            </p>
+                          )}
+
+                          {row.sandbox_preview_human_reviewed_at && (
+                            <p className="mt-2 font-mono text-[10px] opacity-70">
+                              Reviewed at {" "}
+                              {formatDateTime(
+                                row.sandbox_preview_human_reviewed_at
+                              )} {" "}
+                              — safety locks remained false.
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>
@@ -900,6 +1237,47 @@ export default function PaperOrderPreviewHistoryPanel({
                         </p>
                       </div>
 
+                      <div className="mt-3 space-y-2">
+                        <textarea
+                          value={humanReviewNotesValue}
+                          onChange={(event) => {
+                            const nextValue = event.target.value;
+                            setHumanReviewNotesByPreviewId((currentNotes) => ({
+                              ...currentNotes,
+                              [row.id]: nextValue,
+                            }));
+                          }}
+                          disabled={!canSaveHumanReviewDecision}
+                          placeholder="Optional review notes..."
+                          className="min-h-16 w-full rounded-xl border border-slate-700/80 bg-slate-950/80 px-3 py-2 text-left font-mono text-[11px] text-slate-200 outline-none transition-all duration-300 placeholder:text-slate-600 focus:border-cyan-500/60 focus:shadow-[0_0_14px_-6px_rgba(34,211,238,0.45)] disabled:cursor-not-allowed disabled:opacity-45"
+                        />
+
+                        <div className="grid grid-cols-3 gap-2">
+                          {(["WATCH", "HOLD", "REJECT"] as HumanReviewDecision[]).map(
+                            (decision) => (
+                              <button
+                                key={decision}
+                                type="button"
+                                onClick={() =>
+                                  saveHumanReviewDecision(row.id, decision)
+                                }
+                                disabled={!canSaveHumanReviewDecision}
+                                className={`rounded-xl border px-2 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.12em] transition-all duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:shadow-none disabled:active:scale-100 ${getHumanReviewButtonClass(
+                                  decision
+                                )}`}
+                              >
+                                {isHumanReviewing ? "Saving" : decision}
+                              </button>
+                            )
+                          )}
+                        </div>
+
+                        <p className="font-mono text-[10px] leading-relaxed text-slate-500">
+                          Human review only. This saves WATCH / HOLD / REJECT
+                          and keeps sandbox/live/broker submission locked.
+                        </p>
+                      </div>
+
                       <div className="mt-3 flex flex-wrap justify-start gap-2 lg:justify-end">
                         <button
                           type="button"
@@ -916,6 +1294,7 @@ export default function PaperOrderPreviewHistoryPanel({
                             reviewingPreviewId === row.id ||
                             cancellingPreviewId === row.id ||
                             markingSandboxReadyId === row.id ||
+                            humanReviewingPreviewId === row.id ||
                             row.preview_status === "REVIEWED_ONLY" ||
                             row.preview_status === "CANCELLED" ||
                             row.submitted_to_broker
@@ -936,7 +1315,8 @@ export default function PaperOrderPreviewHistoryPanel({
                             !canMarkReadyForSandboxPreview ||
                             reviewingPreviewId === row.id ||
                             cancellingPreviewId === row.id ||
-                            markingSandboxReadyId === row.id
+                            markingSandboxReadyId === row.id ||
+                            humanReviewingPreviewId === row.id
                           }
                           className="rounded-xl border border-sky-500/30 bg-sky-500/[0.08] px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-sky-300 transition-all duration-300 hover:border-sky-400/60 hover:text-sky-200 hover:shadow-[0_0_14px_-6px_rgba(56,189,248,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-sky-500/30 disabled:hover:text-sky-300 disabled:hover:shadow-none disabled:active:scale-100"
                         >
@@ -952,7 +1332,8 @@ export default function PaperOrderPreviewHistoryPanel({
                           onClick={() => runSandboxPreview(row.id)}
                           disabled={
                             !canRunSandboxPreview ||
-                            runningSandboxPreviewId === row.id
+                            runningSandboxPreviewId === row.id ||
+                            humanReviewingPreviewId === row.id
                           }
                           className="rounded-xl border border-cyan-500/30 bg-cyan-500/[0.08] px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-cyan-300 transition-all duration-300 hover:border-cyan-400/60 hover:text-cyan-200 hover:shadow-[0_0_14px_-6px_rgba(34,211,238,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-cyan-500/30 disabled:hover:text-cyan-300 disabled:hover:shadow-none disabled:active:scale-100"
                         >
@@ -968,6 +1349,7 @@ export default function PaperOrderPreviewHistoryPanel({
                             reviewingPreviewId === row.id ||
                             cancellingPreviewId === row.id ||
                             markingSandboxReadyId === row.id ||
+                            humanReviewingPreviewId === row.id ||
                             row.preview_status === "CANCELLED" ||
                             row.submitted_to_broker
                           }

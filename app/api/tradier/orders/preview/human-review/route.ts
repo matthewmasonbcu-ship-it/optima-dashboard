@@ -1,6 +1,19 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl) {
+  throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL");
+}
+
+if (!supabaseAnonKey) {
+  throw new Error("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY");
+}
+
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
 type HumanReviewDecision = "WATCH" | "HOLD" | "REJECT";
 
 type HumanReviewRequestBody = {
@@ -31,26 +44,6 @@ const SAFETY_LOCKS = {
   approved_for_live_order: false,
   submitted_to_broker: false,
 };
-
-function getSupabaseServerClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl) {
-    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL.");
-  }
-
-  if (!serviceRoleKey) {
-    throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY.");
-  }
-
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
-}
 
 function normalizeDecision(value: unknown): HumanReviewDecision | null {
   if (typeof value !== "string") return null;
@@ -111,8 +104,6 @@ export async function PATCH(request: Request) {
       return blockedResponse("Decision must be WATCH, HOLD, or REJECT.");
     }
 
-    const supabase = getSupabaseServerClient();
-
     const { data: preview, error: fetchError } = await supabase
       .from("paper_order_previews")
       .select(
@@ -170,8 +161,6 @@ export async function PATCH(request: Request) {
         sandbox_preview_human_review_notes: notes,
         sandbox_preview_human_reviewed_at: reviewedAt,
 
-        // Safety locks are intentionally written false again.
-        // This route is audit-only and cannot unlock broker submission.
         approved_for_sandbox_order: false,
         approved_for_live_order: false,
         submitted_to_broker: false,
