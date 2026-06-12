@@ -90,7 +90,13 @@ function MiniStat({
   );
 }
 
-export default function AutoTradeJournal() {
+type AutoTradeJournalProps = {
+  refreshKey?: number;
+};
+
+export default function AutoTradeJournal({
+  refreshKey,
+}: AutoTradeJournalProps) {
   // ─── All state — untouched ────────────────────────────────────────────────
   const [trades, setTrades] = useState<AutoTrade[]>([]);
   const [loading, setLoading] = useState(true);
@@ -122,7 +128,7 @@ export default function AutoTradeJournal() {
 
   useEffect(() => {
     loadAutoTrades();
-  }, []);
+  }, [refreshKey]);
 
   return (
     <section className="relative overflow-hidden rounded-2xl border border-slate-700/50 bg-slate-950 shadow-2xl shadow-black/60">

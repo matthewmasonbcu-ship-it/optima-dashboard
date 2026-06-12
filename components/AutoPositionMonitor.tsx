@@ -89,7 +89,13 @@ function MiniStat({
   );
 }
 
-export default function AutoPositionMonitor() {
+type AutoPositionMonitorProps = {
+  refreshKey?: number;
+};
+
+export default function AutoPositionMonitor({
+  refreshKey,
+}: AutoPositionMonitorProps) {
   // ─── All state — untouched ────────────────────────────────────────────────
   const [openTrades, setOpenTrades] = useState<PaperTrade[]>([]);
   const [monitorEvents, setMonitorEvents] = useState<MonitorEvent[]>([]);
@@ -216,7 +222,7 @@ export default function AutoPositionMonitor() {
     return () => {
       window.removeEventListener("paper-trades-updated", handlePaperTradesUpdated);
     };
-  }, []);
+  }, [refreshKey]);
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-slate-700/50 bg-slate-950 shadow-2xl shadow-black/60">
