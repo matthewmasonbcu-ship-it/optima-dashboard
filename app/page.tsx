@@ -12,6 +12,7 @@ import OptionTradeCommandCenter from "../components/OptionTradeCommandCenter";
 import AutoTradeJournal from "../components/AutoTradeJournal";
 import AutoPositionMonitor from "../components/AutoPositionMonitor";
 import BrokerStatusCard from "../components/BrokerStatusCard";
+import WorkModeCommandCenter from "../components/WorkModeCommandCenter";
 import SystemReadinessCard from "../components/SystemReadinessCard";
 import PaperTradingControlCenter from "../components/PaperTradingControlCenter";
 import TradingDashboardHeader from "../components/TradingDashboardHeader";
@@ -1232,6 +1233,8 @@ const sendSelectedContractToApprovalQueue = () => {
         <TradingDashboardHeader />
 
 <BrokerStatusCard />
+
+<WorkModeCommandCenter />
 
 <div className="space-y-3">
   <div className="flex justify-end">
