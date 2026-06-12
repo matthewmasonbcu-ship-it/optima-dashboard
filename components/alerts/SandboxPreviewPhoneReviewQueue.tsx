@@ -68,11 +68,12 @@ function formatDate(value: unknown): string {
 }
 
 function getTimeForSort(row: PaperOrderPreviewRow): number {
+  const phoneAlertSentAt = readValue(row, ["phone_review_alert_sent_at"]);
   const reviewedAt = readValue(row, ["sandbox_preview_human_reviewed_at"]);
   const checkedAt = readValue(row, ["sandbox_preview_validation_checked_at"]);
   const createdAt = readValue(row, ["created_at"]);
 
-  for (const value of [reviewedAt, checkedAt, createdAt]) {
+  for (const value of [phoneAlertSentAt, reviewedAt, checkedAt, createdAt]) {
     if (typeof value === "string") {
       const time = new Date(value).getTime();
       if (!Number.isNaN(time)) return time;
@@ -379,6 +380,25 @@ export default function SandboxPreviewPhoneReviewQueue({
                 ["risk_guard_status"],
                 "—"
               );
+
+              const phoneAlertEventId = readString(
+                row,
+                ["phone_alert_event_id"],
+                ""
+              );
+              const phoneReviewAlertStatus = readString(
+                row,
+                ["phone_review_alert_status"],
+                ""
+              );
+              const phoneReviewAlertSentAt = readValue(row, [
+                "phone_review_alert_sent_at",
+              ]);
+
+              const phoneAlertAlreadySent =
+                Boolean(phoneAlertEventId) ||
+                phoneReviewAlertStatus === "LOGGED_ONLY";
+
               const isSaving = savingPreviewId === id;
               const isSendingPhoneAlert = sendingPhoneAlertPreviewId === id;
               const isBusy = isSaving || isSendingPhoneAlert;
@@ -394,15 +414,24 @@ export default function SandboxPreviewPhoneReviewQueue({
                         <span className="text-lg font-black text-slate-100">
                           {symbol}
                         </span>
+
                         <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-300">
                           VALIDATION PASSED
                         </span>
+
                         <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-bold text-cyan-300">
                           WATCH
                         </span>
+
                         <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[11px] font-bold text-red-300">
                           SUBMIT LOCKED
                         </span>
+
+                        {phoneAlertAlreadySent ? (
+                          <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-300">
+                            PHONE ALERT SENT
+                          </span>
+                        ) : null}
                       </div>
 
                       <div className="mt-2 break-words font-mono text-xs text-slate-400">
@@ -456,6 +485,17 @@ export default function SandboxPreviewPhoneReviewQueue({
                             {formatDate(reviewedAt)}
                           </span>
                         </div>
+
+                        {phoneAlertAlreadySent ? (
+                          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 md:col-span-2">
+                            <span className="text-emerald-300/70">
+                              Phone Alert Sent:{" "}
+                            </span>
+                            <span className="text-emerald-200">
+                              {formatDate(phoneReviewAlertSentAt)}
+                            </span>
+                          </div>
+                        ) : null}
                       </div>
 
                       <div className="mt-3 rounded-xl border border-slate-800 bg-black/20 p-3 text-sm">
@@ -469,13 +509,15 @@ export default function SandboxPreviewPhoneReviewQueue({
                     <div className="flex shrink-0 flex-wrap gap-2 lg:flex-col">
                       <button
                         type="button"
-                        disabled={isBusy}
+                        disabled={isBusy || phoneAlertAlreadySent}
                         onClick={() => void sendPhoneReviewAlert(row)}
                         className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-bold text-cyan-200 transition hover:border-cyan-400 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {isSendingPhoneAlert
-                          ? "Logging Alert..."
-                          : "Send Phone Review Alert"}
+                        {phoneAlertAlreadySent
+                          ? "Phone Alert Sent"
+                          : isSendingPhoneAlert
+                            ? "Logging Alert..."
+                            : "Send Phone Review Alert"}
                       </button>
 
                       <button
