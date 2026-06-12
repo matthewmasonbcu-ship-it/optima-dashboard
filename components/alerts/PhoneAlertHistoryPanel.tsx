@@ -21,6 +21,17 @@ type PhoneAlertEventRow = {
   risk_guard_status: string | null;
   max_risk_dollars: number | null;
   approved_for_order: boolean;
+  paper_order_preview_id: string | null;
+};
+
+type LinkedPreviewAuditInfo = {
+  id: string;
+  preview_status: string | null;
+  sandbox_preview_validation_status: string | null;
+  sandbox_preview_human_review_decision: string | null;
+  sandbox_preview_human_review_notes: string | null;
+  sandbox_preview_human_reviewed_at: string | null;
+  sandbox_preview_validation_checked_at: string | null;
 };
 
 type PhoneAlertHistoryPanelProps = {
@@ -63,6 +74,9 @@ export default function PhoneAlertHistoryPanel({
   const [phoneAlertHistory, setPhoneAlertHistory] = useState<
     PhoneAlertEventRow[]
   >([]);
+  const [linkedPreviewsById, setLinkedPreviewsById] = useState<
+    Record<string, LinkedPreviewAuditInfo>
+  >({});
   const [isLoadingPhoneHistory, setIsLoadingPhoneHistory] = useState(false);
   const [phoneHistoryError, setPhoneHistoryError] = useState<string | null>(
     null
@@ -78,7 +92,7 @@ export default function PhoneAlertHistoryPanel({
       const { data, error } = await supabase
         .from("phone_alert_events")
         .select(
-          "id, created_at, symbol, trade_lane, setup_name, message, priority, channel, delivery_status, contract_symbol, strike, expiration, option_type, contract_quality, risk_guard_status, max_risk_dollars, approved_for_order"
+          "id, created_at, symbol, trade_lane, setup_name, message, priority, channel, delivery_status, contract_symbol, strike, expiration, option_type, contract_quality, risk_guard_status, max_risk_dollars, approved_for_order, paper_order_preview_id"
         )
         .order("created_at", { ascending: false })
         .limit(8);
@@ -89,8 +103,46 @@ export default function PhoneAlertHistoryPanel({
         console.error("Failed to load phone alert history:", error);
         setPhoneHistoryError("Could not load phone alert history.");
         setPhoneAlertHistory([]);
+        setLinkedPreviewsById({});
+        setIsLoadingPhoneHistory(false);
+        return;
+      }
+
+      const rows = (data ?? []) as PhoneAlertEventRow[];
+      setPhoneAlertHistory(rows);
+
+      const previewIds = Array.from(
+        new Set(
+          rows
+            .map((row) => row.paper_order_preview_id)
+            .filter((id): id is string => Boolean(id))
+        )
+      );
+
+      if (previewIds.length === 0) {
+        setLinkedPreviewsById({});
+        setIsLoadingPhoneHistory(false);
+        return;
+      }
+
+      const { data: previewData, error: previewError } = await supabase
+        .from("paper_order_previews")
+        .select(
+          "id, preview_status, sandbox_preview_validation_status, sandbox_preview_human_review_decision, sandbox_preview_human_review_notes, sandbox_preview_human_reviewed_at, sandbox_preview_validation_checked_at"
+        )
+        .in("id", previewIds);
+
+      if (!isMounted) return;
+
+      if (previewError) {
+        console.error("Failed to load linked preview audit info:", previewError);
+        setLinkedPreviewsById({});
       } else {
-        setPhoneAlertHistory((data ?? []) as PhoneAlertEventRow[]);
+        const previewsById: Record<string, LinkedPreviewAuditInfo> = {};
+        for (const preview of (previewData ?? []) as LinkedPreviewAuditInfo[]) {
+          previewsById[preview.id] = preview;
+        }
+        setLinkedPreviewsById(previewsById);
       }
 
       setIsLoadingPhoneHistory(false);
@@ -184,6 +236,53 @@ export default function PhoneAlertHistoryPanel({
                       <span>Max Risk: {formatMoney(row.max_risk_dollars)}</span>
                     )}
                   </div>
+
+                  {row.paper_order_preview_id &&
+                    linkedPreviewsById[row.paper_order_preview_id] && (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-xs font-bold text-emerald-300">
+                          Linked Preview
+                        </span>
+
+                        {linkedPreviewsById[row.paper_order_preview_id]
+                          .preview_status && (
+                          <span className="rounded-full border border-slate-700 px-2 py-1 text-xs font-bold text-slate-300">
+                            {
+                              linkedPreviewsById[row.paper_order_preview_id]
+                                .preview_status
+                            }
+                          </span>
+                        )}
+
+                        {linkedPreviewsById[row.paper_order_preview_id]
+                          .sandbox_preview_validation_status && (
+                          <span className="rounded-full border border-slate-700 px-2 py-1 text-xs font-bold text-slate-300">
+                            Validation{" "}
+                            {
+                              linkedPreviewsById[row.paper_order_preview_id]
+                                .sandbox_preview_validation_status
+                            }
+                          </span>
+                        )}
+
+                        {linkedPreviewsById[row.paper_order_preview_id]
+                          .sandbox_preview_human_review_decision && (
+                          <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-1 text-xs font-bold text-sky-300">
+                            Review{" "}
+                            {
+                              linkedPreviewsById[row.paper_order_preview_id]
+                                .sandbox_preview_human_review_decision
+                            }
+                            {linkedPreviewsById[row.paper_order_preview_id]
+                              .sandbox_preview_human_reviewed_at &&
+                              ` · ${formatDateTime(
+                                linkedPreviewsById[row.paper_order_preview_id]
+                                  .sandbox_preview_human_reviewed_at as string
+                              )}`}
+                          </span>
+                        )}
+                      </div>
+                    )}
                 </div>
 
                 <div className="text-left md:text-right">
