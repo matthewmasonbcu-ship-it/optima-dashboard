@@ -97,6 +97,30 @@ function getTimeForSort(row: PhoneReviewQueueRow): number {
   return 0;
 }
 
+function getLockDisplay(value: boolean | null): {
+  text: string;
+  className: string;
+} {
+  if (value === false) {
+    return {
+      text: "LOCKED",
+      className: "text-emerald-300",
+    };
+  }
+
+  if (value === true) {
+    return {
+      text: "UNLOCKED",
+      className: "text-red-300",
+    };
+  }
+
+  return {
+    text: "—",
+    className: "text-slate-400",
+  };
+}
+
 function isPhoneReadyWatchRow(row: PhoneReviewQueueRow): boolean {
   const validationStatus = readString(row, [
     "sandbox_preview_validation_status",
@@ -396,6 +420,19 @@ export default function SandboxPreviewPhoneReviewQueue({
                 ["risk_guard_status"],
                 "—"
               );
+              const optionType = readString(row, ["option_type"], "—");
+              const strike = readString(row, ["strike"], "—");
+              const expiration = readString(row, ["expiration"], "—");
+
+              const sandboxOrderLock = getLockDisplay(
+                readBoolean(row, ["approved_for_sandbox_order"])
+              );
+              const liveOrderLock = getLockDisplay(
+                readBoolean(row, ["approved_for_live_order"])
+              );
+              const brokerSubmitLock = getLockDisplay(
+                readBoolean(row, ["submitted_to_broker"])
+              );
 
               const phoneAlertEventId = readString(
                 row,
@@ -454,7 +491,36 @@ export default function SandboxPreviewPhoneReviewQueue({
                         {contractSymbol}
                       </div>
 
-                      <div className="mt-3 grid gap-2 text-sm md:grid-cols-3">
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
+                        <div className="rounded-xl border border-slate-800 bg-black/20 p-3">
+                          <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                            Option Type
+                          </div>
+                          <div className="mt-1 font-bold text-slate-200">
+                            {optionType}
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-800 bg-black/20 p-3">
+                          <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                            Strike
+                          </div>
+                          <div className="mt-1 font-bold text-slate-200">
+                            {strike}
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-800 bg-black/20 p-3">
+                          <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                            Expiration
+                          </div>
+                          <div className="mt-1 font-bold text-slate-200">
+                            {expiration}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
                         <div className="rounded-xl border border-slate-800 bg-black/20 p-3">
                           <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">
                             Risk Guard
@@ -479,6 +545,41 @@ export default function SandboxPreviewPhoneReviewQueue({
                           </div>
                           <div className="mt-1 font-bold text-slate-200">
                             {maxRisk}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+                        <div className="rounded-xl border border-slate-800 bg-black/20 p-3">
+                          <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                            Sandbox Order
+                          </div>
+                          <div
+                            className={`mt-1 font-bold ${sandboxOrderLock.className}`}
+                          >
+                            {sandboxOrderLock.text}
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-800 bg-black/20 p-3">
+                          <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                            Live Order
+                          </div>
+                          <div
+                            className={`mt-1 font-bold ${liveOrderLock.className}`}
+                          >
+                            {liveOrderLock.text}
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-800 bg-black/20 p-3">
+                          <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                            Broker Submit
+                          </div>
+                          <div
+                            className={`mt-1 font-bold ${brokerSubmitLock.className}`}
+                          >
+                            {brokerSubmitLock.text}
                           </div>
                         </div>
                       </div>
