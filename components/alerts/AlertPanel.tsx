@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { TradeApprovalAlert } from "@/types/alerts";
 import TradeApprovalCard from "./TradeApprovalCard";
 import ApprovalHistoryPanel from "./ApprovalHistoryPanel";
@@ -28,11 +29,15 @@ export default function AlertPanel({
   approvalActionError,
   isSavingApprovalDecision,
 }: AlertPanelProps) {
+  const [phoneAlertRefreshKey, setPhoneAlertRefreshKey] = useState(0);
+
   const activeAlerts = alerts.filter((alert) => alert.decision === "PENDING");
 
   const historyRefreshKey = alerts
     .map((alert) => `${alert.id}-${alert.decision}-${alert.decidedAt ?? ""}`)
     .join("|");
+
+  const combinedHistoryRefreshKey = `${historyRefreshKey}|phone-${phoneAlertRefreshKey}`;
 
   const hasPending = activeAlerts.length > 0;
 
@@ -273,13 +278,18 @@ export default function AlertPanel({
         </div>
       )}
 
-      <SandboxPreviewPhoneReviewQueue refreshKey={historyRefreshKey} />
+      <SandboxPreviewPhoneReviewQueue
+        refreshKey={combinedHistoryRefreshKey}
+        onPhoneAlertLogged={() =>
+          setPhoneAlertRefreshKey((value) => value + 1)
+        }
+      />
 
       <ApprovalHistoryPanel refreshKey={historyRefreshKey} />
 
-      <PhoneAlertHistoryPanel refreshKey={historyRefreshKey} />
+      <PhoneAlertHistoryPanel refreshKey={combinedHistoryRefreshKey} />
 
-      <PaperOrderPreviewHistoryPanel refreshKey={historyRefreshKey} />
+      <PaperOrderPreviewHistoryPanel refreshKey={combinedHistoryRefreshKey} />
     </section>
   );
 }

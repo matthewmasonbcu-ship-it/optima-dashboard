@@ -6,6 +6,7 @@ import type { PaperOrderPreviewRow } from "./PaperOrderPreviewDetailModal";
 
 type SandboxPreviewPhoneReviewQueueProps = {
   refreshKey?: string | number | boolean | null;
+  onPhoneAlertLogged?: () => void;
 };
 
 type HumanDecision = "WATCH" | "HOLD" | "REJECT";
@@ -105,6 +106,7 @@ function isPhoneReadyWatchRow(row: PaperOrderPreviewRow): boolean {
 
 export default function SandboxPreviewPhoneReviewQueue({
   refreshKey,
+  onPhoneAlertLogged,
 }: SandboxPreviewPhoneReviewQueueProps) {
   const [rows, setRows] = useState<PaperOrderPreviewRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -274,6 +276,7 @@ export default function SandboxPreviewPhoneReviewQueue({
         );
 
         await loadRows();
+        onPhoneAlertLogged?.();
       } catch (error) {
         const message =
           error instanceof Error
@@ -284,7 +287,7 @@ export default function SandboxPreviewPhoneReviewQueue({
         setSendingPhoneAlertPreviewId(null);
       }
     },
-    [loadRows]
+    [loadRows, onPhoneAlertLogged]
   );
 
   return (
