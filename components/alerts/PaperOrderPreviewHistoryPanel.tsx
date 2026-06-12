@@ -11,6 +11,16 @@ type PaperOrderPreviewHistoryPanelProps = {
   refreshKey?: string;
 };
 
+type SandboxPreviewRunStatus = "PASSED" | "BLOCKED" | "ERROR";
+
+type SandboxPreviewRunResult = {
+  status: SandboxPreviewRunStatus;
+  reason: string | null;
+  message: string | null;
+  safetyLocks: unknown;
+  checkedAt: string;
+};
+
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString([], {
     month: "short",
@@ -123,6 +133,73 @@ function getFundedFilterNoteSuffix(safetyNotes: string | null | undefined) {
   return ` ${fundedNote}`;
 }
 
+function getSandboxPreviewResultClass(status: SandboxPreviewRunStatus) {
+  if (status === "PASSED") {
+    return "border-emerald-500/30 bg-emerald-500/[0.08] text-emerald-200 shadow-[0_0_18px_-8px_rgba(52,211,153,0.4)]";
+  }
+
+  if (status === "BLOCKED") {
+    return "border-orange-500/30 bg-orange-500/[0.08] text-orange-200 shadow-[0_0_18px_-8px_rgba(251,146,60,0.4)]";
+  }
+
+  return "border-red-500/30 bg-red-500/[0.08] text-red-200 shadow-[0_0_18px_-8px_rgba(248,113,113,0.4)]";
+}
+
+function getSandboxPreviewResultDotClass(status: SandboxPreviewRunStatus) {
+  if (status === "PASSED") {
+    return "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.9)]";
+  }
+
+  if (status === "BLOCKED") {
+    return "bg-orange-400 shadow-[0_0_6px_rgba(251,146,60,0.9)]";
+  }
+
+  return "bg-red-400 shadow-[0_0_6px_rgba(248,113,113,0.9)]";
+}
+
+function renderSafetyLocks(safetyLocks: unknown) {
+  if (safetyLocks === null || safetyLocks === undefined) return null;
+
+  if (Array.isArray(safetyLocks)) {
+    if (safetyLocks.length === 0) return null;
+
+    return (
+      <ul className="mt-1 space-y-0.5">
+        {safetyLocks.map((lock, index) => (
+          <li key={index} className="flex items-start gap-1.5">
+            <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-current opacity-60" />
+            <span>
+              {typeof lock === "string" ? lock : JSON.stringify(lock)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  if (typeof safetyLocks === "object") {
+    const entries = Object.entries(safetyLocks as Record<string, unknown>);
+
+    if (entries.length === 0) return null;
+
+    return (
+      <ul className="mt-1 space-y-0.5">
+        {entries.map(([key, value]) => (
+          <li key={key} className="flex items-start gap-1.5">
+            <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-current opacity-60" />
+            <span>
+              {key}:{" "}
+              {typeof value === "string" ? value : JSON.stringify(value)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  return <p className="mt-1">{String(safetyLocks)}</p>;
+}
+
 export default function PaperOrderPreviewHistoryPanel({
   refreshKey,
 }: PaperOrderPreviewHistoryPanelProps) {
@@ -148,6 +225,12 @@ export default function PaperOrderPreviewHistoryPanel({
 
   const [markingSandboxReadyId, setMarkingSandboxReadyId] =
     useState<string | null>(null);
+
+  const [runningSandboxPreviewId, setRunningSandboxPreviewId] =
+    useState<string | null>(null);
+
+  const [sandboxPreviewResults, setSandboxPreviewResults] =
+  useState<Record<string, SandboxPreviewRunResult>>({});
 
   useEffect(() => {
     let isMounted = true;
@@ -185,6 +268,74 @@ export default function PaperOrderPreviewHistoryPanel({
       isMounted = false;
     };
   }, [refreshKey]);
+
+  async function runSandboxPreview(previewId: string) {
+    setRunningSandboxPreviewId(previewId);
+
+    const checkedAt = new Date().toISOString();
+
+    try {
+      const response = await fetch("/api/tradier/orders/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paper_order_preview_id: previewId }),
+      });
+
+      const data: unknown = await response.json();
+
+      const parsed =
+        data && typeof data === "object"
+          ? (data as {
+              status?: unknown;
+              reason?: unknown;
+              message?: unknown;
+              safetyLocks?: unknown;
+            })
+          : {};
+
+      const rawStatus = String(parsed.status ?? "").trim().toUpperCase();
+
+      const status: SandboxPreviewRunStatus =
+        rawStatus === "PASSED"
+          ? "PASSED"
+          : rawStatus === "BLOCKED"
+            ? "BLOCKED"
+            : "ERROR";
+
+      setSandboxPreviewResults((currentResults) => ({
+        ...currentResults,
+        [previewId]: {
+          status,
+          reason:
+            typeof parsed.reason === "string" && parsed.reason.length > 0
+              ? parsed.reason
+              : null,
+          message:
+            typeof parsed.message === "string" && parsed.message.length > 0
+              ? parsed.message
+              : null,
+          safetyLocks: parsed.safetyLocks ?? null,
+          checkedAt,
+        },
+      }));
+    } catch (error) {
+      console.error("Failed to run sandbox preview validation:", error);
+
+      setSandboxPreviewResults((currentResults) => ({
+        ...currentResults,
+        [previewId]: {
+          status: "ERROR",
+          reason: null,
+          message:
+            "Could not reach the sandbox preview validation route. No order was submitted.",
+          safetyLocks: null,
+          checkedAt,
+        },
+      }));
+    }
+
+    setRunningSandboxPreviewId(null);
+  }
 
   async function markPaperPreviewReviewed(previewId: string) {
     setReviewingPreviewId(previewId);
@@ -481,6 +632,15 @@ export default function PaperOrderPreviewHistoryPanel({
                 !row.approved_for_sandbox_order &&
                 !row.approved_for_live_order;
 
+              const canRunSandboxPreview =
+                row.preview_status === "REVIEWED_ONLY" &&
+                row.ready_for_sandbox_preview === true &&
+                !row.approved_for_sandbox_order &&
+                !row.approved_for_live_order &&
+                !row.submitted_to_broker;
+
+              const sandboxPreviewResult = sandboxPreviewResults[row.id];
+
               return (
                 <div
                   key={row.id}
@@ -652,6 +812,46 @@ export default function PaperOrderPreviewHistoryPanel({
                           )}
                         </div>
                       )}
+
+                      {sandboxPreviewResult && (
+                        <div
+                          className={`mt-3 rounded-xl border p-3 text-xs ${getSandboxPreviewResultClass(
+                            sandboxPreviewResult.status
+                          )}`}
+                        >
+                          <p className="flex items-center gap-1.5 font-bold uppercase tracking-wider">
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full ${getSandboxPreviewResultDotClass(
+                                sandboxPreviewResult.status
+                              )}`}
+                            />
+                            Sandbox Preview Validation:{" "}
+                            {sandboxPreviewResult.status}
+                          </p>
+
+                          {sandboxPreviewResult.reason && (
+                            <p className="mt-1 leading-relaxed opacity-90">
+                              Reason: {sandboxPreviewResult.reason}
+                            </p>
+                          )}
+
+                          {sandboxPreviewResult.message && (
+                            <p className="mt-1 leading-relaxed opacity-90">
+                              {sandboxPreviewResult.message}
+                            </p>
+                          )}
+
+                          {renderSafetyLocks(
+                            sandboxPreviewResult.safetyLocks
+                          )}
+
+                          <p className="mt-2 font-mono text-[10px] opacity-70">
+                            Validation-only check at{" "}
+                            {formatDateTime(sandboxPreviewResult.checkedAt)} —
+                            no broker order submitted.
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     <div className="shrink-0 border-t border-slate-800/80 pt-3 text-left lg:w-56 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0 lg:text-right">
@@ -745,6 +945,20 @@ export default function PaperOrderPreviewHistoryPanel({
                             : row.ready_for_sandbox_preview
                             ? "Sandbox Ready"
                             : "Mark Sandbox Ready"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => runSandboxPreview(row.id)}
+                          disabled={
+                            !canRunSandboxPreview ||
+                            runningSandboxPreviewId === row.id
+                          }
+                          className="rounded-xl border border-cyan-500/30 bg-cyan-500/[0.08] px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-cyan-300 transition-all duration-300 hover:border-cyan-400/60 hover:text-cyan-200 hover:shadow-[0_0_14px_-6px_rgba(34,211,238,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-cyan-500/30 disabled:hover:text-cyan-300 disabled:hover:shadow-none disabled:active:scale-100"
+                        >
+                          {runningSandboxPreviewId === row.id
+                            ? "Running..."
+                            : "Run Sandbox Preview"}
                         </button>
 
                         <button
