@@ -23,7 +23,20 @@ type PhoneReviewAlertResponse = {
   reason?: string;
 };
 
-function readValue(row: PaperOrderPreviewRow, keys: string[]): unknown {
+type PhoneReviewQueueRow = PaperOrderPreviewRow & {
+  preview_id?: string | null;
+  sandbox_preview_validation_status?: string | null;
+  sandbox_preview_human_review_decision?: string | null;
+  sandbox_preview_human_review_notes?: string | null;
+  sandbox_preview_human_reviewed_at?: string | null;
+  sandbox_preview_validation_checked_at?: string | null;
+  phone_alert_event_id?: string | null;
+  phone_review_alert_status?: string | null;
+  phone_review_alert_sent_at?: string | null;
+  [key: string]: unknown;
+};
+
+function readValue(row: PhoneReviewQueueRow, keys: string[]): unknown {
   for (const key of keys) {
     if (row[key] !== undefined && row[key] !== null) return row[key];
   }
@@ -32,7 +45,7 @@ function readValue(row: PaperOrderPreviewRow, keys: string[]): unknown {
 }
 
 function readString(
-  row: PaperOrderPreviewRow,
+  row: PhoneReviewQueueRow,
   keys: string[],
   fallback = "—"
 ): string {
@@ -46,7 +59,7 @@ function readString(
   return fallback;
 }
 
-function readBoolean(row: PaperOrderPreviewRow, keys: string[]): boolean | null {
+function readBoolean(row: PhoneReviewQueueRow, keys: string[]): boolean | null {
   const value = readValue(row, keys);
 
   if (typeof value === "boolean") return value;
@@ -68,7 +81,7 @@ function formatDate(value: unknown): string {
   return date.toLocaleString();
 }
 
-function getTimeForSort(row: PaperOrderPreviewRow): number {
+function getTimeForSort(row: PhoneReviewQueueRow): number {
   const phoneAlertSentAt = readValue(row, ["phone_review_alert_sent_at"]);
   const reviewedAt = readValue(row, ["sandbox_preview_human_reviewed_at"]);
   const checkedAt = readValue(row, ["sandbox_preview_validation_checked_at"]);
@@ -84,7 +97,7 @@ function getTimeForSort(row: PaperOrderPreviewRow): number {
   return 0;
 }
 
-function isPhoneReadyWatchRow(row: PaperOrderPreviewRow): boolean {
+function isPhoneReadyWatchRow(row: PhoneReviewQueueRow): boolean {
   const validationStatus = readString(row, [
     "sandbox_preview_validation_status",
   ]);
@@ -108,7 +121,7 @@ export default function SandboxPreviewPhoneReviewQueue({
   refreshKey,
   onPhoneAlertLogged,
 }: SandboxPreviewPhoneReviewQueueProps) {
-  const [rows, setRows] = useState<PaperOrderPreviewRow[]>([]);
+  const [rows, setRows] = useState<PhoneReviewQueueRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionStatus, setActionStatus] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -140,7 +153,7 @@ export default function SandboxPreviewPhoneReviewQueue({
       }
 
       const safeRows = Array.isArray(data)
-        ? (data as PaperOrderPreviewRow[]).filter(isPhoneReadyWatchRow)
+        ? (data as PhoneReviewQueueRow[]).filter(isPhoneReadyWatchRow)
         : [];
 
       setRows(safeRows);
@@ -171,7 +184,7 @@ export default function SandboxPreviewPhoneReviewQueue({
 
   const saveDecision = useCallback(
     async (
-      row: PaperOrderPreviewRow,
+      row: PhoneReviewQueueRow,
       decision: HumanDecision,
       notes?: string
     ) => {
@@ -235,7 +248,7 @@ export default function SandboxPreviewPhoneReviewQueue({
   );
 
   const sendPhoneReviewAlert = useCallback(
-    async (row: PaperOrderPreviewRow) => {
+    async (row: PhoneReviewQueueRow) => {
       const previewId = readString(row, ["id", "preview_id"], "");
 
       if (!previewId) {

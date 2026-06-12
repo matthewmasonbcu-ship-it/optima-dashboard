@@ -1119,41 +1119,7 @@ export default function PaperOrderPreviewHistoryPanel({
                             {formatDateTime(sandboxPreviewResult.checkedAt)} —
                             no broker order submitted.
                           </p>
-    
-
-                      {(row.sandbox_preview_human_review_decision ||
-                        row.sandbox_preview_human_review_status) && (
-                        <div
-                          className={`mt-3 rounded-xl border p-3 text-xs ${getHumanReviewBadgeClass(
-                            row.sandbox_preview_human_review_decision,
-                            row.sandbox_preview_human_review_status
-                          )}`}
-                        >
-                          <p className="flex items-center gap-1.5 font-bold uppercase tracking-wider">
-                            <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
-                            Human Review: {" "}
-                            {row.sandbox_preview_human_review_decision ||
-                              row.sandbox_preview_human_review_status}
-                          </p>
-
-                          {row.sandbox_preview_human_review_notes && (
-                            <p className="mt-1 leading-relaxed opacity-90">
-                              Notes: {row.sandbox_preview_human_review_notes}
-                            </p>
-                          )}
-
-                          {row.sandbox_preview_human_reviewed_at && (
-                            <p className="mt-2 font-mono text-[10px] opacity-70">
-                              Reviewed at {" "}
-                              {formatDateTime(
-                                row.sandbox_preview_human_reviewed_at
-                              )} {" "}
-                              — safety locks remained false.
-                            </p>
-                          )}
                         </div>
-                      )}
-                    </div>
                       )}
 
 
