@@ -37,7 +37,6 @@ export default function AlertPanel({
 
   return (
     <section className="relative overflow-hidden rounded-2xl border border-slate-800/80 bg-gradient-to-b from-slate-950 via-slate-950/95 to-slate-900/60 p-4 shadow-[0_0_40px_-12px_rgba(8,47,73,0.5)] sm:p-6">
-      {/* Ambient top glow line */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-500/60 to-transparent"
@@ -47,7 +46,6 @@ export default function AlertPanel({
         className="pointer-events-none absolute -top-24 left-1/2 h-48 w-[36rem] -translate-x-1/2 rounded-full bg-cyan-500/[0.07] blur-3xl"
       />
 
-      {/* Header */}
       <div className="relative mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -74,8 +72,8 @@ export default function AlertPanel({
           </h2>
 
           <p className="mt-2 max-w-md text-sm leading-relaxed text-slate-400">
-            Dashboard-only approval center. Phone alerts and broker actions will
-            connect later after paper testing.
+            Dashboard-only approval center. Sandbox preview validation can pass,
+            but human review is still required before any future broker step.
           </p>
 
           <div className="mt-4 flex flex-wrap gap-1.5">
@@ -145,7 +143,6 @@ export default function AlertPanel({
         </div>
       </div>
 
-      {/* Status banners */}
       {isSavingApprovalDecision && (
         <div className="mb-4 flex items-center gap-3 rounded-xl border border-sky-500/30 bg-sky-500/[0.08] p-3 text-sm font-semibold text-sky-300 shadow-[0_0_20px_-8px_rgba(56,189,248,0.4)]">
           <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-sky-400/30 border-t-sky-300" />
@@ -171,7 +168,75 @@ export default function AlertPanel({
         </div>
       )}
 
-      {/* Queue */}
+      <div className="mb-5 overflow-hidden rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.045] shadow-[0_0_28px_-16px_rgba(34,211,238,0.5)]">
+        <div className="border-b border-cyan-500/10 px-4 py-3">
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-300/80">
+            Sandbox Preview Human Review Gate
+          </p>
+          <h3 className="mt-1 text-base font-bold text-slate-100">
+            Validation Passed ≠ Order Approved
+          </h3>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-400">
+            A passed sandbox preview validation only means the preview row was
+            safely checked and saved for audit. It does not unlock sandbox
+            orders, live orders, or broker submission.
+          </p>
+        </div>
+
+        <div className="grid gap-3 p-4 md:grid-cols-4">
+          <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] p-3">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-300/80">
+              Step 1
+            </p>
+            <p className="mt-1 text-sm font-bold text-emerald-200">
+              Validation Audited
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-emerald-100/60">
+              Supabase stores status, message, timestamp, payload, and safety
+              locks.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-yellow-500/25 bg-yellow-500/[0.07] p-3">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-yellow-300/80">
+              Step 2
+            </p>
+            <p className="mt-1 text-sm font-bold text-yellow-200">
+              Human Review Required
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-yellow-100/60">
+              You still review the setup before any future execution layer is
+              considered.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-red-500/25 bg-red-500/[0.07] p-3">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-red-300/80">
+              Locked
+            </p>
+            <p className="mt-1 text-sm font-bold text-red-200">
+              Broker Submit Off
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-red-100/60">
+              approved_for_sandbox_order and submitted_to_broker remain false.
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-600/60 bg-slate-900/70 p-3">
+            <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+              Protected
+            </p>
+            <p className="mt-1 text-sm font-bold text-slate-200">
+              Live Trading Disabled
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">
+              approved_for_live_order remains false. No real-money route is
+              enabled.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {activeAlerts.length === 0 ? (
         <div className="relative overflow-hidden rounded-2xl border border-dashed border-slate-700/70 bg-black/30 p-8 text-center transition-colors duration-300 hover:border-slate-600/70 sm:p-10">
           <div
