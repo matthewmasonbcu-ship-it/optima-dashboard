@@ -16,6 +16,12 @@ type HumanReviewResponse = {
   reason?: string;
 };
 
+type PhoneReviewAlertResponse = {
+  success?: boolean;
+  message?: string;
+  reason?: string;
+};
+
 function readValue(row: PaperOrderPreviewRow, keys: string[]): unknown {
   for (const key of keys) {
     if (row[key] !== undefined && row[key] !== null) return row[key];
@@ -80,9 +86,7 @@ function isPhoneReadyWatchRow(row: PaperOrderPreviewRow): boolean {
   const validationStatus = readString(row, [
     "sandbox_preview_validation_status",
   ]);
-  const decision = readString(row, [
-    "sandbox_preview_human_review_decision",
-  ]);
+  const decision = readString(row, ["sandbox_preview_human_review_decision"]);
   const approvedForSandboxOrder = readBoolean(row, [
     "approved_for_sandbox_order",
   ]);
@@ -106,6 +110,8 @@ export default function SandboxPreviewPhoneReviewQueue({
   const [actionStatus, setActionStatus] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [savingPreviewId, setSavingPreviewId] = useState<string | null>(null);
+  const [sendingPhoneAlertPreviewId, setSendingPhoneAlertPreviewId] =
+    useState<string | null>(null);
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -225,6 +231,61 @@ export default function SandboxPreviewPhoneReviewQueue({
     [loadRows]
   );
 
+  const sendPhoneReviewAlert = useCallback(
+    async (row: PaperOrderPreviewRow) => {
+      const previewId = readString(row, ["id", "preview_id"], "");
+
+      if (!previewId) {
+        setActionError("Missing preview id.");
+        return;
+      }
+
+      setSendingPhoneAlertPreviewId(previewId);
+      setActionStatus(null);
+      setActionError(null);
+
+      try {
+        const response = await fetch("/api/alerts/phone-review", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            previewId,
+          }),
+        });
+
+        const data = (await response.json().catch(() => null)) as
+          | PhoneReviewAlertResponse
+          | null;
+
+        if (!response.ok || data?.success === false) {
+          throw new Error(
+            data?.message ||
+              data?.reason ||
+              "Could not log phone review alert."
+          );
+        }
+
+        setActionStatus(
+          data?.message ||
+            "Phone review alert logged. Dashboard simulation only — no SMS, push, broker order, or live order."
+        );
+
+        await loadRows();
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Could not log phone review alert.";
+        setActionError(message);
+      } finally {
+        setSendingPhoneAlertPreviewId(null);
+      }
+    },
+    [loadRows]
+  );
+
   return (
     <section className="mb-5 overflow-hidden rounded-3xl border border-cyan-500/25 bg-cyan-500/[0.045] shadow-[0_0_34px_-18px_rgba(34,211,238,0.7)]">
       <div className="flex flex-col gap-3 border-b border-cyan-500/10 px-5 py-4 md:flex-row md:items-center md:justify-between">
@@ -319,6 +380,8 @@ export default function SandboxPreviewPhoneReviewQueue({
                 "—"
               );
               const isSaving = savingPreviewId === id;
+              const isSendingPhoneAlert = sendingPhoneAlertPreviewId === id;
+              const isBusy = isSaving || isSendingPhoneAlert;
 
               return (
                 <article
@@ -406,7 +469,18 @@ export default function SandboxPreviewPhoneReviewQueue({
                     <div className="flex shrink-0 flex-wrap gap-2 lg:flex-col">
                       <button
                         type="button"
-                        disabled={isSaving}
+                        disabled={isBusy}
+                        onClick={() => void sendPhoneReviewAlert(row)}
+                        className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-bold text-cyan-200 transition hover:border-cyan-400 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isSendingPhoneAlert
+                          ? "Logging Alert..."
+                          : "Send Phone Review Alert"}
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isBusy}
                         onClick={() =>
                           void saveDecision(
                             row,
@@ -421,7 +495,7 @@ export default function SandboxPreviewPhoneReviewQueue({
 
                       <button
                         type="button"
-                        disabled={isSaving}
+                        disabled={isBusy}
                         onClick={() =>
                           void saveDecision(
                             row,
