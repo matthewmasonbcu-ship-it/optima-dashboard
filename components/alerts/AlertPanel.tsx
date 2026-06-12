@@ -5,6 +5,7 @@ import TradeApprovalCard from "./TradeApprovalCard";
 import ApprovalHistoryPanel from "./ApprovalHistoryPanel";
 import PhoneAlertHistoryPanel from "./PhoneAlertHistoryPanel";
 import PaperOrderPreviewHistoryPanel from "./PaperOrderPreviewHistoryPanel";
+import SandboxPreviewPhoneReviewQueue from "./SandboxPreviewPhoneReviewQueue";
 
 type AlertPanelProps = {
   alerts: TradeApprovalAlert[];
@@ -77,27 +78,27 @@ export default function AlertPanel({
           </p>
 
           <div className="mt-4 flex flex-wrap gap-1.5">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/[0.08] px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-emerald-300 transition-colors duration-300 hover:border-emerald-400/50 hover:bg-emerald-500/15">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/[0.08] px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-emerald-300">
               <span className="h-1 w-1 rounded-full bg-emerald-400 shadow-[0_0_5px_rgba(52,211,153,0.9)]" />
               Risk Guard Approved
             </span>
 
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-500/25 bg-sky-500/[0.08] px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-sky-300 transition-colors duration-300 hover:border-sky-400/50 hover:bg-sky-500/15">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-500/25 bg-sky-500/[0.08] px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-sky-300">
               <span className="h-1 w-1 rounded-full bg-sky-400 shadow-[0_0_5px_rgba(56,189,248,0.9)]" />
               Grade A+ / A / B
             </span>
 
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-yellow-500/25 bg-yellow-500/[0.08] px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-yellow-300 transition-colors duration-300 hover:border-yellow-400/50 hover:bg-yellow-500/15">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-yellow-500/25 bg-yellow-500/[0.08] px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-yellow-300">
               <span className="h-1 w-1 rounded-full bg-yellow-400 shadow-[0_0_5px_rgba(250,204,21,0.9)]" />
               Max Risk ≤ $100
             </span>
 
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-purple-500/25 bg-purple-500/[0.08] px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-purple-300 transition-colors duration-300 hover:border-purple-400/50 hover:bg-purple-500/15">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-purple-500/25 bg-purple-500/[0.08] px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-purple-300">
               <span className="h-1 w-1 rounded-full bg-purple-400 shadow-[0_0_5px_rgba(192,132,252,0.9)]" />
               Duplicates Blocked
             </span>
 
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-600/60 bg-slate-900/80 px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-300 transition-colors duration-300 hover:border-slate-500">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-600/60 bg-slate-900/80 px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-300">
               <span className="h-1 w-1 rounded-full bg-slate-500" />
               No Orders Placed
             </span>
@@ -122,6 +123,7 @@ export default function AlertPanel({
             >
               {activeAlerts.length}
             </p>
+
             {hasPending && (
               <div
                 aria-hidden="true"
@@ -270,6 +272,8 @@ export default function AlertPanel({
           ))}
         </div>
       )}
+
+      <SandboxPreviewPhoneReviewQueue refreshKey={historyRefreshKey} />
 
       <ApprovalHistoryPanel refreshKey={historyRefreshKey} />
 
