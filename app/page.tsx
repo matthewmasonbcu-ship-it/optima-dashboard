@@ -33,12 +33,12 @@ type QuoteData = {
 
 type ScanResult = {
   symbol: string;
-  price: number;
-  changePercent: number;
-  direction: TradeDirection;
+  price?: number;
+  changePercent?: number;
+  direction?: TradeDirection;
   tradeDirection?: TradeDirection;
   directionBias?: "BULLISH" | "BEARISH" | "NEUTRAL";
-  setupScore: number;
+  setupScore?: number;
   confidenceScore?: number;
   confidence_score?: number;
   trendStrength?: number;
@@ -810,7 +810,9 @@ export default function Home() {
         results.push(result);
       }
 
-      const sorted = results.sort((a, b) => b.setupScore - a.setupScore);
+      const sorted = results.sort(
+        (a, b) => (b.setupScore ?? 0) - (a.setupScore ?? 0)
+      );
 
       setScannerResults(sorted);
 
