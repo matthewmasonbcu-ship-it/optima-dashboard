@@ -265,7 +265,7 @@ export function useTradeApprovalAlerts() {
 
     if (
       !input.contractQuality ||
-      !APPROVED_CONTRACT_GRADES.includes(input.contractQuality)
+      !(APPROVED_CONTRACT_GRADES as readonly ContractQuality[]).includes(input.contractQuality)
     ) {
       setApprovalActionStatus(null);
       setApprovalActionError(
