@@ -32,6 +32,10 @@ type LinkedPreviewAuditInfo = {
   sandbox_preview_human_review_notes: string | null;
   sandbox_preview_human_reviewed_at: string | null;
   sandbox_preview_validation_checked_at: string | null;
+  bid: number | null;
+  ask: number | null;
+  mid: number | null;
+  estimated_limit_price: number | null;
 };
 
 type PhoneAlertHistoryPanelProps = {
@@ -141,7 +145,7 @@ export default function PhoneAlertHistoryPanel({
       const { data: previewData, error: previewError } = await supabase
         .from("paper_order_previews")
         .select(
-          "id, preview_status, sandbox_preview_validation_status, sandbox_preview_human_review_decision, sandbox_preview_human_review_notes, sandbox_preview_human_reviewed_at, sandbox_preview_validation_checked_at"
+          "id, preview_status, sandbox_preview_validation_status, sandbox_preview_human_review_decision, sandbox_preview_human_review_notes, sandbox_preview_human_reviewed_at, sandbox_preview_validation_checked_at, bid, ask, mid, estimated_limit_price"
         )
         .in("id", previewIds);
 
@@ -320,6 +324,59 @@ export default function PhoneAlertHistoryPanel({
                               )}`}
                           </span>
                         )}
+                      </div>
+                    )}
+
+                  {row.paper_order_preview_id &&
+                    linkedPreviewsById[row.paper_order_preview_id] && (
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                        <div className="rounded-xl border border-slate-800 bg-black/20 p-3">
+                          <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                            Entry / Limit
+                          </div>
+                          <div className="mt-1 font-bold text-slate-200">
+                            {formatMoney(
+                              linkedPreviewsById[row.paper_order_preview_id]
+                                .estimated_limit_price
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-800 bg-black/20 p-3">
+                          <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                            Bid
+                          </div>
+                          <div className="mt-1 font-bold text-slate-200">
+                            {formatMoney(
+                              linkedPreviewsById[row.paper_order_preview_id]
+                                .bid
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-800 bg-black/20 p-3">
+                          <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                            Ask
+                          </div>
+                          <div className="mt-1 font-bold text-slate-200">
+                            {formatMoney(
+                              linkedPreviewsById[row.paper_order_preview_id]
+                                .ask
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-800 bg-black/20 p-3">
+                          <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                            Mid
+                          </div>
+                          <div className="mt-1 font-bold text-slate-200">
+                            {formatMoney(
+                              linkedPreviewsById[row.paper_order_preview_id]
+                                .mid
+                            )}
+                          </div>
+                        </div>
                       </div>
                     )}
                 </div>
