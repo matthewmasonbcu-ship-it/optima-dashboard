@@ -12,6 +12,14 @@ type LatestPhoneAlertRow = {
   delivery_status: string | null;
 };
 
+type TopReadySetupRow = {
+  id: string;
+  symbol: string | null;
+  contract_symbol: string | null;
+  contract_quality: string | null;
+  max_risk_dollars: number | null;
+};
+
 function getToneClasses(tone: Tone) {
   if (tone === "green")
     return {
@@ -107,6 +115,11 @@ function formatDateTime(value: string) {
   });
 }
 
+function formatMaxRisk(value: number | null) {
+  if (value === null) return "—";
+  return `$${value.toFixed(2)}`;
+}
+
 export default function WorkModeCommandCenter() {
   const [loading, setLoading] = useState(false);
   const [phoneQueueCount, setPhoneQueueCount] = useState<number | null>(null);
@@ -118,6 +131,7 @@ export default function WorkModeCommandCenter() {
   const [liveOrderEnabled, setLiveOrderEnabled] = useState<boolean | null>(
     null
   );
+  const [topReadySetups, setTopReadySetups] = useState<TopReadySetupRow[]>([]);
 
   const loadWorkModeStatus = useCallback(async () => {
     setLoading(true);
@@ -129,6 +143,7 @@ export default function WorkModeCommandCenter() {
         sandboxApprovedResult,
         submittedToBrokerResult,
         liveApprovedResult,
+        topReadySetupsResult,
       ] = await Promise.all([
         supabase
           .from("paper_order_previews")
@@ -159,10 +174,26 @@ export default function WorkModeCommandCenter() {
           .select("id")
           .eq("approved_for_live_order", true)
           .limit(1),
+        supabase
+          .from("paper_order_previews")
+          .select("id, symbol, contract_symbol, contract_quality, max_risk_dollars")
+          .eq("sandbox_preview_validation_status", "PASSED")
+          .eq("sandbox_preview_human_review_decision", "WATCH")
+          .eq("approved_for_sandbox_order", false)
+          .eq("approved_for_live_order", false)
+          .eq("submitted_to_broker", false)
+          .order("sandbox_preview_human_reviewed_at", {
+            ascending: false,
+            nullsFirst: false,
+          })
+          .limit(3),
       ]);
 
       setPhoneQueueCount(phoneQueueResult.count ?? 0);
       setLatestPhoneAlert(latestPhoneAlertResult.data ?? null);
+      setTopReadySetups(
+        (topReadySetupsResult.data ?? []) as TopReadySetupRow[]
+      );
 
       const anySandboxApproved = (sandboxApprovedResult.data ?? []).length > 0;
       const anySubmittedToBroker =
@@ -176,6 +207,7 @@ export default function WorkModeCommandCenter() {
       setLatestPhoneAlert(null);
       setSandboxOrderUnlocked(null);
       setLiveOrderEnabled(null);
+      setTopReadySetups([]);
     } finally {
       setLoading(false);
     }
@@ -281,12 +313,23 @@ export default function WorkModeCommandCenter() {
             </p>
           </div>
 
-          {loading && (
-            <span className="flex items-center gap-2 self-start font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500 lg:self-auto">
-              <span className="h-1.5 w-1.5 animate-ping rounded-full bg-cyan-400" />
-              Checking...
-            </span>
-          )}
+          <div className="flex items-center gap-3 self-start lg:self-auto">
+            {loading && (
+              <span className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                <span className="h-1.5 w-1.5 animate-ping rounded-full bg-cyan-400" />
+                Checking...
+              </span>
+            )}
+
+            <button
+              type="button"
+              onClick={() => void loadWorkModeStatus()}
+              disabled={loading}
+              className="rounded-lg border border-slate-700/80 bg-slate-900/80 px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-cyan-500/40 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              ⟳ Refresh
+            </button>
+          </div>
         </div>
 
         <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -321,6 +364,54 @@ export default function WorkModeCommandCenter() {
             subtext="Dashboard simulation only"
           />
         </div>
+
+        {topReadySetups.length > 0 && (
+          <div className="relative mb-5 overflow-hidden rounded-xl border border-cyan-500/20 bg-cyan-500/[0.03]">
+            <div className="absolute inset-y-0 left-0 w-[3px] bg-cyan-500" />
+            <div className="flex flex-col gap-2 px-5 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-300/80">
+                  Top Ready Setups
+                </p>
+                <a
+                  href="#phone-review-queue"
+                  className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-200 transition-all hover:border-cyan-400 hover:bg-cyan-500/20"
+                >
+                  Jump to Phone Review Queue
+                </a>
+              </div>
+
+              <div className="space-y-2">
+                {topReadySetups.map((setup) => (
+                  <div
+                    key={setup.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-black/20 px-3 py-2"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-sm font-black text-white">
+                        {setup.symbol ?? "—"}
+                      </span>
+                      {setup.contract_symbol && (
+                        <span className="font-mono text-[10px] text-slate-500">
+                          {setup.contract_symbol}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-sky-300">
+                        Grade {setup.contract_quality ?? "—"}
+                      </span>
+                      <span className="rounded border border-slate-700/60 bg-slate-900/60 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-slate-300">
+                        Max Risk {formatMaxRisk(setup.max_risk_dollars)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="relative overflow-hidden rounded-lg border border-emerald-500/15 bg-emerald-500/5">
           <div className="absolute inset-y-0 left-0 w-[3px] bg-emerald-500" />

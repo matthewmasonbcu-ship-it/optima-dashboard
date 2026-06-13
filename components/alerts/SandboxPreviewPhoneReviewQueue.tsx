@@ -328,7 +328,10 @@ export default function SandboxPreviewPhoneReviewQueue({
   );
 
   return (
-    <section className="mb-5 overflow-hidden rounded-3xl border border-cyan-500/25 bg-cyan-500/[0.045] shadow-[0_0_34px_-18px_rgba(34,211,238,0.7)]">
+    <section
+      id="phone-review-queue"
+      className="mb-5 overflow-hidden rounded-3xl border border-cyan-500/25 bg-cyan-500/[0.045] shadow-[0_0_34px_-18px_rgba(34,211,238,0.7)]"
+    >
       <div className="flex flex-col gap-3 border-b border-cyan-500/10 px-5 py-4 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="font-mono text-[10px] font-bold uppercase tracking-[0.28em] text-cyan-300/80">
