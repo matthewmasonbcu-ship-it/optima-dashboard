@@ -132,6 +132,7 @@ export default function WorkModeCommandCenter() {
     null
   );
   const [topReadySetups, setTopReadySetups] = useState<TopReadySetupRow[]>([]);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const loadWorkModeStatus = useCallback(async () => {
     setLoading(true);
@@ -210,6 +211,7 @@ export default function WorkModeCommandCenter() {
       setTopReadySetups([]);
     } finally {
       setLoading(false);
+      setLastUpdated(new Date());
     }
   }, []);
 
@@ -218,7 +220,14 @@ export default function WorkModeCommandCenter() {
       void loadWorkModeStatus();
     }, 0);
 
-    return () => window.clearTimeout(timeoutId);
+    const intervalId = window.setInterval(() => {
+      void loadWorkModeStatus();
+    }, 60000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.clearInterval(intervalId);
+    };
   }, [loadWorkModeStatus]);
 
   const phoneQueueValue =
@@ -318,6 +327,12 @@ export default function WorkModeCommandCenter() {
               <span className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">
                 <span className="h-1.5 w-1.5 animate-ping rounded-full bg-cyan-400" />
                 Checking...
+              </span>
+            )}
+
+            {lastUpdated && (
+              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-600">
+                Last checked {lastUpdated.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}
               </span>
             )}
 
