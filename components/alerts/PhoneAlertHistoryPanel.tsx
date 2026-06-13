@@ -52,6 +52,24 @@ function formatMoney(value: number | null) {
   return `$${value.toFixed(2)}`;
 }
 
+function getReviewDecisionBadgeClass(decision: string | null | undefined) {
+  const normalized = String(decision || "").trim().toUpperCase();
+
+  if (normalized === "WATCH") {
+    return "border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
+  }
+
+  if (normalized === "HOLD") {
+    return "border-yellow-500/40 bg-yellow-500/10 text-yellow-300";
+  }
+
+  if (normalized === "REJECT") {
+    return "border-red-500/40 bg-red-500/10 text-red-300";
+  }
+
+  return "border-sky-500/40 bg-sky-500/10 text-sky-300";
+}
+
 function getDeliveryBadgeClass(status: string) {
   if (status === "LOGGED_ONLY") {
     return "border-sky-500/40 bg-sky-500/10 text-sky-300";
@@ -283,7 +301,12 @@ export default function PhoneAlertHistoryPanel({
 
                         {linkedPreviewsById[row.paper_order_preview_id]
                           .sandbox_preview_human_review_decision && (
-                          <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-1 text-xs font-bold text-sky-300">
+                          <span
+                            className={`rounded-full border px-2 py-1 text-xs font-bold ${getReviewDecisionBadgeClass(
+                              linkedPreviewsById[row.paper_order_preview_id]
+                                .sandbox_preview_human_review_decision
+                            )}`}
+                          >
                             Review{" "}
                             {
                               linkedPreviewsById[row.paper_order_preview_id]
