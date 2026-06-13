@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 type PhoneAlertEventRow = {
@@ -81,14 +81,13 @@ export default function PhoneAlertHistoryPanel({
   const [phoneHistoryError, setPhoneHistoryError] = useState<string | null>(
     null
   );
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadPhoneAlertHistory = useCallback(async () => {
+    setIsLoadingPhoneHistory(true);
+    setPhoneHistoryError(null);
 
-    async function loadPhoneAlertHistory() {
-      setIsLoadingPhoneHistory(true);
-      setPhoneHistoryError(null);
-
+    try {
       const { data, error } = await supabase
         .from("phone_alert_events")
         .select(
@@ -97,14 +96,11 @@ export default function PhoneAlertHistoryPanel({
         .order("created_at", { ascending: false })
         .limit(8);
 
-      if (!isMounted) return;
-
       if (error) {
         console.error("Failed to load phone alert history:", error);
         setPhoneHistoryError("Could not load phone alert history.");
         setPhoneAlertHistory([]);
         setLinkedPreviewsById({});
-        setIsLoadingPhoneHistory(false);
         return;
       }
 
@@ -121,7 +117,6 @@ export default function PhoneAlertHistoryPanel({
 
       if (previewIds.length === 0) {
         setLinkedPreviewsById({});
-        setIsLoadingPhoneHistory(false);
         return;
       }
 
@@ -131,8 +126,6 @@ export default function PhoneAlertHistoryPanel({
           "id, preview_status, sandbox_preview_validation_status, sandbox_preview_human_review_decision, sandbox_preview_human_review_notes, sandbox_preview_human_reviewed_at, sandbox_preview_validation_checked_at"
         )
         .in("id", previewIds);
-
-      if (!isMounted) return;
 
       if (previewError) {
         console.error("Failed to load linked preview audit info:", previewError);
@@ -144,16 +137,26 @@ export default function PhoneAlertHistoryPanel({
         }
         setLinkedPreviewsById(previewsById);
       }
-
+    } finally {
       setIsLoadingPhoneHistory(false);
+      setLastChecked(new Date());
     }
+  }, []);
 
-    loadPhoneAlertHistory();
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void loadPhoneAlertHistory();
+    }, 0);
+
+    const intervalId = window.setInterval(() => {
+      void loadPhoneAlertHistory();
+    }, 60000);
 
     return () => {
-      isMounted = false;
+      window.clearTimeout(timeoutId);
+      window.clearInterval(intervalId);
     };
-  }, [refreshKey]);
+  }, [loadPhoneAlertHistory, refreshKey]);
 
   return (
     <div className="mt-6 rounded-2xl border border-slate-800 bg-black/20 p-4">
@@ -168,9 +171,22 @@ export default function PhoneAlertHistoryPanel({
           </h3>
         </div>
 
-        <p className="text-xs text-slate-500">
-          Logging only — no SMS, push, or orders yet
-        </p>
+        <div className="flex flex-col items-start gap-1 md:items-end">
+          <p className="text-xs text-slate-500">
+            Logging only — no SMS, push, or orders yet
+          </p>
+
+          {lastChecked && (
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-600">
+              Last checked{" "}
+              {lastChecked.toLocaleTimeString([], {
+                hour: "numeric",
+                minute: "2-digit",
+                second: "2-digit",
+              })}
+            </span>
+          )}
+        </div>
       </div>
 
       {isLoadingPhoneHistory ? (
