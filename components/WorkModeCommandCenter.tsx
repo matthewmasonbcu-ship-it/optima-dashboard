@@ -428,6 +428,35 @@ export default function WorkModeCommandCenter() {
           </div>
         )}
 
+        {topReadySetups.length === 0 && !loading && (
+          <div className="relative mb-5 overflow-hidden rounded-xl border border-slate-700/40 bg-slate-900/40">
+            <div className="absolute inset-y-0 left-0 w-[3px] bg-slate-600" />
+            <div className="flex flex-col gap-2 px-5 py-4">
+              <div className="flex items-center gap-2">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-slate-500" />
+                <p className="font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">
+                  No WATCH-ready setups right now
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-cyan-300">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-400" />
+                  Scanner Active
+                </span>
+
+                <span className="rounded-full border border-slate-600/60 bg-slate-800/60 px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-slate-300">
+                  Phone Workflow Standing By
+                </span>
+
+                <span className="rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-red-300">
+                  Broker Submit Locked
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="relative overflow-hidden rounded-lg border border-emerald-500/15 bg-emerald-500/5">
           <div className="absolute inset-y-0 left-0 w-[3px] bg-emerald-500" />
           <div className="px-5 py-3">
