@@ -402,11 +402,26 @@ export default function SandboxPreviewPhoneReviewQueue({
         ) : sortedRows.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/60 p-6 text-center">
             <p className="font-bold text-slate-200">
-              No phone-ready WATCH setups right now.
+              No phone-ready setups right now.
             </p>
             <p className="mx-auto mt-2 max-w-xl text-sm leading-relaxed text-slate-500">
-              Mark a PASSED sandbox preview as WATCH, then it will appear here.
-              HOLD and REJECT rows stay out of this queue.
+              The scanner is still watching for setups that pass validation,
+              get marked WATCH, and clear every safety filter. Mark a PASSED
+              sandbox preview as WATCH and it will appear here. HOLD and
+              REJECT rows stay out of this queue.
+            </p>
+
+            <div className="mx-auto mt-4 flex flex-wrap items-center justify-center gap-2">
+              <span className="rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs font-bold text-red-300">
+                Broker Submit Locked
+              </span>
+              <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-300">
+                Phone Safe
+              </span>
+            </div>
+
+            <p className="mx-auto mt-3 max-w-xl text-xs leading-relaxed text-slate-600">
+              Nothing to do right now — use Refresh above to check again.
             </p>
           </div>
         ) : (
