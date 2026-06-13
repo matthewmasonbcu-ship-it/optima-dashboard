@@ -253,6 +253,12 @@ export default function SandboxPreviewPhoneReviewQueue({
           );
         }
 
+        setRows((prev) =>
+          prev.filter(
+            (r) => readString(r, ["id", "preview_id"], "") !== previewId
+          )
+        );
+
         setActionStatus(
           `Saved ${decision}. Safety locks remained false. No broker order submitted.`
         );
