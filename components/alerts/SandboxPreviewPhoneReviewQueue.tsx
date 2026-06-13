@@ -152,6 +152,7 @@ export default function SandboxPreviewPhoneReviewQueue({
   const [savingPreviewId, setSavingPreviewId] = useState<string | null>(null);
   const [sendingPhoneAlertPreviewId, setSendingPhoneAlertPreviewId] =
     useState<string | null>(null);
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -189,6 +190,7 @@ export default function SandboxPreviewPhoneReviewQueue({
       setActionError(message);
     } finally {
       setLoading(false);
+      setLastChecked(new Date());
     }
   }, []);
 
@@ -197,8 +199,13 @@ export default function SandboxPreviewPhoneReviewQueue({
       void loadRows();
     }, 0);
 
+    const intervalId = window.setInterval(() => {
+      void loadRows();
+    }, 60000);
+
     return () => {
       window.clearTimeout(timeoutId);
+      window.clearInterval(intervalId);
     };
   }, [loadRows, refreshKey]);
 
@@ -360,6 +367,11 @@ export default function SandboxPreviewPhoneReviewQueue({
           <span className="rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs font-bold text-red-300">
             Broker Submit Locked
           </span>
+          {lastChecked && (
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-600">
+              Last checked {lastChecked.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}
+            </span>
+          )}
           <button
             type="button"
             onClick={() => void loadRows()}
