@@ -72,6 +72,17 @@ function readBoolean(row: PhoneReviewQueueRow, keys: string[]): boolean | null {
   return null;
 }
 
+function formatPriceValue(value: unknown): string {
+  if (typeof value === "number") return `$${value.toFixed(2)}`;
+
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (!Number.isNaN(parsed)) return `$${parsed.toFixed(2)}`;
+  }
+
+  return "—";
+}
+
 function formatDate(value: unknown): string {
   if (!value || typeof value !== "string") return "—";
 
@@ -460,6 +471,13 @@ export default function SandboxPreviewPhoneReviewQueue({
               const strike = readString(row, ["strike"], "—");
               const expiration = readString(row, ["expiration"], "—");
 
+              const entryLimitPrice = formatPriceValue(
+                readValue(row, ["estimated_limit_price"])
+              );
+              const bidPrice = formatPriceValue(readValue(row, ["bid"]));
+              const askPrice = formatPriceValue(readValue(row, ["ask"]));
+              const midPrice = formatPriceValue(readValue(row, ["mid"]));
+
               const sandboxOrderLock = getLockDisplay(
                 readBoolean(row, ["approved_for_sandbox_order"])
               );
@@ -552,6 +570,44 @@ export default function SandboxPreviewPhoneReviewQueue({
                           </div>
                           <div className="mt-1 font-bold text-slate-200">
                             {expiration}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                        <div className="rounded-xl border border-slate-800 bg-black/20 p-3">
+                          <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                            Entry / Limit
+                          </div>
+                          <div className="mt-1 font-bold text-slate-200">
+                            {entryLimitPrice}
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-800 bg-black/20 p-3">
+                          <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                            Bid
+                          </div>
+                          <div className="mt-1 font-bold text-slate-200">
+                            {bidPrice}
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-800 bg-black/20 p-3">
+                          <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                            Ask
+                          </div>
+                          <div className="mt-1 font-bold text-slate-200">
+                            {askPrice}
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-800 bg-black/20 p-3">
+                          <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                            Mid
+                          </div>
+                          <div className="mt-1 font-bold text-slate-200">
+                            {midPrice}
                           </div>
                         </div>
                       </div>
