@@ -83,6 +83,36 @@ function formatPriceValue(value: unknown): string {
   return "—";
 }
 
+function getFundedFilterStatus(safetyNotes: string | null | undefined) {
+  const notes = String(safetyNotes || "").toUpperCase();
+
+  if (
+    notes.includes("FUNDED ACCOUNT SAFETY FILTER: PASSED") ||
+    notes.includes("FUNDED FILTER PASSED") ||
+    notes.includes("FUNDED FILTER: PASSED")
+  ) {
+    return "PASSED";
+  }
+
+  if (
+    notes.includes("FUNDED ACCOUNT SAFETY FILTER: BLOCKED") ||
+    notes.includes("FUNDED FILTER BLOCKED") ||
+    notes.includes("FUNDED FILTER: BLOCKED")
+  ) {
+    return "BLOCKED";
+  }
+
+  return null;
+}
+
+function getFundedFilterBadgeClass(status: "PASSED" | "BLOCKED") {
+  if (status === "PASSED") {
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
+  }
+
+  return "border-orange-500/30 bg-orange-500/10 text-orange-300";
+}
+
 function formatDate(value: unknown): string {
   if (!value || typeof value !== "string") return "—";
 
@@ -478,6 +508,10 @@ export default function SandboxPreviewPhoneReviewQueue({
               const askPrice = formatPriceValue(readValue(row, ["ask"]));
               const midPrice = formatPriceValue(readValue(row, ["mid"]));
 
+              const fundedFilterStatus = getFundedFilterStatus(
+                readValue(row, ["safety_notes"]) as string | null
+              );
+
               const sandboxOrderLock = getLockDisplay(
                 readBoolean(row, ["approved_for_sandbox_order"])
               );
@@ -533,6 +567,16 @@ export default function SandboxPreviewPhoneReviewQueue({
                         <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[11px] font-bold text-red-300">
                           SUBMIT LOCKED
                         </span>
+
+                        {fundedFilterStatus && (
+                          <span
+                            className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${getFundedFilterBadgeClass(
+                              fundedFilterStatus
+                            )}`}
+                          >
+                            Funded Filter {fundedFilterStatus}
+                          </span>
+                        )}
 
                         {phoneAlertAlreadySent ? (
                           <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-300">
