@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "crypto";
+import { sendPhoneAlertSms } from "@/lib/sms/sendPhoneAlertSms";
+import { sendPhoneAlertEmailSms } from "@/lib/sms/sendPhoneAlertEmailSms";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -33,6 +35,23 @@ type PhoneReviewTokenRow = {
 
 type PaperOrderPreviewRow = {
   id: string;
+  symbol: string | null;
+  contract_symbol: string | null;
+  strike: number | null;
+  expiration: string | null;
+  option_type: string | null;
+  bid: number | null;
+  ask: number | null;
+  mid: number | null;
+  quantity: number | null;
+  estimated_order_cost: number | null;
+  max_risk_dollars: number | null;
+  contract_quality: string | null;
+  risk_guard_status: string | null;
+  risk_guard_reason: string | null;
+  entry_price: number | null;
+  stop_loss: number | null;
+  take_profit: number | null;
   sandbox_preview_validation_status: string | null;
   sandbox_preview_human_review_decision: string | null;
   approved_for_sandbox_order: boolean | null;
@@ -45,6 +64,144 @@ const SAFETY_LOCKS = {
   approved_for_live_order: false,
   submitted_to_broker: false,
 };
+
+function getNewYorkUtcOffsetHours(date: Date): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    timeZoneName: "short",
+  }).formatToParts(date);
+
+  const tzName = parts.find((part) => part.type === "timeZoneName")?.value;
+  return tzName === "EDT" ? 4 : 5;
+}
+
+function getStartOfTodayNewYorkISO(now: Date): string {
+  const nyDateStr = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+  }).format(now);
+
+  const offsetHours = getNewYorkUtcOffsetHours(now);
+  const offsetStr = String(offsetHours).padStart(2, "0");
+
+  return new Date(`${nyDateStr}T00:00:00.000-${offsetStr}:00`).toISOString();
+}
+
+type AutoSaveResult = {
+  saved: boolean;
+  reason?: string;
+  paperTradeId?: string;
+};
+
+async function autoSavePaperTrade(
+  preview: PaperOrderPreviewRow
+): Promise<AutoSaveResult> {
+  if (
+    !preview.symbol ||
+    !preview.contract_symbol ||
+    !preview.strike ||
+    !preview.expiration ||
+    !preview.option_type ||
+    preview.entry_price === null ||
+    preview.entry_price === undefined
+  ) {
+    return {
+      saved: false,
+      reason:
+        "Preview is missing contract or trade-plan data required for auto-save.",
+    };
+  }
+
+  const now = new Date();
+  const startOfTodayISO = getStartOfTodayNewYorkISO(now);
+
+  const dailyCountCheck = await supabase
+    .from("paper_trades")
+    .select("id")
+    .gte("created_at", startOfTodayISO);
+
+  if (dailyCountCheck.error) {
+    console.error("Auto-save daily trade count check failed:", dailyCountCheck.error);
+    return { saved: false, reason: "Daily trade count check failed." };
+  }
+
+  if (dailyCountCheck.data && dailyCountCheck.data.length >= 3) {
+    return { saved: false, reason: "Daily limit of 3 trades reached." };
+  }
+
+  const duplicateCheck = await supabase
+    .from("paper_trades")
+    .select("id")
+    .eq("symbol", preview.symbol)
+    .eq("status", "open")
+    .is("exit_price", null)
+    .limit(1);
+
+  if (duplicateCheck.error) {
+    console.error("Auto-save duplicate position check failed:", duplicateCheck.error);
+    return { saved: false, reason: "Duplicate position check failed." };
+  }
+
+  if (duplicateCheck.data && duplicateCheck.data.length > 0) {
+    return {
+      saved: false,
+      reason: `${preview.symbol} already has an open trade.`,
+    };
+  }
+
+  const { data: paperTradeData, error: paperTradeError } = await supabase
+    .from("paper_trades")
+    .insert({
+      symbol: preview.symbol,
+      entry_price: preview.entry_price,
+      stop_loss: preview.stop_loss,
+      take_profit: preview.take_profit,
+      status: "open",
+      strategy: "phone_approved",
+    })
+    .select("id")
+    .single();
+
+  if (paperTradeError || !paperTradeData?.id) {
+    console.error("Auto-save paper trade insert failed:", paperTradeError);
+    return { saved: false, reason: "Failed to save paper trade." };
+  }
+
+  const paperTradeId = paperTradeData.id as string;
+
+  const { error: optionDetailError } = await supabase
+    .from("option_trade_details")
+    .insert({
+      paper_trade_id: paperTradeId,
+      stock_symbol: preview.symbol,
+      trade_direction: preview.option_type,
+      option_symbol: preview.contract_symbol,
+      expiration_date: preview.expiration,
+      strike_price: preview.strike,
+      bid_price: preview.bid,
+      ask_price: preview.ask,
+      mid_price: preview.mid,
+      contracts: preview.quantity,
+      estimated_cost: preview.estimated_order_cost,
+      max_risk: preview.max_risk_dollars,
+      risk_guard_status: preview.risk_guard_status,
+      risk_guard_reason: preview.risk_guard_reason,
+      override_used: false,
+      override_reason: null,
+      contract_quality: preview.contract_quality,
+      spread_type: "single_leg",
+    });
+
+  if (optionDetailError) {
+    console.error("Auto-save option trade details insert failed:", optionDetailError);
+    return {
+      saved: false,
+      reason: "Paper trade saved, but option details failed.",
+      paperTradeId,
+    };
+  }
+
+  return { saved: true, paperTradeId };
+}
 
 function blockedResponse(reason: string, status = 400) {
   return NextResponse.json(
@@ -120,6 +277,23 @@ export async function POST(request: Request) {
       .select(
         [
           "id",
+          "symbol",
+          "contract_symbol",
+          "strike",
+          "expiration",
+          "option_type",
+          "bid",
+          "ask",
+          "mid",
+          "quantity",
+          "estimated_order_cost",
+          "max_risk_dollars",
+          "contract_quality",
+          "risk_guard_status",
+          "risk_guard_reason",
+          "entry_price",
+          "stop_loss",
+          "take_profit",
           "sandbox_preview_validation_status",
           "sandbox_preview_human_review_decision",
           "approved_for_sandbox_order",
@@ -210,18 +384,39 @@ export async function POST(request: Request) {
       console.error("Failed to mark phone review token used:", tokenUpdateError);
     }
 
+    let autoSave: AutoSaveResult | null = null;
+    let message: string;
+
+    if (decision === "PHONE_APPROVED") {
+      autoSave = await autoSavePaperTrade(preview);
+
+      if (autoSave.saved) {
+        message =
+          "Approved via phone. Paper trade saved automatically. Open the dashboard for details.";
+
+        const smsBody = `OPTIMA: Trade saved — ${preview.symbol} ${preview.contract_symbol}. Risk Guard: ${preview.risk_guard_status}. Check dashboard for details.`;
+
+        const smsResult = await sendPhoneAlertSms(smsBody);
+        if (!smsResult.success) {
+          await sendPhoneAlertEmailSms(smsBody);
+        }
+      } else {
+        message = `Approved via phone. No broker order was submitted. Trade not auto-saved: ${autoSave.reason} Open the dashboard to continue.`;
+      }
+    } else {
+      message = "Rejected via phone. No broker order was submitted.";
+    }
+
     return NextResponse.json(
       {
         success: true,
         route: ROUTE,
         mode: "phone_review_response_audit_only",
-        message:
-          decision === "PHONE_APPROVED"
-            ? "Approved via phone. No broker order was submitted. Open the dashboard to continue."
-            : "Rejected via phone. No broker order was submitted.",
+        message,
         decision,
         reviewedAt,
         preview: updatedPreview,
+        autoSave,
         safetyLocks: SAFETY_LOCKS,
         brokerCall: {
           tradierPreviewEndpointCalled: false,
