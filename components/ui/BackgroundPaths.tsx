@@ -32,6 +32,7 @@ export function BackgroundPaths() {
     <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
       <FloatingPaths position={1} />
       <FloatingPaths position={-1} />
+      <div className="pointer-events-none absolute inset-0 z-10 opacity-[0.03] bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,1)_2px,rgba(255,255,255,1)_4px)]" />
     </div>
   );
 }

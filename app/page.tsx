@@ -705,6 +705,18 @@ function getRiskTone(status: RiskGuardCheck["status"]) {
   return "border-red-400/40 bg-red-500/10 text-red-300";
 }
 
+function getRiskPulse(status: RiskGuardCheck["status"]) {
+  if (status === "APPROVED") {
+    return "animate-pulse shadow-lg shadow-emerald-500/50";
+  }
+
+  if (status === "BLOCKED") {
+    return "animate-pulse shadow-lg shadow-red-500/50";
+  }
+
+  return "animate-pulse shadow-lg shadow-amber-500/50";
+}
+
 function StatusCard({
   label,
   value,
@@ -1263,7 +1275,7 @@ const sendSelectedContractToApprovalQueue = () => {
         </div>
 
         <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em]">
-          <span className={`rounded-md border px-2 py-1 ${getRiskTone(optionRiskCheck.status)}`}>
+          <span className={`rounded-md border px-2 py-1 ${getRiskTone(optionRiskCheck.status)} ${getRiskPulse(optionRiskCheck.status)}`}>
             Risk Guard: {optionRiskCheck.status}
           </span>
           <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-300">

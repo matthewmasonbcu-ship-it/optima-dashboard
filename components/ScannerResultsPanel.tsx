@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 // ─── UI ONLY — all scanner logic, props, types, and selection behavior untouched ───
 
@@ -350,7 +350,8 @@ export default function ScannerResultsPanel({
           </div>
         ) : (
           <div className="space-y-2.5">
-            {data.map((result) => {
+            <AnimatePresence>
+            {data.map((result, index) => {
               const direction = getDirection(result);
               const setupScore = getSetupScore(result);
               const confidenceScore = getConfidenceScore(result);
@@ -366,9 +367,11 @@ export default function ScannerResultsPanel({
                 <motion.button
                   key={result.symbol}
                   onClick={() => handleSelect(result)}
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.99 }}
-                  transition={{ duration: 0.15 }}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0, transition: { duration: 0.2, delay: index * 0.05 } }}
+                  exit={{ opacity: 0, y: 4, transition: { duration: 0.2 } }}
+                  whileHover={{ scale: 1.01, transition: { duration: 0.15 } }}
+                  whileTap={{ scale: 0.99, transition: { duration: 0.15 } }}
                   className={`group relative w-full overflow-hidden rounded-xl border text-left transition-all duration-150
                     ${isSelected
                       ? "border-cyan-500/40 bg-slate-900/90 ring-1 ring-cyan-500/20 shadow-lg shadow-cyan-950/20"
@@ -515,6 +518,7 @@ export default function ScannerResultsPanel({
                 </motion.button>
               );
             })}
+            </AnimatePresence>
           </div>
         )}
       </div>
