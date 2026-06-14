@@ -19,11 +19,13 @@ built on process, not luck.
 
 ## What We Are Building
 A semi-automated options trading system focused on:
-- The Wheel Strategy (cash-secured puts + covered calls)
+- Credit Spreads (bull put spreads on bullish setups, bear call spreads on bearish setups)
 - Strict risk guardrails (3 trades/day max, 5% risk, 50% stop-loss, 30–45 DTE, 0.30 delta)
 - Phone-based remote approval so trading is compatible with day job hours
 - Complete audit trail of every decision, scan, and trade
 - A system that tells you when you're ready to fund — not just when features are done
+- Target prop firm is Black Eagle Financial Group — evaluation fee $150-500, funded accounts up to $250K, 80% profit split
+- Strategy optimized for defined-risk, capital-efficient trades compatible with prop firm Greek-based risk framework
 
 ## What We Are NOT Building
 - A gambling tool
