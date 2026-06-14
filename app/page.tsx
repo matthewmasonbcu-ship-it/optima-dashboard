@@ -10,6 +10,7 @@ import WatchlistManager from "../components/WatchlistManager";
 import PaperTradeTracker from "../components/PaperTradeTracker";
 import PaperTradeAnalytics from "../components/PaperTradeAnalytics";
 import OptionPerformanceScoreboard from "../components/OptionPerformanceScoreboard";
+import PerformanceCharts from "../components/PerformanceCharts";
 import ScannerResultsPanel from "../components/ScannerResultsPanel";
 import OptionTradeCommandCenter from "../components/OptionTradeCommandCenter";
 import AutoTradeJournal from "../components/AutoTradeJournal";
@@ -1392,6 +1393,7 @@ const sendSelectedContractToApprovalQueue = () => {
               {activeTab === "analytics" && (
                 <div className="h-full space-y-4 overflow-y-auto">
                   <OptionPerformanceScoreboard refreshKey={refreshKey} />
+                  <PerformanceCharts refreshKey={refreshKey} />
                   <PaperTradeAnalytics refreshKey={refreshKey} />
                   <AutoTradeJournal refreshKey={refreshKey} />
                 </div>
