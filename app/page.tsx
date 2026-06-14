@@ -1416,7 +1416,7 @@ const sendSelectedContractToApprovalQueue = () => {
               )}
 
               {activeTab === "system" && (
-                <div className="flex h-[calc(100vh-48px)] flex-col gap-4 overflow-y-auto">
+                <div className="h-full space-y-4 overflow-y-auto">
                   <TradingDashboardHeader />
 
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
