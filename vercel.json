@@ -23,6 +23,14 @@
     {
       "path": "/api/cron/market-open-scan",
       "schedule": "0 19 * * 1-5"
+    },
+    {
+      "path": "/api/cron/daily-summary",
+      "schedule": "0 20 * * 1-5"
+    },
+    {
+      "path": "/api/cron/daily-summary",
+      "schedule": "0 21 * * 1-5"
     }
   ]
 }
