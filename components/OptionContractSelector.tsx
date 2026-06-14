@@ -3,6 +3,7 @@
 // --- UI ONLY - all chain logic, filtering, sorting, and selection untouched --
 
 import { useEffect, useMemo, useState } from "react";
+import type { SpreadType, OptionLeg } from "../lib/dashboardTypes";
 
 type TradeDirection = "CALL" | "PUT" | "NO TRADE";
 
@@ -66,6 +67,15 @@ type OptionContract = {
   vega?: number | null;
   implied_volatility?: number | null;
   impliedVolatility?: number | null;
+
+  // --- Credit spread support ---------------------------------------------
+  spread_type?: SpreadType;
+  short_leg?: OptionLeg;
+  long_leg?: OptionLeg;
+  net_credit?: number;
+  spread_width?: number;
+  max_loss?: number;
+  max_profit?: number;
 };
 
 type OptionContractSelectorProps = {
@@ -101,6 +111,26 @@ function normalizeDirection(direction?: string): TradeDirection {
   if (direction === "CALL") return "CALL";
   if (direction === "PUT") return "PUT";
   return "NO TRADE";
+}
+
+// --- Credit spread helpers -----------------------------------------------
+function getDefaultSpreadType(direction: TradeDirection): SpreadType {
+  if (direction === "CALL") return "bull_put_spread";
+  if (direction === "PUT") return "bear_call_spread";
+  return "single_leg";
+}
+
+// Bull put spread sells/buys PUTs. Bear call spread sells/buys CALLs.
+function getSpreadOptionType(spreadType: SpreadType, direction: TradeDirection): TradeDirection {
+  if (spreadType === "bull_put_spread") return "PUT";
+  if (spreadType === "bear_call_spread") return "CALL";
+  return direction;
+}
+
+function getSpreadTypeLabel(spreadType: SpreadType) {
+  if (spreadType === "bull_put_spread") return "Bull Put Spread";
+  if (spreadType === "bear_call_spread") return "Bear Call Spread";
+  return "Single Leg";
 }
 
 function getOptionSymbol(contract: OptionContract | null | undefined) {
@@ -390,6 +420,109 @@ function buildManualContract(params: { stockSymbol: string; direction: TradeDire
     whyThisContract: ["Manual contract entered by user.", "No automatic grade available.", "Use Testing Override only if intentionally testing."],
   };
   return manualContract;
+}
+
+// --- buildCreditSpreadContract - combines a short + long leg into one contract --
+function buildCreditSpreadContract(params: {
+  shortLeg: OptionContract;
+  longLeg: OptionContract;
+  spreadType: SpreadType;
+  stockSymbol: string;
+  contracts: number;
+}): OptionContract {
+  const { shortLeg, longLeg, spreadType, stockSymbol, contracts } = params;
+
+  const shortMid = getMid(shortLeg);
+  const longMid = getMid(longLeg);
+  const shortStrike = getStrike(shortLeg);
+  const longStrike = getStrike(longLeg);
+  const shortBid = getBid(shortLeg);
+  const shortAsk = getAsk(shortLeg);
+
+  const netCredit = Number((shortMid - longMid).toFixed(2));
+  const spreadWidth = Number(Math.abs(shortStrike - longStrike).toFixed(2));
+  const maxLoss = Number(((spreadWidth - netCredit) * 100 * contracts).toFixed(2));
+  const maxProfit = Number((netCredit * 100 * contracts).toFixed(2));
+
+  const shortGrade = getGrade(shortLeg);
+  const longGrade = getGrade(longLeg);
+  // The combined spread is only as good as its weaker leg.
+  const combinedGrade = getGradeRank(shortGrade) <= getGradeRank(longGrade) ? shortGrade : longGrade;
+
+  const shortLegSummary: OptionLeg = {
+    option_symbol: getOptionSymbol(shortLeg),
+    strike_price: shortStrike,
+    bid_price: shortBid,
+    ask_price: shortAsk,
+    mid_price: shortMid,
+  };
+
+  const longLegSummary: OptionLeg = {
+    option_symbol: getOptionSymbol(longLeg),
+    strike_price: longStrike,
+    bid_price: getBid(longLeg),
+    ask_price: getAsk(longLeg),
+    mid_price: longMid,
+  };
+
+  const optionType = getSpreadOptionType(spreadType, normalizeDirection(getContractValue(shortLeg, ["trade_direction", "tradeDirection"], "")));
+
+  return {
+    option_symbol: shortLegSummary.option_symbol,
+    optionSymbol: shortLegSummary.option_symbol,
+    symbol: shortLegSummary.option_symbol,
+    stock_symbol: stockSymbol,
+    stockSymbol: stockSymbol,
+    trade_direction: optionType,
+    tradeDirection: optionType,
+    expiration_date: getExpiration(shortLeg),
+    expirationDate: getExpiration(shortLeg),
+    strike_price: shortStrike,
+    strikePrice: shortStrike,
+    bid_price: shortBid, bidPrice: shortBid, bid: shortBid,
+    ask_price: shortAsk, askPrice: shortAsk, ask: shortAsk,
+    mid_price: netCredit, midPrice: netCredit, mid: netCredit,
+    contracts,
+    estimated_cost: 0,
+    estimatedCost: 0,
+    max_risk: maxLoss,
+    maxRisk: maxLoss,
+    spreadPercent: getSpreadPercent(shortLeg),
+    spread_percent: getSpreadPercent(shortLeg),
+    bidAskSpreadPercent: getSpreadPercent(shortLeg),
+    volume: getVolume(shortLeg),
+    openInterest: getOpenInterest(shortLeg),
+    open_interest: getOpenInterest(shortLeg),
+    liquidityScore: getLiquidityScore(shortLeg),
+    liquidity_score: getLiquidityScore(shortLeg),
+    recommendationScore: getRecommendationScore(shortLeg),
+    recommendation_score: getRecommendationScore(shortLeg),
+    qualityGrade: combinedGrade,
+    contractQualityGrade: combinedGrade,
+    grade: combinedGrade,
+    contract_quality: combinedGrade,
+    quality_grade: combinedGrade,
+    contract_quality_grade: combinedGrade,
+    source: "tradier",
+
+    // --- Credit spread fields ----------------------------------------------
+    spread_type: spreadType,
+    short_leg: shortLegSummary,
+    long_leg: longLegSummary,
+    net_credit: netCredit,
+    spread_width: spreadWidth,
+    max_loss: maxLoss,
+    max_profit: maxProfit,
+
+    recommendationReason: `${getSpreadTypeLabel(spreadType)}: sell ${shortLegSummary.option_symbol} / buy ${longLegSummary.option_symbol}. Net credit $${netCredit.toFixed(2)}, max loss $${maxLoss.toFixed(2)}.`,
+    whyThisContract: [
+      `Short leg ${shortLegSummary.option_symbol} (strike $${shortStrike.toFixed(2)}, grade ${shortGrade}).`,
+      `Long leg ${longLegSummary.option_symbol} (strike $${longStrike.toFixed(2)}, grade ${longGrade}).`,
+      `Spread width $${spreadWidth.toFixed(2)}. Net credit $${netCredit.toFixed(2)}.`,
+      `Max loss $${maxLoss.toFixed(2)}. Max profit $${maxProfit.toFixed(2)}.`,
+      "Read-only market data only. Paper trade save remains controlled by Risk Guard.",
+    ],
+  };
 }
 
 
@@ -826,6 +959,12 @@ export default function OptionContractSelector({
   const [manualAsk, setManualAsk] = useState("");
   const [manualContracts, setManualContracts] = useState("1");
 
+  // --- Credit spread state ----------------------------------------------------
+  const [spreadType, setSpreadType] = useState<SpreadType>(() => getDefaultSpreadType(finalDirection));
+  const [shortLegContract, setShortLegContract] = useState<OptionContract | null>(null);
+
+  const chainOptionType = getSpreadOptionType(spreadType, finalDirection);
+
   // --- All handlers - untouched ---------------------------------------------
   function selectContract(contract: OptionContract | null) {
     const syncedContract = withSyncedContractQuality(contract);
@@ -835,13 +974,52 @@ export default function OptionContractSelector({
     if (typeof onContractSelected === "function") onContractSelected(syncedContract);
   }
 
+  function handleSpreadTypeChange(nextSpreadType: SpreadType) {
+    if (nextSpreadType === spreadType) return;
+    setSpreadType(nextSpreadType);
+    setShortLegContract(null);
+    if (typeof onClearSelectedContract === "function") onClearSelectedContract();
+    else selectContract(null);
+  }
+
+  function handleSelectShortLeg(contract: OptionContract) {
+    if (spreadType === "single_leg") {
+      selectContract(contract);
+      return;
+    }
+
+    setShortLegContract(contract);
+    if (typeof onClearSelectedContract === "function") onClearSelectedContract();
+    else selectContract(null);
+  }
+
+  function handleSelectLongLeg(longLeg: OptionContract) {
+    if (!shortLegContract) return;
+
+    const spreadContract = buildCreditSpreadContract({
+      shortLeg: shortLegContract,
+      longLeg,
+      spreadType,
+      stockSymbol: finalSymbol,
+      contracts: getContracts(shortLegContract),
+    });
+
+    selectContract(spreadContract);
+  }
+
+  function handleClearSpreadSelection() {
+    setShortLegContract(null);
+    if (typeof onClearSelectedContract === "function") onClearSelectedContract();
+    else selectContract(null);
+  }
+
   async function loadMockChain() {
     if (!finalSymbol) { setStatusMessage("Select a scanner setup before loading the option chain."); return; }
     if (finalDirection === "NO TRADE") { setStatusMessage("Direction is NO TRADE. Select a CALL or PUT setup first."); return; }
     setLoadingChain(true);
     setStatusMessage("Loading mock option chain...");
     try {
-      const res = await fetch(`/api/options/chain?symbol=${encodeURIComponent(finalSymbol)}&direction=${encodeURIComponent(finalDirection)}`, { cache: "no-store" });
+      const res = await fetch(`/api/options/chain?symbol=${encodeURIComponent(finalSymbol)}&direction=${encodeURIComponent(chainOptionType)}`, { cache: "no-store" });
       const data = await res.json();
       if (!res.ok || !data?.success) { setStatusMessage(data?.error || "Option chain failed."); setContracts([]); return; }
       const rawContracts = data.contracts || data.optionChain || data.chain || [];
@@ -918,13 +1096,13 @@ export default function OptionContractSelector({
       const rawContracts = Array.isArray(chainData.contracts) ? chainData.contracts : [];
       const directionFiltered = rawContracts.filter((contract: OptionContract) => {
         const optionType = getRawOptionType(contract);
-        return optionType === finalDirection || String(contract.trade_direction || contract.tradeDirection || "").toUpperCase() === finalDirection;
+        return optionType === chainOptionType || String(contract.trade_direction || contract.tradeDirection || "").toUpperCase() === chainOptionType;
       });
 
       const enrichedContracts = directionFiltered.map((contract: OptionContract) =>
         enrichTradierContract(contract, {
           stockSymbol: finalSymbol,
-          direction: finalDirection,
+          direction: chainOptionType,
           accountSize,
           maxRiskPercent,
           maxSpreadPercent,
@@ -934,7 +1112,7 @@ export default function OptionContractSelector({
       setContracts(enrichedContracts);
       setChainSource("tradier");
       setStatusMessage(
-        `Loaded ${enrichedContracts.length} Tradier ${finalDirection} contracts for ${finalSymbol} ${expiration}. Read-only sandbox data. Quality ranking is tuned for spread, liquidity, delta, risk, and expiration.`
+        `Loaded ${enrichedContracts.length} Tradier ${chainOptionType} contracts for ${finalSymbol} ${expiration}. Read-only sandbox data. Quality ranking is tuned for spread, liquidity, delta, risk, and expiration.`
       );
     } catch (error) {
       console.error("loadTradierChain error:", error);
@@ -946,12 +1124,25 @@ export default function OptionContractSelector({
     }
   }
 
-  // --- Auto-load Tradier chain as the default source on symbol/direction change --
+  // --- Auto-load Tradier chain as the default source on symbol/direction/spread type change --
   useEffect(() => {
     if (!finalSymbol || finalDirection === "NO TRADE") return;
     loadTradierChain();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finalSymbol, finalDirection, spreadType]);
+
+  // --- Reset spread type default and in-progress leg selection when the setup changes --
+  useEffect(() => {
+    setSpreadType(getDefaultSpreadType(finalDirection));
+    setShortLegContract(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finalSymbol, finalDirection]);
+
+  // --- Reset in-progress short leg whenever the spread type changes --
+  useEffect(() => {
+    setShortLegContract(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spreadType]);
 
   function handleManualSelect() {
     if (!finalSymbol) { setStatusMessage("Select a scanner setup first."); return; }
@@ -1039,6 +1230,26 @@ export default function OptionContractSelector({
 
   const noCleanRecommendation = visibleContracts.length > 0 && !recommendedContract;
 
+  // --- Long leg (protection) candidates for the in-progress short leg ----------
+  const longLegCandidates = useMemo(() => {
+    if (spreadType === "single_leg" || !shortLegContract) return [];
+
+    const shortStrike = getStrike(shortLegContract);
+    const shortExpiration = getExpiration(shortLegContract);
+    const shortSymbol = getOptionSymbol(shortLegContract);
+
+    return contracts
+      .filter((contract) => {
+        if (getOptionSymbol(contract) === shortSymbol) return false;
+        if (getExpiration(contract) !== shortExpiration) return false;
+        const strike = getStrike(contract);
+        if (spreadType === "bull_put_spread") return strike < shortStrike;
+        if (spreadType === "bear_call_spread") return strike > shortStrike;
+        return false;
+      })
+      .sort((a, b) => Math.abs(getStrike(a) - shortStrike) - Math.abs(getStrike(b) - shortStrike));
+  }, [contracts, spreadType, shortLegContract]);
+
   const selectedOptionSymbol = getOptionSymbol(selectedContract);
 
   return (
@@ -1114,6 +1325,74 @@ export default function OptionContractSelector({
           </p>
         </div>
       </div>
+
+      {/* -- SPREAD TYPE SELECTOR ------------------------------------------- */}
+      <div className="relative overflow-hidden rounded-xl border border-slate-700/60 bg-black/40 ring-1 ring-slate-700/10">
+        <div className="absolute inset-y-0 left-0 w-[3px] bg-purple-500" />
+        <div className="flex flex-col gap-3 px-5 py-4 pl-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-purple-500">
+              OPTIMA-SYS - Spread Type
+            </p>
+            <p className="mt-0.5 font-mono text-[9px] leading-4 text-slate-600">
+              {spreadType === "single_leg"
+                ? "Single leg mode. Selecting a contract saves it directly."
+                : shortLegContract
+                ? `Short leg selected. Pick a long leg below to complete the ${getSpreadTypeLabel(spreadType)}.`
+                : `Pick the short leg (sell side) to begin the ${getSpreadTypeLabel(spreadType)}.`}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(["bull_put_spread", "bear_call_spread", "single_leg"] as SpreadType[]).map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => handleSpreadTypeChange(type)}
+                className={`rounded-lg border px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] transition-all ${
+                  spreadType === type
+                    ? "border-purple-500/40 bg-purple-500/10 text-purple-300"
+                    : "border-slate-700/80 bg-slate-900/80 text-slate-400 hover:border-slate-600"
+                }`}
+              >
+                {getSpreadTypeLabel(type)}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* -- SPREAD SUMMARY -------------------------------------------------- */}
+      {selectedContract && selectedContract.spread_type && selectedContract.spread_type !== "single_leg" && (
+        <div className="relative overflow-hidden rounded-xl border border-purple-500/25 bg-purple-500/5 ring-1 ring-purple-500/10">
+          <div className="absolute inset-y-0 left-0 w-[3px] bg-purple-500" />
+          <div className="px-5 py-4 pl-6">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-purple-500">
+                  {getSpreadTypeLabel(selectedContract.spread_type)} - Spread Summary
+                </p>
+                <p className="mt-1 font-mono text-[9px] leading-4 text-slate-400">
+                  Short: {selectedContract.short_leg?.option_symbol || "-"} (sell) - Long: {selectedContract.long_leg?.option_symbol || "-"} (buy)
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleClearSpreadSelection}
+                className="shrink-0 rounded-lg border border-slate-700/80 bg-slate-900/80 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400 transition hover:border-red-500/30 hover:text-red-400"
+              >
+                Clear Spread x
+              </button>
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+              <MiniStat label="Net Credit" value={`$${(selectedContract.net_credit ?? 0).toFixed(2)}`} valueClass="text-emerald-300" />
+              <MiniStat label="Spread Width" value={`$${(selectedContract.spread_width ?? 0).toFixed(2)}`} />
+              <MiniStat label="Max Loss" value={`$${(selectedContract.max_loss ?? 0).toFixed(2)}`} valueClass="text-red-400" />
+              <MiniStat label="Max Profit" value={`$${(selectedContract.max_profit ?? 0).toFixed(2)}`} valueClass="text-emerald-300" />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* -- STATUS MESSAGE ------------------------------------------------ */}
       {statusMessage && (
@@ -1304,6 +1583,63 @@ export default function OptionContractSelector({
         </div>
       )}
 
+      {/* -- LONG LEG (PROTECTION) PICKER ----------------------------------- */}
+      {spreadType !== "single_leg" && shortLegContract && !selectedContract && (
+        <div className="relative overflow-hidden rounded-xl border border-purple-500/25 bg-purple-500/5 ring-1 ring-purple-500/10">
+          <div className="absolute inset-y-0 left-0 w-[3px] bg-purple-500" />
+          <div className="px-5 py-4 pl-6">
+            <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-purple-500">
+              Long Leg (Protection) - Step 2 of 2
+            </p>
+            <p className="mt-1 font-mono text-[9px] leading-4 text-slate-500">
+              Short leg: {getOptionSymbol(shortLegContract)} (strike ${getStrike(shortLegContract).toFixed(2)}).
+              {" "}Pick a {spreadType === "bull_put_spread" ? "lower" : "higher"}-strike {getSpreadOptionType(spreadType, finalDirection)} in the same expiration to define max loss.
+            </p>
+
+            {longLegCandidates.length === 0 ? (
+              <p className="mt-3 font-mono text-[9px] text-slate-600">
+                No eligible long leg candidates loaded for this expiration. Load more of the chain or pick a different short leg.
+              </p>
+            ) : (
+              <div className="mt-3 space-y-2">
+                {longLegCandidates.map((contract) => {
+                  const optionSymbol = getOptionSymbol(contract);
+                  const strike = getStrike(contract);
+                  const bid = getBid(contract);
+                  const ask = getAsk(contract);
+                  const mid = getMid(contract);
+                  const grade = getGrade(contract);
+
+                  return (
+                    <div
+                      key={optionSymbol}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800/80 bg-black/30 px-3 py-2"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="break-all font-mono text-[10px] font-black text-white">{optionSymbol}</span>
+                        <span className={`rounded border px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] ${getGradeBadge(grade)}`}>
+                          {grade}
+                        </span>
+                        <span className="font-mono text-[9px] text-slate-500">
+                          Strike ${strike.toFixed(2)} - Bid ${bid.toFixed(2)} / Ask ${ask.toFixed(2)} / Mid ${mid.toFixed(2)}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectLongLeg(contract)}
+                        className="rounded-lg border border-purple-500/40 bg-purple-500/10 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-purple-300 transition hover:bg-purple-500/20"
+                      >
+                        Select Long Leg &gt;
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* -- EMPTY STATE --------------------------------------------------- */}
       {visibleContracts.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-slate-800 bg-black/30 py-10">
@@ -1321,6 +1657,11 @@ export default function OptionContractSelector({
             const grade = getGrade(contract);
             const risk = getRiskStatus(contract, { accountSize, maxRiskPercent, maxSpreadPercent });
             const isSelected = selectedOptionSymbol && selectedOptionSymbol === optionSymbol;
+            const isShortLeg =
+              spreadType !== "single_leg" &&
+              !selectedContract &&
+              !!shortLegContract &&
+              getOptionSymbol(shortLegContract) === optionSymbol;
             const bid = getBid(contract);
             const ask = getAsk(contract);
             const mid = getMid(contract);
@@ -1340,6 +1681,8 @@ export default function OptionContractSelector({
                 className={`relative overflow-hidden rounded-xl border ring-1 transition-all ${
                   isSelected
                     ? "border-cyan-500/40 bg-slate-900/90 ring-cyan-500/20"
+                    : isShortLeg
+                    ? "border-purple-500/40 bg-slate-900/90 ring-purple-500/20"
                     : `border-slate-700/60 bg-slate-900/60 ${getGradeRing(grade)}`
                 }`}
               >
@@ -1350,8 +1693,15 @@ export default function OptionContractSelector({
                     style={{ background: "linear-gradient(90deg, transparent, #06b6d4 40%, #3b82f6 70%, transparent)" }}
                   />
                 )}
+                {/* Short leg in progress: top purple line */}
+                {isShortLeg && (
+                  <div
+                    className="absolute inset-x-0 top-0 h-px"
+                    style={{ background: "linear-gradient(90deg, transparent, #a855f7 40%, #6366f1 70%, transparent)" }}
+                  />
+                )}
                 {/* Left grade accent bar */}
-                <div className={`absolute inset-y-0 left-0 w-[3px] ${isSelected ? "bg-cyan-500" : getGradeBar(grade)}`} />
+                <div className={`absolute inset-y-0 left-0 w-[3px] ${isSelected ? "bg-cyan-500" : isShortLeg ? "bg-purple-500" : getGradeBar(grade)}`} />
 
                 <div className="px-5 py-4 pl-6">
                   {/* -- Row 1: Symbol + badges --------------------------- */}
@@ -1368,6 +1718,11 @@ export default function OptionContractSelector({
                     {isSelected && (
                       <span className="rounded border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-cyan-300">
                         Selected
+                      </span>
+                    )}
+                    {isShortLeg && (
+                      <span className="rounded border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-purple-300">
+                        Short Leg
                       </span>
                     )}
                   </div>
@@ -1414,16 +1769,26 @@ export default function OptionContractSelector({
                   {/* -- Row 5: Action buttons ----------------------------- */}
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <button
-                      onClick={() => selectContract(contract)}
+                      onClick={() => handleSelectShortLeg(contract)}
                       className={`rounded-lg border px-4 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] transition-all ${
-                        isWeak
-                          ? "border-orange-500/40 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20"
-                          : isSelected
+                        isSelected
                           ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20"
+                          : isShortLeg
+                          ? "border-purple-500/40 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20"
+                          : isWeak
+                          ? "border-orange-500/40 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20"
                           : "border-slate-700/80 bg-slate-900/80 text-slate-300 hover:border-cyan-500/30 hover:text-cyan-300"
                       }`}
                     >
-                      {isWeak ? "Select for Override Test >" : isSelected ? "Selected" : "Select Contract >"}
+                      {isSelected
+                        ? "Selected"
+                        : isShortLeg
+                        ? "Short Leg Selected"
+                        : isWeak
+                        ? "Select for Override Test >"
+                        : spreadType !== "single_leg"
+                        ? "Select Short Leg >"
+                        : "Select Contract >"}
                     </button>
 
                     {isWeak && (

@@ -29,3 +29,15 @@ export type PaperTrade = Scan & {
   openedAt: string;
   closedAt?: string;
 };
+
+// --- Credit spread support -------------------------------------------------
+
+export type SpreadType = "single_leg" | "bull_put_spread" | "bear_call_spread";
+
+export type OptionLeg = {
+  option_symbol: string;
+  strike_price: number;
+  bid_price: number;
+  ask_price: number;
+  mid_price: number;
+};
