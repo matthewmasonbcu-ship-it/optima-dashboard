@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../lib/supabaseClient";
+import { BackgroundPaths } from "../components/ui/BackgroundPaths";
+import { FloatingShapes } from "../components/ui/FloatingShapes";
 
 import WatchlistManager from "../components/WatchlistManager";
 import PaperTradeTracker from "../components/PaperTradeTracker";
@@ -1244,9 +1246,12 @@ const sendSelectedContractToApprovalQueue = () => {
 };
 
   return (
-    <main className="flex h-screen flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,_#172554_0,_#020617_35%,_#000_100%)] font-mono text-white">
+    <main className="relative flex h-screen flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,_#172554_0,_#020617_35%,_#000_100%)] font-mono text-white">
+      <BackgroundPaths />
+      <FloatingShapes />
+
       {/* Slim top bar */}
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-slate-800 bg-slate-950/90 px-4">
+      <header className="relative z-10 flex h-12 shrink-0 items-center justify-between border-b border-slate-800 bg-slate-950/90 px-4">
         <div className="flex items-center gap-2">
           <span className="relative flex h-2 w-2">
             <span className="absolute h-2 w-2 animate-ping rounded-full bg-cyan-400 opacity-60" />
@@ -1270,7 +1275,7 @@ const sendSelectedContractToApprovalQueue = () => {
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="relative z-10 flex flex-1 overflow-hidden">
         {/* Icon sidebar */}
         <nav className="flex w-16 shrink-0 flex-col items-center gap-2 border-r border-slate-800 bg-slate-950/90 py-4">
           {TABS.map((tab) => (
