@@ -2,7 +2,7 @@
 
 // --- UI ONLY - all chain logic, filtering, sorting, and selection untouched --
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type TradeDirection = "CALL" | "PUT" | "NO TRADE";
 
@@ -945,6 +945,13 @@ export default function OptionContractSelector({
       setLoadingChain(false);
     }
   }
+
+  // --- Auto-load Tradier chain as the default source on symbol/direction change --
+  useEffect(() => {
+    if (!finalSymbol || finalDirection === "NO TRADE") return;
+    loadTradierChain();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finalSymbol, finalDirection]);
 
   function handleManualSelect() {
     if (!finalSymbol) { setStatusMessage("Select a scanner setup first."); return; }

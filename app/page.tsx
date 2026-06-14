@@ -1069,6 +1069,23 @@ export default function Home() {
         tradeDirection === "CALL" ? entryPrice * 1.03 : entryPrice * 0.97
       );
 
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+
+      const dailyCountCheck = await supabase
+        .from("paper_trades")
+        .select("id")
+        .gte("created_at", startOfDay.toISOString());
+
+      if (dailyCountCheck.error) {
+        console.error("Daily trade count check failed:", dailyCountCheck.error);
+      }
+
+      if (dailyCountCheck.data && dailyCountCheck.data.length >= 3) {
+        setStatusMessage("Paper trade blocked: daily limit of 3 trades reached.");
+        return;
+      }
+
       const duplicateCheck = await supabase
         .from("paper_trades")
         .select("id")
