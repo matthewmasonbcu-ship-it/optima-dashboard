@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendPhoneAlertSms } from "@/lib/sms/sendPhoneAlertSms";
+import { sendPhoneAlertEmailSms } from "@/lib/sms/sendPhoneAlertEmailSms";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -76,12 +77,18 @@ const DELIVERY_LOCKS = {
   dashboardLogOnly: true,
 };
 
-function buildDeliveryStatus(smsResult: { success: boolean }) {
+function buildDeliveryStatus(
+  smsResult: { success: boolean },
+  emailSmsResult: { success: boolean } | null
+) {
+  const emailSmsSent = emailSmsResult?.success ?? false;
+
   return {
     smsSent: smsResult.success,
+    emailSmsSent,
     pushSent: false,
     emailSent: false,
-    dashboardLogOnly: !smsResult.success,
+    dashboardLogOnly: !smsResult.success && !emailSmsSent,
   };
 }
 
@@ -318,14 +325,49 @@ export async function POST(request: Request) {
 
     const phoneMessage = buildPhoneMessage(preview);
     const smsResult = await sendPhoneAlertSms(phoneMessage);
+    const emailSmsResult = smsResult.success
+      ? null
+      : await sendPhoneAlertEmailSms(phoneMessage);
 
-    const channel = smsResult.success ? "SMS" : "DASHBOARD_SIMULATION";
-    const deliveryMode = smsResult.success ? "TWILIO" : "DASHBOARD_SIMULATION";
-    const deliveryStatus = smsResult.success
-      ? "SENT"
-      : smsResult.error === "Twilio environment variables are not configured."
-      ? "LOGGED_ONLY"
-      : "FAILED";
+    let channel: string;
+    let deliveryMode: string;
+    let deliveryStatus: string;
+    let deliveryProvider: string | null;
+    let deliveryError: string | null;
+
+    if (smsResult.success) {
+      channel = "SMS";
+      deliveryMode = "TWILIO";
+      deliveryStatus = "SENT";
+      deliveryProvider = "TWILIO";
+      deliveryError = null;
+    } else if (emailSmsResult?.success) {
+      channel = "SMS";
+      deliveryMode = "EMAIL_SMS_GATEWAY";
+      deliveryStatus = "SENT";
+      deliveryProvider = "SMTP";
+      deliveryError = null;
+    } else {
+      const twilioNotConfigured =
+        smsResult.error === "Twilio environment variables are not configured.";
+      const emailNotConfigured =
+        emailSmsResult?.error ===
+        "Email-to-SMS environment variables are not configured.";
+
+      channel = "DASHBOARD_SIMULATION";
+      deliveryMode = "DASHBOARD_SIMULATION";
+      deliveryStatus =
+        twilioNotConfigured && emailNotConfigured ? "LOGGED_ONLY" : "FAILED";
+      deliveryProvider = null;
+      deliveryError = [smsResult.error, emailSmsResult?.error]
+        .filter(Boolean)
+        .join(" | ") || null;
+    }
+
+    const deliveredAt =
+      smsResult.success || emailSmsResult?.success
+        ? new Date().toISOString()
+        : null;
 
     const { data: phoneAlertEvent, error: insertError } = await supabase
       .from("phone_alert_events")
@@ -342,9 +384,9 @@ export async function POST(request: Request) {
         channel,
         delivery_mode: deliveryMode,
         delivery_status: deliveryStatus,
-        delivery_provider: smsResult.success ? "TWILIO" : null,
-        delivery_error: smsResult.success ? null : smsResult.error,
-        sent_at: smsResult.success ? new Date().toISOString() : null,
+        delivery_provider: deliveryProvider,
+        delivery_error: deliveryError,
+        sent_at: deliveredAt,
 
         contract_symbol: preview.contract_symbol ?? null,
         strike: preview.strike ?? null,
@@ -380,7 +422,7 @@ export async function POST(request: Request) {
         duplicatePrevented: false,
         route: ROUTE,
         mode: "phone_review_alert_log_only",
-        message: smsResult.success
+        message: deliveredAt
           ? "Phone review alert logged and linked to preview. SMS sent. No broker order or live order was sent."
           : "Phone review alert logged and linked to preview. SMS was not sent. No broker order or live order was sent.",
         phoneAlertEvent,
@@ -388,7 +430,7 @@ export async function POST(request: Request) {
         preview: updatedPreview,
         safetyLocks: SAFETY_LOCKS,
         brokerCall: BROKER_CALL_LOCKS,
-        delivery: buildDeliveryStatus(smsResult),
+        delivery: buildDeliveryStatus(smsResult, emailSmsResult),
       },
       { status: 200 }
     );
