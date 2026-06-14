@@ -84,17 +84,17 @@ const DELIVERY_LOCKS = {
 };
 
 function buildDeliveryStatus(
-  smsResult: { success: boolean },
-  emailSmsResult: { success: boolean } | null
+  emailSmsResult: { success: boolean },
+  smsResult: { success: boolean } | null
 ) {
-  const emailSmsSent = emailSmsResult?.success ?? false;
+  const smsSent = smsResult?.success ?? false;
 
   return {
-    smsSent: smsResult.success,
-    emailSmsSent,
+    smsSent,
+    emailSmsSent: emailSmsResult.success,
     pushSent: false,
     emailSent: false,
-    dashboardLogOnly: !smsResult.success && !emailSmsSent,
+    dashboardLogOnly: !emailSmsResult.success && !smsSent,
   };
 }
 
@@ -372,10 +372,10 @@ export async function POST(request: Request) {
     const reviewLink = `${APP_BASE_URL}/phone-review/${token}`;
 
     const phoneMessage = buildPhoneMessage(preview, reviewLink);
-    const smsResult = await sendPhoneAlertSms(phoneMessage);
-    const emailSmsResult = smsResult.success
+    const emailSmsResult = await sendPhoneAlertEmailSms(phoneMessage);
+    const smsResult = emailSmsResult.success
       ? null
-      : await sendPhoneAlertEmailSms(phoneMessage);
+      : await sendPhoneAlertSms(phoneMessage);
 
     let channel: string;
     let deliveryMode: string;
@@ -383,37 +383,37 @@ export async function POST(request: Request) {
     let deliveryProvider: string | null;
     let deliveryError: string | null;
 
-    if (smsResult.success) {
-      channel = "SMS";
-      deliveryMode = "TWILIO";
-      deliveryStatus = "SENT";
-      deliveryProvider = "TWILIO";
-      deliveryError = null;
-    } else if (emailSmsResult?.success) {
+    if (emailSmsResult.success) {
       channel = "SMS";
       deliveryMode = "EMAIL_SMS_GATEWAY";
       deliveryStatus = "SENT";
       deliveryProvider = "SMTP";
       deliveryError = null;
+    } else if (smsResult?.success) {
+      channel = "SMS";
+      deliveryMode = "TWILIO";
+      deliveryStatus = "SENT";
+      deliveryProvider = "TWILIO";
+      deliveryError = null;
     } else {
-      const twilioNotConfigured =
-        smsResult.error === "Twilio environment variables are not configured.";
       const emailNotConfigured =
-        emailSmsResult?.error ===
+        emailSmsResult.error ===
         "Email-to-SMS environment variables are not configured.";
+      const twilioNotConfigured =
+        smsResult?.error === "Twilio environment variables are not configured.";
 
       channel = "DASHBOARD_SIMULATION";
       deliveryMode = "DASHBOARD_SIMULATION";
       deliveryStatus =
-        twilioNotConfigured && emailNotConfigured ? "LOGGED_ONLY" : "FAILED";
+        emailNotConfigured && twilioNotConfigured ? "LOGGED_ONLY" : "FAILED";
       deliveryProvider = null;
-      deliveryError = [smsResult.error, emailSmsResult?.error]
+      deliveryError = [emailSmsResult.error, smsResult?.error]
         .filter(Boolean)
         .join(" | ") || null;
     }
 
     const deliveredAt =
-      smsResult.success || emailSmsResult?.success
+      emailSmsResult.success || smsResult?.success
         ? new Date().toISOString()
         : null;
 
@@ -485,7 +485,7 @@ export async function POST(request: Request) {
         preview: updatedPreview,
         safetyLocks: SAFETY_LOCKS,
         brokerCall: BROKER_CALL_LOCKS,
-        delivery: buildDeliveryStatus(smsResult, emailSmsResult),
+        delivery: buildDeliveryStatus(emailSmsResult, smsResult),
       },
       { status: 200 }
     );
