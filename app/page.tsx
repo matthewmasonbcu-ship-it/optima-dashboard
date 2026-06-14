@@ -831,6 +831,7 @@ export default function Home() {
   const [testingOverrideEnabled, setTestingOverrideEnabled] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("trade");
   const [openTradesCount, setOpenTradesCount] = useState(0);
+  const [tickerQuotes, setTickerQuotes] = useState<Record<string, QuoteData | null>>({});
 
   const selectedSymbol = selectedSetup?.symbol || "";
 
@@ -886,6 +887,32 @@ export default function Home() {
 
     loadOpenTradesCount();
   }, [refreshKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadTickerQuotes() {
+      const symbols = Array.from(new Set(["SPY", ...watchlist]));
+      const quotes: Record<string, QuoteData | null> = {};
+
+      for (const symbol of symbols) {
+        const quote = await fetchQuote(symbol);
+        quotes[symbol] = quote;
+      }
+
+      if (!cancelled) {
+        setTickerQuotes(quotes);
+      }
+    }
+
+    loadTickerQuotes();
+    const interval = setInterval(loadTickerQuotes, 30000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [watchlist]);
 
   async function runScanner() {
     setIsScanning(true);
@@ -1272,6 +1299,34 @@ const sendSelectedContractToApprovalQueue = () => {
           <span className="text-sm font-black uppercase tracking-[0.3em] text-cyan-400">
             OPTIMA
           </span>
+        </div>
+
+        <div className="min-w-0 flex-1 overflow-hidden mx-4">
+          <motion.div
+            className="flex items-center gap-6 whitespace-nowrap"
+            animate={{ x: ["0%", "-50%"] }}
+            transition={{ duration: 35, repeat: Infinity, ease: "linear" }}
+          >
+            {[...Array.from(new Set(["SPY", ...watchlist])), ...Array.from(new Set(["SPY", ...watchlist]))].map((symbol, i) => {
+              const quote = tickerQuotes[symbol];
+              const change = quote?.d ?? 0;
+              const changePercent = quote?.dp ?? 0;
+              const isPositive = change >= 0;
+
+              return (
+                <span key={`${symbol}-${i}`} className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.15em]">
+                  <span className="text-slate-300">{symbol}</span>
+                  {quote ? (
+                    <span className={isPositive ? "text-emerald-400" : "text-red-400"}>
+                      {isPositive ? "+" : ""}{change.toFixed(2)} ({isPositive ? "+" : ""}{changePercent.toFixed(2)}%)
+                    </span>
+                  ) : (
+                    <span className="text-slate-600">--</span>
+                  )}
+                </span>
+              );
+            })}
+          </motion.div>
         </div>
 
         <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em]">
