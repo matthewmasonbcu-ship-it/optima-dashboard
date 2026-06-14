@@ -787,6 +787,16 @@ const TABS: { id: TabId; label: string; icon: ReactNode }[] = [
   },
 ];
 
+const tradeColumnContainerVariants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.08 } },
+};
+
+const tradeColumnItemVariants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0 },
+};
+
 export default function Home() {
   const [watchlist, setWatchlist] = useState<string[]>(DEFAULT_WATCHLIST);
   const [scannerResults, setScannerResults] = useState<ScanResult[]>([]);
@@ -1269,14 +1279,21 @@ const sendSelectedContractToApprovalQueue = () => {
               type="button"
               onClick={() => setActiveTab(tab.id)}
               title={tab.label}
-              className={`flex h-12 w-12 flex-col items-center justify-center gap-1 rounded-xl border transition ${
+              className={`relative flex h-12 w-12 flex-col items-center justify-center gap-1 rounded-xl border border-transparent transition ${
                 activeTab === tab.id
-                  ? "border-cyan-400/60 bg-cyan-500/10 text-cyan-300"
-                  : "border-transparent text-slate-500 hover:bg-slate-900 hover:text-slate-300"
+                  ? "text-cyan-300"
+                  : "text-slate-500 hover:bg-slate-900 hover:text-slate-300"
               }`}
             >
-              {tab.icon}
-              <span className="text-[8px] font-bold uppercase tracking-wider">
+              {activeTab === tab.id && (
+                <motion.div
+                  layoutId="activeTabPill"
+                  className="absolute inset-0 rounded-xl border border-cyan-400/60 bg-cyan-500/10"
+                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10">{tab.icon}</span>
+              <span className="relative z-10 text-[8px] font-bold uppercase tracking-wider">
                 {tab.label}
               </span>
             </button>
@@ -1288,16 +1305,29 @@ const sendSelectedContractToApprovalQueue = () => {
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
               className="h-full"
             >
               {activeTab === "trade" && (
-                <div className="grid h-full grid-cols-1 gap-4 xl:grid-cols-3">
-                  <div className="flex h-full flex-col gap-4 overflow-y-auto">
-                    <div className="rounded-[1.75rem] border border-slate-800 bg-slate-950/85 p-5 shadow-xl shadow-black/30 backdrop-blur">
+                <motion.div
+                  className="grid h-full grid-cols-1 gap-4 xl:grid-cols-3"
+                  initial="hidden"
+                  animate="visible"
+                  variants={tradeColumnContainerVariants}
+                >
+                  <motion.div
+                    variants={tradeColumnItemVariants}
+                    transition={{ duration: 0.25, ease: "easeOut" }}
+                    className="flex h-full flex-col gap-4 overflow-y-auto"
+                  >
+                    <motion.div
+                      whileHover={{ scale: 1.01 }}
+                      transition={{ duration: 0.2 }}
+                      className="rounded-[1.75rem] border border-slate-800 bg-slate-950/85 p-5 shadow-xl shadow-black/30 backdrop-blur"
+                    >
                       <div className="mb-4 flex items-start justify-between gap-4">
                         <div>
                           <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
@@ -1309,39 +1339,57 @@ const sendSelectedContractToApprovalQueue = () => {
                           </p>
                         </div>
 
-                        <button
+                        <motion.button
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.97 }}
                           onClick={runScanner}
                           disabled={isScanning}
                           className="rounded-2xl bg-emerald-400 px-4 py-2 text-sm font-black text-slate-950 shadow-lg shadow-emerald-950/20 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {isScanning ? "Scanning..." : "Run"}
-                        </button>
+                        </motion.button>
                       </div>
 
-                      {statusMessage && (
-                        <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-900/80 p-3 text-sm text-slate-300">
-                          {statusMessage}
-                        </div>
-                      )}
+                      <AnimatePresence>
+                        {statusMessage && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -8 }}
+                            transition={{ duration: 0.2 }}
+                            className="mb-4 rounded-2xl border border-slate-800 bg-slate-900/80 p-3 text-sm text-slate-300"
+                          >
+                            {statusMessage}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
 
                       <WatchlistManager
                         watchlist={watchlist}
                         setWatchlist={setWatchlist}
                         protectedSymbols={["SPY"]}
                       />
-                    </div>
-                  </div>
+                    </motion.div>
+                  </motion.div>
 
-                  <div className="h-full overflow-y-auto">
+                  <motion.div
+                    variants={tradeColumnItemVariants}
+                    transition={{ duration: 0.25, ease: "easeOut" }}
+                    className="h-full overflow-y-auto"
+                  >
                     <ScannerResultsPanel
                       scannerResults={scannerResults}
                       selectedSymbol={selectedSymbol}
                       onSelectSetup={handleSelectSetup}
                       marketCondition={marketCondition}
                     />
-                  </div>
+                  </motion.div>
 
-                  <div className="h-full overflow-y-auto">
+                  <motion.div
+                    variants={tradeColumnItemVariants}
+                    transition={{ duration: 0.25, ease: "easeOut" }}
+                    className="h-full overflow-y-auto"
+                  >
                     <OptionTradeCommandCenter
                       selectedSetup={selectedSetup}
                       selectedSymbol={selectedSymbol}
@@ -1365,8 +1413,8 @@ const sendSelectedContractToApprovalQueue = () => {
                       testingOverrideEnabled={testingOverrideEnabled}
                       setTestingOverrideEnabled={setTestingOverrideEnabled}
                     />
-                  </div>
-                </div>
+                  </motion.div>
+                </motion.div>
               )}
 
               {activeTab === "positions" && (

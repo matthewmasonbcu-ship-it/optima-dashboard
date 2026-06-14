@@ -1,5 +1,7 @@
 "use client";
 
+import { motion } from "framer-motion";
+
 // ─── UI ONLY — all scanner logic, props, types, and selection behavior untouched ───
 
 type TradeDirection = "CALL" | "PUT" | "NO TRADE";
@@ -361,9 +363,12 @@ export default function ScannerResultsPanel({
               const volume = getVolumeBadge(result);
 
               return (
-                <button
+                <motion.button
                   key={result.symbol}
                   onClick={() => handleSelect(result)}
+                  whileHover={{ scale: 1.01 }}
+                  whileTap={{ scale: 0.99 }}
+                  transition={{ duration: 0.15 }}
                   className={`group relative w-full overflow-hidden rounded-xl border text-left transition-all duration-150
                     ${isSelected
                       ? "border-cyan-500/40 bg-slate-900/90 ring-1 ring-cyan-500/20 shadow-lg shadow-cyan-950/20"
@@ -507,7 +512,7 @@ export default function ScannerResultsPanel({
                       </div>
                     )}
                   </div>
-                </button>
+                </motion.button>
               );
             })}
           </div>
