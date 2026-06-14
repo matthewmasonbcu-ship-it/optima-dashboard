@@ -80,6 +80,23 @@ export async function POST(request: Request) {
       grade,
       quality_grade,
       contract_quality_grade,
+
+      // Credit spread support
+      spread_type,
+      short_leg_option_symbol,
+      short_leg_strike_price,
+      short_leg_bid_price,
+      short_leg_ask_price,
+      short_leg_mid_price,
+      long_leg_option_symbol,
+      long_leg_strike_price,
+      long_leg_bid_price,
+      long_leg_ask_price,
+      long_leg_mid_price,
+      net_credit,
+      spread_width,
+      max_loss,
+      max_profit,
     } = body;
 
     if (!paper_trade_id) {
@@ -149,6 +166,23 @@ export async function POST(request: Request) {
       override_used: toBoolean(override_used),
       override_reason: override_reason || null,
       contract_quality: savedContractQuality,
+
+      // Credit spread support
+      spread_type: spread_type || "single_leg",
+      short_leg_option_symbol: short_leg_option_symbol || null,
+      short_leg_strike_price: toNumberOrNull(short_leg_strike_price),
+      short_leg_bid_price: toNumberOrNull(short_leg_bid_price),
+      short_leg_ask_price: toNumberOrNull(short_leg_ask_price),
+      short_leg_mid_price: toNumberOrNull(short_leg_mid_price),
+      long_leg_option_symbol: long_leg_option_symbol || null,
+      long_leg_strike_price: toNumberOrNull(long_leg_strike_price),
+      long_leg_bid_price: toNumberOrNull(long_leg_bid_price),
+      long_leg_ask_price: toNumberOrNull(long_leg_ask_price),
+      long_leg_mid_price: toNumberOrNull(long_leg_mid_price),
+      net_credit: toNumberOrNull(net_credit),
+      spread_width: toNumberOrNull(spread_width),
+      max_loss: toNumberOrNull(max_loss),
+      max_profit: toNumberOrNull(max_profit),
     };
 
     const { data, error } = await supabase
