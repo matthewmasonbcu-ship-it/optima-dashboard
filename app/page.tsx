@@ -953,6 +953,24 @@ export default function Home() {
 
       setScannerResults(sorted);
 
+      const topResult = sorted[0];
+
+      if (
+        topResult &&
+        (topResult.setupScore ?? 0) >= 75 &&
+        topResult.direction !== "NO TRADE"
+      ) {
+        fetch("/api/alerts/scanner-notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            symbol: topResult.symbol,
+            direction: topResult.direction,
+            setupScore: topResult.setupScore,
+          }),
+        }).catch((error) => console.error("scanner-notify error:", error));
+      }
+
       if (sorted.length > 0) {
         setSelectedSetup(sorted[0]);
         setSelectedContract(null);
