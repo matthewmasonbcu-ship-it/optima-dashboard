@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { randomBytes, createHash } from "crypto";
 import { sendPhoneAlertSms } from "@/lib/sms/sendPhoneAlertSms";
 import { sendPhoneAlertEmailSms } from "@/lib/sms/sendPhoneAlertEmailSms";
+
+const APP_BASE_URL =
+  process.env.NEXT_PUBLIC_APP_BASE_URL ?? "https://optima-dashboard-azm9.vercel.app";
+
+const PHONE_REVIEW_TOKEN_TTL_MINUTES = 60;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -108,7 +114,7 @@ function blockedResponse(reason: string, status = 400) {
   );
 }
 
-function buildPhoneMessage(preview: PaperOrderPreviewRow) {
+function buildPhoneMessage(preview: PaperOrderPreviewRow, reviewLink: string | null) {
   const symbol = preview.symbol ?? "UNKNOWN";
   const contract = preview.contract_symbol ?? "No contract";
   const grade = preview.contract_quality ?? "N/A";
@@ -118,14 +124,53 @@ function buildPhoneMessage(preview: PaperOrderPreviewRow) {
       ? `$${preview.max_risk_dollars.toFixed(2)}`
       : "N/A";
 
-  return [
+  const lines = [
     `PHONE REVIEW: ${symbol} WATCH setup ready.`,
     `Contract: ${contract}.`,
     `Grade: ${grade}.`,
     `Risk Guard: ${riskGuard}.`,
     `Max Risk: ${maxRisk}.`,
     "No broker order or live order submitted.",
-  ].join(" ");
+  ];
+
+  if (reviewLink) {
+    lines.push(`Approve or reject: ${reviewLink}`);
+  }
+
+  return lines.join(" ");
+}
+
+function generatePhoneReviewToken() {
+  const token = randomBytes(32).toString("hex");
+  const tokenHash = createHash("sha256").update(token).digest("hex");
+  const expiresAt = new Date(
+    Date.now() + PHONE_REVIEW_TOKEN_TTL_MINUTES * 60 * 1000
+  ).toISOString();
+
+  return { token, tokenHash, expiresAt };
+}
+
+async function savePhoneReviewToken({
+  phoneAlertEventId,
+  paperOrderPreviewId,
+  tokenHash,
+  expiresAt,
+}: {
+  phoneAlertEventId: string;
+  paperOrderPreviewId: string;
+  tokenHash: string;
+  expiresAt: string;
+}) {
+  const { error } = await supabase.from("phone_review_tokens").insert({
+    phone_alert_event_id: phoneAlertEventId,
+    paper_order_preview_id: paperOrderPreviewId,
+    token_hash: tokenHash,
+    expires_at: expiresAt,
+  });
+
+  if (error) {
+    console.error("Failed to save phone review token:", error);
+  }
 }
 
 async function linkExistingPhoneAlertToPreview({
@@ -323,7 +368,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const phoneMessage = buildPhoneMessage(preview);
+    const { token, tokenHash, expiresAt } = generatePhoneReviewToken();
+    const reviewLink = `${APP_BASE_URL}/phone-review/${token}`;
+
+    const phoneMessage = buildPhoneMessage(preview, reviewLink);
     const smsResult = await sendPhoneAlertSms(phoneMessage);
     const emailSmsResult = smsResult.success
       ? null
@@ -409,6 +457,13 @@ export async function POST(request: Request) {
     if (!phoneAlertEvent) {
       return blockedResponse("Phone alert event was not created.", 500);
     }
+
+    await savePhoneReviewToken({
+      phoneAlertEventId: phoneAlertEvent.id,
+      paperOrderPreviewId: preview.id,
+      tokenHash,
+      expiresAt,
+    });
 
     const updatedPreview = await linkExistingPhoneAlertToPreview({
       preview,
