@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { sendPhoneAlertSms } from "@/lib/sms/sendPhoneAlertSms";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -75,6 +76,15 @@ const DELIVERY_LOCKS = {
   dashboardLogOnly: true,
 };
 
+function buildDeliveryStatus(smsResult: { success: boolean }) {
+  return {
+    smsSent: smsResult.success,
+    pushSent: false,
+    emailSent: false,
+    dashboardLogOnly: !smsResult.success,
+  };
+}
+
 function blockedResponse(reason: string, status = 400) {
   return NextResponse.json(
     {
@@ -107,7 +117,7 @@ function buildPhoneMessage(preview: PaperOrderPreviewRow) {
     `Grade: ${grade}.`,
     `Risk Guard: ${riskGuard}.`,
     `Max Risk: ${maxRisk}.`,
-    "Dashboard simulation only — no SMS, push, broker order, or live order submitted.",
+    "No broker order or live order submitted.",
   ].join(" ");
 }
 
@@ -307,6 +317,15 @@ export async function POST(request: Request) {
     }
 
     const phoneMessage = buildPhoneMessage(preview);
+    const smsResult = await sendPhoneAlertSms(phoneMessage);
+
+    const channel = smsResult.success ? "SMS" : "DASHBOARD_SIMULATION";
+    const deliveryMode = smsResult.success ? "TWILIO" : "DASHBOARD_SIMULATION";
+    const deliveryStatus = smsResult.success
+      ? "SENT"
+      : smsResult.error === "Twilio environment variables are not configured."
+      ? "LOGGED_ONLY"
+      : "FAILED";
 
     const { data: phoneAlertEvent, error: insertError } = await supabase
       .from("phone_alert_events")
@@ -320,9 +339,12 @@ export async function POST(request: Request) {
         message: phoneMessage,
 
         priority: "HIGH",
-        channel: "DASHBOARD_SIMULATION",
-        delivery_mode: "DASHBOARD_SIMULATION",
-        delivery_status: "LOGGED_ONLY",
+        channel,
+        delivery_mode: deliveryMode,
+        delivery_status: deliveryStatus,
+        delivery_provider: smsResult.success ? "TWILIO" : null,
+        delivery_error: smsResult.success ? null : smsResult.error,
+        sent_at: smsResult.success ? new Date().toISOString() : null,
 
         contract_symbol: preview.contract_symbol ?? null,
         strike: preview.strike ?? null,
@@ -358,14 +380,15 @@ export async function POST(request: Request) {
         duplicatePrevented: false,
         route: ROUTE,
         mode: "phone_review_alert_log_only",
-        message:
-          "Phone review alert logged and linked to preview. No SMS, push, broker order, or live order was sent.",
+        message: smsResult.success
+          ? "Phone review alert logged and linked to preview. SMS sent. No broker order or live order was sent."
+          : "Phone review alert logged and linked to preview. SMS was not sent. No broker order or live order was sent.",
         phoneAlertEvent,
         previewId: preview.id,
         preview: updatedPreview,
         safetyLocks: SAFETY_LOCKS,
         brokerCall: BROKER_CALL_LOCKS,
-        delivery: DELIVERY_LOCKS,
+        delivery: buildDeliveryStatus(smsResult),
       },
       { status: 200 }
     );
