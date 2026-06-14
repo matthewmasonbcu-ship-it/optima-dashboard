@@ -36,6 +36,10 @@ type CreateTradeApprovalAlertInput = {
   volume?: number | null;
   openInterest?: number | null;
   delta?: number | null;
+
+  entryPrice?: number | null;
+  stopLoss?: number | null;
+  takeProfit?: number | null;
 };
 
 const initialTestAlerts: TradeApprovalAlert[] = [];
@@ -167,6 +171,10 @@ const { error } = await supabase.from("paper_order_previews").insert({
     contract_quality: alert.contractQuality ?? null,
     risk_guard_status: alert.riskGuardStatus ?? null,
     risk_guard_reason: alert.riskGuardReason ?? null,
+
+    entry_price: alert.entryPrice ?? null,
+    stop_loss: alert.stopLoss ?? null,
+    take_profit: alert.takeProfit ?? null,
 
     preview_status: "PREVIEW_ONLY",
     broker: "TRADIER_SANDBOX",
@@ -344,6 +352,10 @@ export function useTradeApprovalAlerts() {
       volume: input.volume ?? null,
       openInterest: input.openInterest ?? null,
       delta: input.delta ?? null,
+
+      entryPrice: input.entryPrice ?? null,
+      stopLoss: input.stopLoss ?? null,
+      takeProfit: input.takeProfit ?? null,
 
       createdAt: new Date().toISOString(),
     };
