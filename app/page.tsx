@@ -1370,7 +1370,7 @@ const sendSelectedContractToApprovalQueue = () => {
               )}
 
               {activeTab === "positions" && (
-                <div className="flex h-[calc(100vh-48px)] flex-col gap-4 overflow-y-auto">
+                <div className="flex h-full flex-col gap-4 overflow-y-auto">
                   <PaperTradeTracker key={`tracker-${refreshKey}`} />
 
                   <AutoPositionMonitor refreshKey={refreshKey} />
@@ -1379,7 +1379,7 @@ const sendSelectedContractToApprovalQueue = () => {
               )}
 
               {activeTab === "alerts" && (
-                <div className="flex h-[calc(100vh-48px)] flex-col gap-4 overflow-y-auto">
+                <div className="flex h-full flex-col gap-4 overflow-y-auto">
                   <div className="flex justify-end">
                     <button
                       type="button"
@@ -1408,7 +1408,7 @@ const sendSelectedContractToApprovalQueue = () => {
               )}
 
               {activeTab === "analytics" && (
-                <div className="flex h-[calc(100vh-48px)] flex-col gap-4 overflow-y-auto">
+                <div className="flex h-full flex-col gap-4 overflow-y-auto">
                   <OptionPerformanceScoreboard refreshKey={refreshKey} />
                   <PaperTradeAnalytics refreshKey={refreshKey} />
                   <AutoTradeJournal refreshKey={refreshKey} />
