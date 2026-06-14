@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../lib/supabaseClient";
 
 import WatchlistManager from "../components/WatchlistManager";
@@ -724,6 +725,68 @@ function StatusCard({
   );
 }
 
+type TabId = "trade" | "positions" | "alerts" | "analytics" | "system";
+
+const TABS: { id: TabId; label: string; icon: ReactNode }[] = [
+  {
+    id: "trade",
+    label: "Trade",
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="5" y1="3" x2="5" y2="21" />
+        <rect x="3" y="9" width="4" height="6" />
+        <line x1="12" y1="3" x2="12" y2="21" />
+        <rect x="10" y="5" width="4" height="9" />
+        <line x1="19" y1="3" x2="19" y2="21" />
+        <rect x="17" y="12" width="4" height="5" />
+      </svg>
+    ),
+  },
+  {
+    id: "positions",
+    label: "Positions",
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="4" width="16" height="4" rx="1" />
+        <rect x="4" y="10" width="16" height="4" rx="1" />
+        <rect x="4" y="16" width="16" height="4" rx="1" />
+      </svg>
+    ),
+  },
+  {
+    id: "alerts",
+    label: "Alerts",
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.73 21a2 2 0 01-3.46 0" />
+      </svg>
+    ),
+  },
+  {
+    id: "analytics",
+    label: "Analytics",
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="4" y1="20" x2="4" y2="12" />
+        <line x1="10" y1="20" x2="10" y2="6" />
+        <line x1="16" y1="20" x2="16" y2="10" />
+        <line x1="21" y1="20" x2="21" y2="4" />
+      </svg>
+    ),
+  },
+  {
+    id: "system",
+    label: "System",
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 005.6 15a1.65 1.65 0 00-1.51-1H4a2 2 0 110-4h.09A1.65 1.65 0 005.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" />
+      </svg>
+    ),
+  },
+];
+
 export default function Home() {
   const [watchlist, setWatchlist] = useState<string[]>(DEFAULT_WATCHLIST);
   const [scannerResults, setScannerResults] = useState<ScanResult[]>([]);
@@ -742,6 +805,8 @@ export default function Home() {
   const [statusMessage, setStatusMessage] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [testingOverrideEnabled, setTestingOverrideEnabled] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabId>("trade");
+  const [openTradesCount, setOpenTradesCount] = useState(0);
 
   const selectedSymbol = selectedSetup?.symbol || "";
 
@@ -777,6 +842,26 @@ export default function Home() {
     runScanner();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    async function loadOpenTradesCount() {
+      const { count, error } = await supabase
+        .from("paper_trades")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "open");
+
+      if (error) {
+        console.error("Failed to load open trades count:", error);
+        return;
+      }
+
+      if (typeof count === "number") {
+        setOpenTradesCount(count);
+      }
+    }
+
+    loadOpenTradesCount();
+  }, [refreshKey]);
 
   async function runScanner() {
     setIsScanning(true);
@@ -1149,211 +1234,259 @@ const sendSelectedContractToApprovalQueue = () => {
 };
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#172554_0,_#020617_35%,_#000_100%)] text-white">
-      <div className="mx-auto flex max-w-[1500px] flex-col gap-6 px-4 py-5 md:px-6 lg:px-8">
-        <header className="overflow-hidden rounded-[2rem] border border-slate-800 bg-slate-950/85 p-5 shadow-2xl shadow-black/40 backdrop-blur">
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-            <div>
-              <div className="inline-flex rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-black uppercase tracking-[0.2em] text-blue-300">
-                 <TradingDashboardHeader />
-              </div>
+    <main className="flex h-screen flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,_#172554_0,_#020617_35%,_#000_100%)] font-mono text-white">
+      {/* Slim top bar */}
+      <header className="flex h-12 shrink-0 items-center justify-between border-b border-slate-800 bg-slate-950/90 px-4">
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute h-2 w-2 animate-ping rounded-full bg-cyan-400 opacity-60" />
+            <span className="relative h-2 w-2 rounded-full bg-cyan-400" />
+          </span>
+          <span className="text-sm font-black uppercase tracking-[0.3em] text-cyan-400">
+            OPTIMA
+          </span>
+        </div>
 
-              <h1 className="mt-3 text-3xl font-black tracking-tight md:text-5xl">
-                Trading Command Center
-              </h1>
+        <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em]">
+          <span className={`rounded-md border px-2 py-1 ${getRiskTone(optionRiskCheck.status)}`}>
+            Risk Guard: {optionRiskCheck.status}
+          </span>
+          <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-300">
+            Paper Mode
+          </span>
+          <span className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-slate-300">
+            Open Trades: {openTradesCount}
+          </span>
+        </div>
+      </header>
 
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-                Scanner, SPY market filter, contract selection, Risk Guard,
-                checklist discipline, testing override, paper trades, option
-                P/L, and clean performance tracking.
-              </p>
-            </div>
+      <div className="flex flex-1 overflow-hidden">
+        {/* Icon sidebar */}
+        <nav className="flex w-16 shrink-0 flex-col items-center gap-2 border-r border-slate-800 bg-slate-950/90 py-4">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              title={tab.label}
+              className={`flex h-12 w-12 flex-col items-center justify-center gap-1 rounded-xl border transition ${
+                activeTab === tab.id
+                  ? "border-cyan-400/60 bg-cyan-500/10 text-cyan-300"
+                  : "border-transparent text-slate-500 hover:bg-slate-900 hover:text-slate-300"
+              }`}
+            >
+              {tab.icon}
+              <span className="text-[8px] font-bold uppercase tracking-wider">
+                {tab.label}
+              </span>
+            </button>
+          ))}
+        </nav>
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-sm text-slate-300">
-              <span className="text-slate-500">Mode:</span>{" "}
-              <span className="font-black text-white">Paper Trading</span>
-            </div>
-          </div>
+        {/* Active tab content */}
+        <div className="flex-1 overflow-hidden p-4">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="h-full"
+            >
+              {activeTab === "trade" && (
+                <div className="grid h-full grid-cols-1 gap-4 xl:grid-cols-3">
+                  <div className="flex h-full flex-col gap-4 overflow-y-auto">
+                    <div className="rounded-[1.75rem] border border-slate-800 bg-slate-950/85 p-5 shadow-xl shadow-black/30 backdrop-blur">
+                      <div className="mb-4 flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                            Scanner Control
+                          </p>
+                          <h2 className="mt-1 text-xl font-black">Market Scanner</h2>
+                          <p className="mt-1 text-sm text-slate-400">
+                            Real stock quotes through your quote API.
+                          </p>
+                        </div>
 
-          <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
-            <StatusCard
-              label="Market Condition"
-              value={marketCondition}
-              subtext={spyPrice ? `SPY ${formatMoney(spyPrice)}` : "SPY waiting"}
-              className={getMarketTone(marketCondition)}
-            />
+                        <button
+                          onClick={runScanner}
+                          disabled={isScanning}
+                          className="rounded-2xl bg-emerald-400 px-4 py-2 text-sm font-black text-slate-950 shadow-lg shadow-emerald-950/20 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {isScanning ? "Scanning..." : "Run"}
+                        </button>
+                      </div>
 
-            <StatusCard
-              label="Selected Setup"
-              value={selectedSetupText}
-              subtext={
-                selectedSetup
-                  ? `Score ${selectedSetup.setupScore} / Confidence ${
-                      selectedSetup.confidenceScore ??
-                      selectedSetup.confidence_score ??
-                      "-"
-                    }`
-                  : "Pick a scanner setup"
-              }
-              className={
-                selectedSymbol
-                  ? "border-orange-400/40 bg-orange-500/10 text-orange-300"
-                  : "border-slate-800 bg-slate-900/80 text-slate-300"
-              }
-            />
+                      {statusMessage && (
+                        <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-900/80 p-3 text-sm text-slate-300">
+                          {statusMessage}
+                        </div>
+                      )}
 
-            <StatusCard
-              label="Risk Guard"
-              value={optionRiskCheck.status}
-              subtext={optionRiskCheck.reason}
-              className={getRiskTone(optionRiskCheck.status)}
-            />
+                      <WatchlistManager
+                        watchlist={watchlist}
+                        setWatchlist={setWatchlist}
+                        protectedSymbols={["SPY"]}
+                      />
+                    </div>
+                  </div>
 
-            <StatusCard
-              label="Risk / Trade"
-              value={`${MAX_RISK_PERCENT}%`}
-              subtext={`${formatMoney(
-                ACCOUNT_SIZE * (MAX_RISK_PERCENT / 100)
-              )} max risk`}
-            />
+                  <div className="h-full overflow-y-auto">
+                    <ScannerResultsPanel
+                      scannerResults={scannerResults}
+                      selectedSymbol={selectedSymbol}
+                      onSelectSetup={handleSelectSetup}
+                      marketCondition={marketCondition}
+                    />
+                  </div>
 
-            <StatusCard
-              label="Testing Override"
-              value={testingOverrideEnabled ? "ON" : "OFF"}
-              subtext={
-                testingOverrideEnabled
-                  ? "Blocked tests can be saved"
-                  : "Blocked tests stay blocked"
-              }
-              className={
-                testingOverrideEnabled
-                  ? "border-orange-400/40 bg-orange-500/10 text-orange-300"
-                  : "border-slate-800 bg-slate-900/80 text-slate-300"
-              }
-            />
-          </div>
-        </header>
-
-        <TradingDashboardHeader />
-
-<BrokerStatusCard />
-
-<WorkModeCommandCenter />
-
-<div className="space-y-3">
-  <div className="flex justify-end">
-    <button
-      type="button"
-      onClick={sendSelectedContractToApprovalQueue}
-      disabled={!selectedSetup || !selectedContract}
-      className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500"
-    >
-      Send Selected Contract to Approval Queue
-    </button>
-  </div>
-
-  <AlertPanel
-  alerts={tradeApprovalAlerts}
-  onReviewAlert={reviewAlert}
-  onApproveAlert={approveAlert}
-  onRejectAlert={rejectAlert}
-  onClearResolvedAlerts={clearResolvedAlerts}
-  approvalActionStatus={approvalActionStatus}
-  approvalActionError={approvalActionError}
-  isSavingApprovalDecision={isSavingApprovalDecision}
-/>
-</div>
-
-<SystemReadinessCard />
-<PaperTradingControlCenter />
-      
-        
-
-    <section className="grid grid-cols-1 gap-6 xl:grid-cols-[380px_1fr]">
-          <aside className="flex flex-col gap-6">
-            <div className="rounded-[1.75rem] border border-slate-800 bg-slate-950/85 p-5 shadow-xl shadow-black/30 backdrop-blur">
-              <div className="mb-4 flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
-                    Scanner Control
-                  </p>
-                  <h2 className="mt-1 text-xl font-black">Market Scanner</h2>
-                  <p className="mt-1 text-sm text-slate-400">
-                    Real stock quotes through your quote API.
-                  </p>
-                </div>
-
-                <button
-                  onClick={runScanner}
-                  disabled={isScanning}
-                  className="rounded-2xl bg-emerald-400 px-4 py-2 text-sm font-black text-slate-950 shadow-lg shadow-emerald-950/20 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isScanning ? "Scanning..." : "Run"}
-                </button>
-              </div>
-
-              {statusMessage && (
-                <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-900/80 p-3 text-sm text-slate-300">
-                  {statusMessage}
+                  <div className="h-full overflow-y-auto">
+                    <OptionTradeCommandCenter
+                      selectedSetup={selectedSetup}
+                      selectedSymbol={selectedSymbol}
+                      stockSymbol={selectedSymbol}
+                      scannerDirection={tradeDirection}
+                      tradeDirection={tradeDirection}
+                      selectedContract={selectedContract}
+                      onSelectContract={handleSelectContract}
+                      onContractSelected={handleSelectContract}
+                      onClearSelectedContract={clearSelectedContract}
+                      accountSize={ACCOUNT_SIZE}
+                      maxRiskPercent={MAX_RISK_PERCENT}
+                      maxSpreadPercent={MAX_SPREAD_PERCENT}
+                      riskGuardStatus={optionRiskCheck.status}
+                      riskGuardReason={optionRiskCheck.reason}
+                      preTradeStatus={preTradeCheck.status}
+                      preTradeWarnings={preTradeCheck.warnings}
+                      preTradeBlocks={preTradeCheck.blocks}
+                      onSavePaperTrade={savePaperTrade}
+                      marketCondition={marketCondition}
+                      testingOverrideEnabled={testingOverrideEnabled}
+                      setTestingOverrideEnabled={setTestingOverrideEnabled}
+                    />
+                  </div>
                 </div>
               )}
 
-              <WatchlistManager
-                watchlist={watchlist}
-                setWatchlist={setWatchlist}
-                protectedSymbols={["SPY"]}
-              />
-            </div>
+              {activeTab === "positions" && (
+                <div className="flex h-full flex-col gap-4 overflow-y-auto">
+                  <PaperTradeTracker key={`tracker-${refreshKey}`} />
 
-            <OptionPerformanceScoreboard refreshKey={refreshKey} />
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                    <AutoPositionMonitor refreshKey={refreshKey} />
+                    <PaperTradingControlCenter />
+                  </div>
+                </div>
+              )}
 
-            <PaperTradeAnalytics refreshKey={refreshKey} />
-          </aside>
+              {activeTab === "alerts" && (
+                <div className="flex h-full flex-col gap-4 overflow-y-auto">
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={sendSelectedContractToApprovalQueue}
+                      disabled={!selectedSetup || !selectedContract}
+                      className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500"
+                    >
+                      Send Selected Contract to Approval Queue
+                    </button>
+                  </div>
 
-          <section className="flex flex-col gap-6">
-            <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[1fr_480px]">
-              <ScannerResultsPanel
-                scannerResults={scannerResults}
-                selectedSymbol={selectedSymbol}
-                onSelectSetup={handleSelectSetup}
-                marketCondition={marketCondition}
-              />
+                  <AlertPanel
+                    alerts={tradeApprovalAlerts}
+                    onReviewAlert={reviewAlert}
+                    onApproveAlert={approveAlert}
+                    onRejectAlert={rejectAlert}
+                    onClearResolvedAlerts={clearResolvedAlerts}
+                    approvalActionStatus={approvalActionStatus}
+                    approvalActionError={approvalActionError}
+                    isSavingApprovalDecision={isSavingApprovalDecision}
+                  />
 
-              <OptionTradeCommandCenter
-                selectedSetup={selectedSetup}
-                selectedSymbol={selectedSymbol}
-                stockSymbol={selectedSymbol}
-                scannerDirection={tradeDirection}
-                tradeDirection={tradeDirection}
-                selectedContract={selectedContract}
-                onSelectContract={handleSelectContract}
-                onContractSelected={handleSelectContract}
-                onClearSelectedContract={clearSelectedContract}
-                accountSize={ACCOUNT_SIZE}
-                maxRiskPercent={MAX_RISK_PERCENT}
-                maxSpreadPercent={MAX_SPREAD_PERCENT}
-                riskGuardStatus={optionRiskCheck.status}
-                riskGuardReason={optionRiskCheck.reason}
-                preTradeStatus={preTradeCheck.status}
-                preTradeWarnings={preTradeCheck.warnings}
-                preTradeBlocks={preTradeCheck.blocks}
-                onSavePaperTrade={savePaperTrade}
-                marketCondition={marketCondition}
-                testingOverrideEnabled={testingOverrideEnabled}
-                setTestingOverrideEnabled={setTestingOverrideEnabled}
-              />
-            </div>
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                    <WorkModeCommandCenter />
+                    <BrokerStatusCard />
+                  </div>
+                </div>
+              )}
 
-            <div className="grid grid-cols-1 gap-6">
-  <PaperTradeTracker key={`tracker-${refreshKey}`} />
+              {activeTab === "analytics" && (
+                <div className="grid h-full grid-cols-1 gap-4 overflow-y-auto xl:grid-cols-3">
+                  <OptionPerformanceScoreboard refreshKey={refreshKey} />
+                  <PaperTradeAnalytics refreshKey={refreshKey} />
+                  <AutoTradeJournal refreshKey={refreshKey} />
+                </div>
+              )}
 
-  <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-    <AutoPositionMonitor refreshKey={refreshKey} />
-    <AutoTradeJournal refreshKey={refreshKey} />
-  </div>
-</div>
-          </section>
-        </section>
+              {activeTab === "system" && (
+                <div className="flex h-full flex-col gap-4 overflow-y-auto">
+                  <TradingDashboardHeader />
+
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+                    <StatusCard
+                      label="Market Condition"
+                      value={marketCondition}
+                      subtext={spyPrice ? `SPY ${formatMoney(spyPrice)}` : "SPY waiting"}
+                      className={getMarketTone(marketCondition)}
+                    />
+
+                    <StatusCard
+                      label="Selected Setup"
+                      value={selectedSetupText}
+                      subtext={
+                        selectedSetup
+                          ? `Score ${selectedSetup.setupScore} / Confidence ${
+                              selectedSetup.confidenceScore ??
+                              selectedSetup.confidence_score ??
+                              "-"
+                            }`
+                          : "Pick a scanner setup"
+                      }
+                      className={
+                        selectedSymbol
+                          ? "border-orange-400/40 bg-orange-500/10 text-orange-300"
+                          : "border-slate-800 bg-slate-900/80 text-slate-300"
+                      }
+                    />
+
+                    <StatusCard
+                      label="Risk Guard"
+                      value={optionRiskCheck.status}
+                      subtext={optionRiskCheck.reason}
+                      className={getRiskTone(optionRiskCheck.status)}
+                    />
+
+                    <StatusCard
+                      label="Risk / Trade"
+                      value={`${MAX_RISK_PERCENT}%`}
+                      subtext={`${formatMoney(
+                        ACCOUNT_SIZE * (MAX_RISK_PERCENT / 100)
+                      )} max risk`}
+                    />
+
+                    <StatusCard
+                      label="Testing Override"
+                      value={testingOverrideEnabled ? "ON" : "OFF"}
+                      subtext={
+                        testingOverrideEnabled
+                          ? "Blocked tests can be saved"
+                          : "Blocked tests stay blocked"
+                      }
+                      className={
+                        testingOverrideEnabled
+                          ? "border-orange-400/40 bg-orange-500/10 text-orange-300"
+                          : "border-slate-800 bg-slate-900/80 text-slate-300"
+                      }
+                    />
+                  </div>
+
+                  <SystemReadinessCard />
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </div>
     </main>
   );
