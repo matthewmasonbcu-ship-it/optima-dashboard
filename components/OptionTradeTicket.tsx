@@ -4,6 +4,7 @@
 // ─── Save Paper Trade lives in OptionTradeCommandCenter.tsx ──────────────────
 
 import { useEffect, useState } from "react";
+import type { SpreadType, OptionLeg } from "../lib/dashboardTypes";
 
 type RiskGuardStatus = "APPROVED" | "CAUTION" | "BLOCKED" | "WAITING" | string;
 
@@ -31,6 +32,15 @@ type OptionContractLike = {
   estimatedCost?: number;
   max_risk?: number;
   maxRisk?: number;
+
+  // ─── Credit spread support ────────────────────────────────────────────
+  spread_type?: SpreadType;
+  short_leg?: OptionLeg;
+  long_leg?: OptionLeg;
+  net_credit?: number;
+  spread_width?: number;
+  max_loss?: number;
+  max_profit?: number;
 };
 
 type RiskCheckLike = {
@@ -137,6 +147,34 @@ function getEstimatedCost(c: OptionContractLike | null) {
 }
 function getMaxRisk(c: OptionContractLike | null) {
   return c?.max_risk ?? c?.maxRisk ?? null;
+}
+
+// ─── Credit spread helpers ────────────────────────────────────────────────────
+function getSpreadType(c: OptionContractLike | null): SpreadType | null {
+  return c?.spread_type ?? null;
+}
+function getShortLeg(c: OptionContractLike | null): OptionLeg | null {
+  return c?.short_leg ?? null;
+}
+function getLongLeg(c: OptionContractLike | null): OptionLeg | null {
+  return c?.long_leg ?? null;
+}
+function getNetCredit(c: OptionContractLike | null) {
+  return c?.net_credit ?? null;
+}
+function getSpreadWidth(c: OptionContractLike | null) {
+  return c?.spread_width ?? null;
+}
+function getMaxLoss(c: OptionContractLike | null) {
+  return c?.max_loss ?? null;
+}
+function getMaxProfit(c: OptionContractLike | null) {
+  return c?.max_profit ?? null;
+}
+function getSpreadTypeLabel(spreadType: SpreadType | null) {
+  if (spreadType === "bull_put_spread") return "Bull Put Spread";
+  if (spreadType === "bear_call_spread") return "Bear Call Spread";
+  return "Credit Spread";
 }
 function getSetupPrice(s: ScannerSetupLike | null) {
   return s?.price ?? s?.currentPrice ?? s?.current_price ?? null;
@@ -432,6 +470,15 @@ export default function OptionTradeTicket({
   const estimatedCost = getEstimatedCost(contract);
   const maxRisk = getMaxRisk(contract);
 
+  const spreadType = getSpreadType(contract);
+  const isCreditSpread = spreadType !== null && spreadType !== "single_leg";
+  const shortLeg = getShortLeg(contract);
+  const longLeg = getLongLeg(contract);
+  const netCredit = getNetCredit(contract);
+  const spreadWidth = getSpreadWidth(contract);
+  const maxLoss = getMaxLoss(contract);
+  const maxProfit = getMaxProfit(contract);
+
   const spreadPercent = calculateSpreadPercent(bid, ask, mid);
   const spreadDollars =
     typeof bid === "number" && typeof ask === "number"
@@ -524,6 +571,50 @@ export default function OptionTradeTicket({
         </div>
       </div>
 
+      {/* ── CREDIT SPREAD TICKET ──────────────────────────────────────────── */}
+      {isCreditSpread && (
+        <div className="relative overflow-hidden rounded-xl border border-purple-500/25 bg-purple-500/5 ring-1 ring-purple-500/10">
+          <div className="absolute inset-y-0 left-0 w-[3px] bg-purple-500" />
+          <div className="px-5 py-4 pl-6">
+            <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-purple-500">
+              {getSpreadTypeLabel(spreadType)} · Two-Leg Ticket
+            </p>
+
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-lg border border-slate-800/80 bg-black/30 px-3 py-2">
+                <p className="font-mono text-[8px] font-bold uppercase tracking-[0.22em] text-red-400">
+                  Short Leg (Sell)
+                </p>
+                <p className="mt-0.5 break-all font-mono text-[10px] font-black text-white">
+                  {shortLeg?.option_symbol || "—"}
+                </p>
+                <p className="mt-0.5 font-mono text-[9px] text-slate-500">
+                  Strike {money(shortLeg?.strike_price ?? null)} · Bid {money(shortLeg?.bid_price ?? null)} / Ask {money(shortLeg?.ask_price ?? null)} / Mid {money(shortLeg?.mid_price ?? null)}
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-800/80 bg-black/30 px-3 py-2">
+                <p className="font-mono text-[8px] font-bold uppercase tracking-[0.22em] text-emerald-400">
+                  Long Leg (Buy)
+                </p>
+                <p className="mt-0.5 break-all font-mono text-[10px] font-black text-white">
+                  {longLeg?.option_symbol || "—"}
+                </p>
+                <p className="mt-0.5 font-mono text-[9px] text-slate-500">
+                  Strike {money(longLeg?.strike_price ?? null)} · Bid {money(longLeg?.bid_price ?? null)} / Ask {money(longLeg?.ask_price ?? null)} / Mid {money(longLeg?.mid_price ?? null)}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+              <MiniStat label="Net Credit" value={money(netCredit)} valueClass="text-emerald-300" />
+              <MiniStat label="Spread Width" value={money(spreadWidth)} />
+              <MiniStat label="Max Loss" value={money(maxLoss)} valueClass="text-red-400" />
+              <MiniStat label="Max Profit" value={money(maxProfit)} valueClass="text-emerald-300" />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── CONTRACT STATS GRID ───────────────────────────────────────────── */}
       <div className="grid grid-cols-5 gap-1.5 lg:grid-cols-10">
         <MiniStat label="Strike" value={money(strike)} />
@@ -575,7 +666,11 @@ export default function OptionTradeTicket({
                 Formula ›
               </span>
               <span className="font-mono text-[9px] font-bold text-cyan-500">
-                {direction.toUpperCase().includes("PUT")
+                {isCreditSpread
+                  ? spreadType === "bull_put_spread"
+                    ? "Short Strike − Net Credit"
+                    : "Short Strike + Net Credit"
+                  : direction.toUpperCase().includes("PUT")
                   ? "Strike − Mid"
                   : direction.toUpperCase().includes("CALL")
                   ? "Strike + Mid"
@@ -583,7 +678,11 @@ export default function OptionTradeTicket({
               </span>
             </div>
             <p className="mt-1 font-mono text-[9px] leading-4 text-slate-600">
-              {direction.toUpperCase().includes("PUT")
+              {isCreditSpread
+                ? spreadType === "bull_put_spread"
+                  ? "For a bull put spread, breakeven is the short put strike minus the net credit received."
+                  : "For a bear call spread, breakeven is the short call strike plus the net credit received."
+                : direction.toUpperCase().includes("PUT")
                 ? "For a PUT, breakeven is strike minus entry premium."
                 : direction.toUpperCase().includes("CALL")
                 ? "For a CALL, breakeven is strike plus entry premium."
