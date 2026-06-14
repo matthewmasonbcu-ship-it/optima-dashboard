@@ -1075,6 +1075,21 @@ const sendSelectedContractToApprovalQueue = () => {
 
   const contractGrade = getContractGrade(selectedContract);
 
+  const alertEntryPrice = getNumber(
+    selectedSetup.entryPrice ?? selectedSetup.entry_price ?? selectedSetup.price,
+    0
+  );
+
+  const alertStopLoss = getNumber(
+    selectedSetup.stopLoss ?? selectedSetup.stop_loss,
+    tradeDirection === "CALL" ? alertEntryPrice * 0.985 : alertEntryPrice * 1.015
+  );
+
+  const alertTakeProfit = getNumber(
+    selectedSetup.takeProfit ?? selectedSetup.take_profit,
+    tradeDirection === "CALL" ? alertEntryPrice * 1.03 : alertEntryPrice * 0.97
+  );
+
   createTradeAlert({
   symbol: selectedSymbol,
   lane: "OPTIONS_DAY_TRADE",
@@ -1140,6 +1155,10 @@ const sendSelectedContractToApprovalQueue = () => {
     null
   ),
   delta: getNumber(getContractValue(selectedContract, ["delta"]), null),
+
+  entryPrice: alertEntryPrice,
+  stopLoss: alertStopLoss,
+  takeProfit: alertTakeProfit,
 });
 
   setStatusMessage(
