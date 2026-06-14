@@ -21,6 +21,7 @@ import PaperTradingControlCenter from "../components/PaperTradingControlCenter";
 import TradingDashboardHeader from "../components/TradingDashboardHeader";
 import AlertPanel from "@/components/alerts/AlertPanel";
 import { useTradeApprovalAlerts } from "@/hooks/useTradeApprovalAlerts";
+import type { SpreadType, OptionLeg } from "../lib/dashboardTypes";
 
 type MarketCondition = "BULLISH" | "BEARISH" | "CHOPPY" | "UNKNOWN";
 type TradeDirection = "CALL" | "PUT" | "NO TRADE";
@@ -125,6 +126,15 @@ type OptionContract = {
   contract_quality?: string;
 
   riskStatus?: string;
+
+  // --- Credit spread support ----------------------------------------------
+  spread_type?: SpreadType;
+  short_leg?: OptionLeg;
+  long_leg?: OptionLeg;
+  net_credit?: number;
+  spread_width?: number;
+  max_loss?: number;
+  max_profit?: number;
 };
 
 type RiskGuardCheck = {
@@ -633,6 +643,11 @@ function normalizeContractForSave(
 
   const contractQuality = getContractGrade(contract);
 
+  const spreadType = getContractValue(contract, ["spread_type"], "single_leg") as SpreadType;
+  const shortLeg = contract.short_leg ?? null;
+  const longLeg = contract.long_leg ?? null;
+  const isCreditSpread = spreadType !== "single_leg" && !!shortLeg && !!longLeg;
+
   return {
     stock_symbol: String(
       getContractValue(
@@ -674,6 +689,27 @@ function normalizeContractForSave(
     grade: contractQuality,
     quality_grade: contractQuality,
     contract_quality_grade: contractQuality,
+
+    // --- Credit spread support ----------------------------------------------
+    spread_type: spreadType,
+    ...(isCreditSpread
+      ? {
+          short_leg_option_symbol: shortLeg!.option_symbol,
+          short_leg_strike_price: shortLeg!.strike_price,
+          short_leg_bid_price: shortLeg!.bid_price,
+          short_leg_ask_price: shortLeg!.ask_price,
+          short_leg_mid_price: shortLeg!.mid_price,
+          long_leg_option_symbol: longLeg!.option_symbol,
+          long_leg_strike_price: longLeg!.strike_price,
+          long_leg_bid_price: longLeg!.bid_price,
+          long_leg_ask_price: longLeg!.ask_price,
+          long_leg_mid_price: longLeg!.mid_price,
+          net_credit: getNumber(getContractValue(contract, ["net_credit"]), 0),
+          spread_width: getNumber(getContractValue(contract, ["spread_width"]), 0),
+          max_loss: getNumber(getContractValue(contract, ["max_loss"]), maxRisk),
+          max_profit: getNumber(getContractValue(contract, ["max_profit"]), 0),
+        }
+      : {}),
   };
 }
 
