@@ -7,6 +7,22 @@
     {
       "path": "/api/cron/market-open-scan",
       "schedule": "30 14 * * 1-5"
+    },
+    {
+      "path": "/api/cron/market-open-scan",
+      "schedule": "0 15 * * 1-5"
+    },
+    {
+      "path": "/api/cron/market-open-scan",
+      "schedule": "0 16 * * 1-5"
+    },
+    {
+      "path": "/api/cron/market-open-scan",
+      "schedule": "0 18 * * 1-5"
+    },
+    {
+      "path": "/api/cron/market-open-scan",
+      "schedule": "0 19 * * 1-5"
     }
   ]
 }

@@ -10,6 +10,14 @@ import {
 const ROUTE = "/api/cron/market-open-scan";
 const MIN_SETUP_SCORE = 75;
 
+const SCAN_WINDOW_TOLERANCE_MINUTES = 2;
+
+const SCAN_TIMES_NY = [
+  { hour: 9, minute: 30 },
+  { hour: 11, minute: 0 },
+  { hour: 14, minute: 0 },
+];
+
 function isMarketOpenNowInNewYork(): boolean {
   const now = new Date();
 
@@ -31,9 +39,14 @@ function isMarketOpenNowInNewYork(): boolean {
   const weekday = map.weekday;
 
   const isWeekday = weekday !== "Sat" && weekday !== "Sun";
-  const isMarketOpenTime = hour === 9 && minute === 30;
+  const nowMinutes = hour * 60 + minute;
 
-  return isWeekday && isMarketOpenTime;
+  const isScanTime = SCAN_TIMES_NY.some(({ hour: targetHour, minute: targetMinute }) => {
+    const targetMinutes = targetHour * 60 + targetMinute;
+    return Math.abs(nowMinutes - targetMinutes) <= SCAN_WINDOW_TOLERANCE_MINUTES;
+  });
+
+  return isWeekday && isScanTime;
 }
 
 export async function GET(request: Request) {
