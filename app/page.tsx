@@ -27,6 +27,7 @@ import {
   type TradeDirection,
   type QuoteData,
   type ScanResult,
+  DEFAULT_WATCHLIST,
   getNumber,
   fetchQuote,
   classifyMarketCondition,
@@ -110,8 +111,6 @@ type PreTradeEnforcementStatus = "READY" | "CAUTION" | "BLOCKED";
 const ACCOUNT_SIZE = 10000;
 const MAX_RISK_PERCENT = 1;
 const MAX_SPREAD_PERCENT = 20;
-
-const DEFAULT_WATCHLIST = ["SPY", "AAPL", "MSFT", "NVDA", "TSLA"];
 
 function formatMoney(value: number) {
   return value.toLocaleString("en-US", {

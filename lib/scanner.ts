@@ -1,3 +1,5 @@
+export const DEFAULT_WATCHLIST = ["SPY", "AAPL", "MSFT", "NVDA", "TSLA"];
+
 export type MarketCondition = "BULLISH" | "BEARISH" | "CHOPPY" | "UNKNOWN";
 export type TradeDirection = "CALL" | "PUT" | "NO TRADE";
 
