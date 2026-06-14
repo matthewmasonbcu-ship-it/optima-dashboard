@@ -1370,18 +1370,16 @@ const sendSelectedContractToApprovalQueue = () => {
               )}
 
               {activeTab === "positions" && (
-                <div className="flex h-full flex-col gap-4 overflow-y-auto">
+                <div className="flex h-[calc(100vh-48px)] flex-col gap-4 overflow-y-auto">
                   <PaperTradeTracker key={`tracker-${refreshKey}`} />
 
-                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                    <AutoPositionMonitor refreshKey={refreshKey} />
-                    <PaperTradingControlCenter />
-                  </div>
+                  <AutoPositionMonitor refreshKey={refreshKey} />
+                  <PaperTradingControlCenter />
                 </div>
               )}
 
               {activeTab === "alerts" && (
-                <div className="flex h-full flex-col gap-4 overflow-y-auto">
+                <div className="flex h-[calc(100vh-48px)] flex-col gap-4 overflow-y-auto">
                   <div className="flex justify-end">
                     <button
                       type="button"
@@ -1404,15 +1402,13 @@ const sendSelectedContractToApprovalQueue = () => {
                     isSavingApprovalDecision={isSavingApprovalDecision}
                   />
 
-                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                    <WorkModeCommandCenter />
-                    <BrokerStatusCard />
-                  </div>
+                  <WorkModeCommandCenter />
+                  <BrokerStatusCard />
                 </div>
               )}
 
               {activeTab === "analytics" && (
-                <div className="grid h-full grid-cols-1 gap-4 overflow-y-auto xl:grid-cols-3">
+                <div className="flex h-[calc(100vh-48px)] flex-col gap-4 overflow-y-auto">
                   <OptionPerformanceScoreboard refreshKey={refreshKey} />
                   <PaperTradeAnalytics refreshKey={refreshKey} />
                   <AutoTradeJournal refreshKey={refreshKey} />
@@ -1420,7 +1416,7 @@ const sendSelectedContractToApprovalQueue = () => {
               )}
 
               {activeTab === "system" && (
-                <div className="flex h-full flex-col gap-4 overflow-y-auto">
+                <div className="flex h-[calc(100vh-48px)] flex-col gap-4 overflow-y-auto">
                   <TradingDashboardHeader />
 
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
