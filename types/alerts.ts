@@ -40,6 +40,11 @@ export interface TradeApprovalAlert {
   openInterest?: number | null;
   delta?: number | null;
 
+  // Trade plan (underlying entry/stop/take-profit)
+  entryPrice?: number | null;
+  stopLoss?: number | null;
+  takeProfit?: number | null;
+
   // Timestamps
   expiresAt?: string | null;
   createdAt?: string;
