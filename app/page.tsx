@@ -654,12 +654,23 @@ export default function Home() {
         .order("created_at", { ascending: true });
 
       if (error) {
-        console.error("Failed to load watchlist:", error);
+        console.error("Failed to load watchlist:", {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        });
         return;
       }
 
+      console.log("Loaded watchlist_symbols:", data);
+
       if (!cancelled && data && data.length > 0) {
         setWatchlist(data.map((row) => row.symbol as string));
+      } else {
+        console.warn(
+          "watchlist_symbols query returned no rows; keeping DEFAULT_WATCHLIST."
+        );
       }
     }
 
