@@ -1377,7 +1377,8 @@ const sendSelectedContractToApprovalQueue = () => {
 
                       <WatchlistManager
                         watchlist={watchlist}
-                        setWatchlist={setWatchlist}
+                        onAddSymbol={addWatchlistSymbol}
+                        onRemoveSymbol={removeWatchlistSymbol}
                         protectedSymbols={["SPY"]}
                       />
                     </motion.div>

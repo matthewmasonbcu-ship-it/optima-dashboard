@@ -4,13 +4,15 @@ import { useState } from "react";
 
 type WatchlistManagerProps = {
   watchlist?: string[];
-  setWatchlist?: React.Dispatch<React.SetStateAction<string[]>>;
+  onAddSymbol?: (symbol: string) => void;
+  onRemoveSymbol?: (symbol: string) => void;
   protectedSymbols?: string[];
 };
 
 export default function WatchlistManager({
   watchlist = [],
-  setWatchlist,
+  onAddSymbol,
+  onRemoveSymbol,
   protectedSymbols = ["SPY"],
 }: WatchlistManagerProps) {
   const [newSymbol, setNewSymbol] = useState("");
@@ -20,7 +22,7 @@ export default function WatchlistManager({
     : ["SPY"];
 
   function addSymbol() {
-    if (!setWatchlist) return;
+    if (!onAddSymbol) return;
 
     const cleaned = newSymbol.toUpperCase().trim();
 
@@ -31,26 +33,19 @@ export default function WatchlistManager({
       return;
     }
 
-    setWatchlist((prev) => {
-      const safePrev = Array.isArray(prev) ? prev : [];
-      return Array.from(new Set([...safePrev, cleaned]));
-    });
-
+    onAddSymbol(cleaned);
     setNewSymbol("");
   }
 
   function removeSymbol(symbol: string) {
-    if (!setWatchlist) return;
+    if (!onRemoveSymbol) return;
 
     if (safeProtectedSymbols.includes(symbol)) {
       alert(`${symbol} is protected because it powers the market filter.`);
       return;
     }
 
-    setWatchlist((prev) => {
-      const safePrev = Array.isArray(prev) ? prev : [];
-      return safePrev.filter((item) => item !== symbol);
-    });
+    onRemoveSymbol(symbol);
   }
 
   return (
