@@ -643,6 +643,63 @@ const tradeColumnItemVariants = {
 
 export default function Home() {
   const [watchlist, setWatchlist] = useState<string[]>(DEFAULT_WATCHLIST);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadWatchlist() {
+      const { data, error } = await supabase
+        .from("watchlist_symbols")
+        .select("symbol")
+        .order("created_at", { ascending: true });
+
+      if (error) {
+        console.error("Failed to load watchlist:", error);
+        return;
+      }
+
+      if (!cancelled && data && data.length > 0) {
+        setWatchlist(data.map((row) => row.symbol as string));
+      }
+    }
+
+    loadWatchlist();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function addWatchlistSymbol(symbol: string) {
+    setWatchlist((prev) => {
+      const safePrev = Array.isArray(prev) ? prev : [];
+      return Array.from(new Set([...safePrev, symbol]));
+    });
+
+    const { error } = await supabase
+      .from("watchlist_symbols")
+      .insert({ symbol });
+
+    if (error) {
+      console.error("Failed to save watchlist symbol:", error);
+    }
+  }
+
+  async function removeWatchlistSymbol(symbol: string) {
+    setWatchlist((prev) => {
+      const safePrev = Array.isArray(prev) ? prev : [];
+      return safePrev.filter((item) => item !== symbol);
+    });
+
+    const { error } = await supabase
+      .from("watchlist_symbols")
+      .delete()
+      .eq("symbol", symbol);
+
+    if (error) {
+      console.error("Failed to remove watchlist symbol:", error);
+    }
+  }
   const [scannerResults, setScannerResults] = useState<ScanResult[]>([]);
   const [selectedSetup, setSelectedSetup] = useState<ScanResult | null>(null);
   const [selectedContract, setSelectedContract] = useState<OptionContract | null>(
