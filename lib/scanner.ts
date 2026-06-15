@@ -1,3 +1,5 @@
+// Fallback only — the live watchlist is stored in the watchlist_symbols
+// Supabase table and used whenever it's reachable.
 export const DEFAULT_WATCHLIST = ["SPY", "AAPL", "MSFT", "NVDA", "TSLA"];
 
 export type MarketCondition = "BULLISH" | "BEARISH" | "CHOPPY" | "UNKNOWN";
