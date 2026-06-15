@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { supabase } from "@/lib/supabaseClient";
 import {
   DEFAULT_WATCHLIST,
   fetchQuote,
@@ -6,6 +7,22 @@ import {
   analyzeSetup,
   sortScanResults,
 } from "@/lib/scanner";
+
+async function loadWatchlist(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("watchlist_symbols")
+    .select("symbol")
+    .order("created_at", { ascending: true });
+
+  if (error || !data || data.length === 0) {
+    if (error) {
+      console.error("Failed to load watchlist, using default:", error);
+    }
+    return DEFAULT_WATCHLIST;
+  }
+
+  return data.map((row) => row.symbol as string);
+}
 
 const ROUTE = "/api/cron/market-open-scan";
 const MIN_SETUP_SCORE = 75;
@@ -83,7 +100,8 @@ export async function GET(request: Request) {
     }
 
     const marketCondition = classifyMarketCondition(spyQuote);
-    const symbolsToScan = DEFAULT_WATCHLIST.filter((s) => s !== "SPY");
+    const watchlist = await loadWatchlist();
+    const symbolsToScan = watchlist.filter((s) => s !== "SPY");
     const results = [];
 
     for (const symbol of symbolsToScan) {
