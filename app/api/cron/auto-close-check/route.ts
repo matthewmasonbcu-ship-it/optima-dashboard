@@ -79,6 +79,17 @@ async function fetchChain(
   return options;
 }
 
+function getNowDateStringNewYork(now: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(now);
+}
+
+function computeDTE(expirationDate: string, now: Date): number {
+  const todayStr = getNowDateStringNewYork(now);
+  const today = new Date(`${todayStr}T00:00:00Z`);
+  const exp = new Date(`${expirationDate}T00:00:00Z`);
+  return Math.round((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
 function isMarketHoursNowInNewYork(now: Date): boolean {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
@@ -202,12 +213,26 @@ export async function GET(request: Request) {
 
       const takeProfitTriggered = current <= TAKE_PROFIT_FACTOR * entry;
       const stopLossTriggered = current >= STOP_LOSS_FACTOR * entry;
+      const dte = computeDTE(expirationDate, now);
+      const dteTriggered = dte <= 21;
 
-      if (!takeProfitTriggered && !stopLossTriggered) continue;
+      if (!takeProfitTriggered && !stopLossTriggered && !dteTriggered) continue;
 
-      const result: "WIN" | "LOSS" = takeProfitTriggered ? "WIN" : "LOSS";
       const contracts = trade.contracts || 1;
       const optionPnl = (entry - current) * contracts * 100;
+
+      let result: "WIN" | "LOSS";
+      let closeReason: "take_profit" | "stop_loss" | "dte_21";
+      if (takeProfitTriggered) {
+        result = "WIN";
+        closeReason = "take_profit";
+      } else if (stopLossTriggered) {
+        result = "LOSS";
+        closeReason = "stop_loss";
+      } else {
+        result = optionPnl >= 0 ? "WIN" : "LOSS";
+        closeReason = "dte_21";
+      }
 
       const { error: optionUpdateError } = await supabase
         .from("option_trade_details")
@@ -255,9 +280,11 @@ export async function GET(request: Request) {
       closedResults.push({ stockSymbol, result, optionPnl });
 
       const sign = optionPnl >= 0 ? "+" : "-";
-      const message = `OPTIMA AUTO-CLOSE: ${stockSymbol} ${result} — P&L: ${sign}$${Math.abs(
-        optionPnl
-      ).toFixed(2)}. Position closed automatically.`;
+      const absAmount = Math.abs(optionPnl).toFixed(2);
+      const message =
+        closeReason === "dte_21"
+          ? `OPTIMA 21-DTE CLOSE: ${stockSymbol} closed at ${dte} DTE to avoid gamma risk. P&L: ${sign}$${absAmount}.`
+          : `OPTIMA AUTO-CLOSE: ${stockSymbol} ${result} — P&L: ${sign}$${absAmount}. Position closed automatically.`;
 
       const smsResult = await sendPhoneAlertSms(message);
       if (!smsResult.success) {
