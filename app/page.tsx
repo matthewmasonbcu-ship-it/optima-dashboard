@@ -1397,6 +1397,16 @@ const sendSelectedContractToApprovalQueue = () => {
   entryPrice: alertEntryPrice,
   stopLoss: alertStopLoss,
   takeProfit: alertTakeProfit,
+
+  spreadType: selectedContract.spread_type ?? null,
+  netCredit: selectedContract.net_credit ?? null,
+  spreadWidth: selectedContract.spread_width ?? null,
+  maxLoss: selectedContract.max_loss ?? null,
+  maxProfit: selectedContract.max_profit ?? null,
+  shortLegOptionSymbol: selectedContract.short_leg?.option_symbol ?? null,
+  shortLegStrikePrice: selectedContract.short_leg?.strike_price ?? null,
+  longLegOptionSymbol: selectedContract.long_leg?.option_symbol ?? null,
+  longLegStrikePrice: selectedContract.long_leg?.strike_price ?? null,
 });
 
   setStatusMessage(

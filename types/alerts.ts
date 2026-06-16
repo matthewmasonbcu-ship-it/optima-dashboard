@@ -45,6 +45,17 @@ export interface TradeApprovalAlert {
   stopLoss?: number | null;
   takeProfit?: number | null;
 
+  // Credit spread fields (null for single-leg contracts)
+  spreadType?: string | null;
+  netCredit?: number | null;
+  spreadWidth?: number | null;
+  maxLoss?: number | null;
+  maxProfit?: number | null;
+  shortLegOptionSymbol?: string | null;
+  shortLegStrikePrice?: number | null;
+  longLegOptionSymbol?: string | null;
+  longLegStrikePrice?: number | null;
+
   // Timestamps
   expiresAt?: string | null;
   createdAt?: string;

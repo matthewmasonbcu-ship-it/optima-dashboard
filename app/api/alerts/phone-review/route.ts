@@ -44,6 +44,16 @@ type PaperOrderPreviewRow = {
   risk_guard_status: string | null;
   max_risk_dollars: number | null;
 
+  spread_type: string | null;
+  short_leg_option_symbol: string | null;
+  short_leg_strike_price: number | null;
+  long_leg_option_symbol: string | null;
+  long_leg_strike_price: number | null;
+  net_credit: number | null;
+  spread_width: number | null;
+  max_loss: number | null;
+  max_profit: number | null;
+
   sandbox_preview_validation_status: string | null;
   sandbox_preview_human_review_decision: string | null;
 
@@ -257,6 +267,15 @@ export async function POST(request: Request) {
           "contract_quality",
           "risk_guard_status",
           "max_risk_dollars",
+          "spread_type",
+          "short_leg_option_symbol",
+          "short_leg_strike_price",
+          "long_leg_option_symbol",
+          "long_leg_strike_price",
+          "net_credit",
+          "spread_width",
+          "max_loss",
+          "max_profit",
           "sandbox_preview_validation_status",
           "sandbox_preview_human_review_decision",
           "phone_review_alert_status",
@@ -443,6 +462,16 @@ export async function POST(request: Request) {
         contract_quality: preview.contract_quality ?? null,
         risk_guard_status: preview.risk_guard_status ?? null,
         max_risk_dollars: preview.max_risk_dollars ?? null,
+
+        spread_type: preview.spread_type ?? "single_leg",
+        short_leg_option_symbol: preview.short_leg_option_symbol ?? null,
+        short_leg_strike_price: preview.short_leg_strike_price ?? null,
+        long_leg_option_symbol: preview.long_leg_option_symbol ?? null,
+        long_leg_strike_price: preview.long_leg_strike_price ?? null,
+        net_credit: preview.net_credit ?? null,
+        spread_width: preview.spread_width ?? null,
+        max_loss: preview.max_loss ?? null,
+        max_profit: preview.max_profit ?? null,
 
         approved_for_order: false,
       })

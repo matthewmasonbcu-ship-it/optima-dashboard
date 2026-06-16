@@ -52,6 +52,17 @@ type PaperOrderPreviewRow = {
   entry_price: number | null;
   stop_loss: number | null;
   take_profit: number | null;
+
+  spread_type: string | null;
+  short_leg_option_symbol: string | null;
+  short_leg_strike_price: number | null;
+  long_leg_option_symbol: string | null;
+  long_leg_strike_price: number | null;
+  net_credit: number | null;
+  spread_width: number | null;
+  max_loss: number | null;
+  max_profit: number | null;
+
   sandbox_preview_validation_status: string | null;
   sandbox_preview_human_review_decision: string | null;
   approved_for_sandbox_order: boolean | null;
@@ -233,7 +244,15 @@ async function autoSavePaperTrade(
       override_used: false,
       override_reason: null,
       contract_quality: preview.contract_quality,
-      spread_type: "single_leg",
+      spread_type: preview.spread_type ?? "single_leg",
+      short_leg_option_symbol: preview.short_leg_option_symbol ?? null,
+      short_leg_strike_price: preview.short_leg_strike_price ?? null,
+      long_leg_option_symbol: preview.long_leg_option_symbol ?? null,
+      long_leg_strike_price: preview.long_leg_strike_price ?? null,
+      net_credit: preview.net_credit ?? null,
+      spread_width: preview.spread_width ?? null,
+      max_loss: preview.max_loss ?? null,
+      max_profit: preview.max_profit ?? null,
     });
 
   if (optionDetailError) {
@@ -339,6 +358,15 @@ export async function POST(request: Request) {
           "entry_price",
           "stop_loss",
           "take_profit",
+          "spread_type",
+          "short_leg_option_symbol",
+          "short_leg_strike_price",
+          "long_leg_option_symbol",
+          "long_leg_strike_price",
+          "net_credit",
+          "spread_width",
+          "max_loss",
+          "max_profit",
           "sandbox_preview_validation_status",
           "sandbox_preview_human_review_decision",
           "approved_for_sandbox_order",

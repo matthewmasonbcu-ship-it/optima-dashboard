@@ -40,6 +40,16 @@ type CreateTradeApprovalAlertInput = {
   entryPrice?: number | null;
   stopLoss?: number | null;
   takeProfit?: number | null;
+
+  spreadType?: string | null;
+  netCredit?: number | null;
+  spreadWidth?: number | null;
+  maxLoss?: number | null;
+  maxProfit?: number | null;
+  shortLegOptionSymbol?: string | null;
+  shortLegStrikePrice?: number | null;
+  longLegOptionSymbol?: string | null;
+  longLegStrikePrice?: number | null;
 };
 
 const initialTestAlerts: TradeApprovalAlert[] = [];
@@ -90,6 +100,16 @@ async function savePhoneAlertEvent(alert: TradeApprovalAlert) {
     risk_guard_status: alert.riskGuardStatus ?? null,
     risk_guard_reason: alert.riskGuardReason ?? null,
     max_risk_dollars: alert.maxRiskDollars ?? null,
+
+    spread_type: alert.spreadType ?? "single_leg",
+    short_leg_option_symbol: alert.shortLegOptionSymbol ?? null,
+    short_leg_strike_price: alert.shortLegStrikePrice ?? null,
+    long_leg_option_symbol: alert.longLegOptionSymbol ?? null,
+    long_leg_strike_price: alert.longLegStrikePrice ?? null,
+    net_credit: alert.netCredit ?? null,
+    spread_width: alert.spreadWidth ?? null,
+    max_loss: alert.maxLoss ?? null,
+    max_profit: alert.maxProfit ?? null,
 
     sent_at: null,
     opened_at: null,
@@ -175,6 +195,16 @@ const { error } = await supabase.from("paper_order_previews").insert({
     entry_price: alert.entryPrice ?? null,
     stop_loss: alert.stopLoss ?? null,
     take_profit: alert.takeProfit ?? null,
+
+    spread_type: alert.spreadType ?? "single_leg",
+    short_leg_option_symbol: alert.shortLegOptionSymbol ?? null,
+    short_leg_strike_price: alert.shortLegStrikePrice ?? null,
+    long_leg_option_symbol: alert.longLegOptionSymbol ?? null,
+    long_leg_strike_price: alert.longLegStrikePrice ?? null,
+    net_credit: alert.netCredit ?? null,
+    spread_width: alert.spreadWidth ?? null,
+    max_loss: alert.maxLoss ?? null,
+    max_profit: alert.maxProfit ?? null,
 
     preview_status: "PREVIEW_ONLY",
     broker: "TRADIER_SANDBOX",
@@ -356,6 +386,16 @@ export function useTradeApprovalAlerts() {
       entryPrice: input.entryPrice ?? null,
       stopLoss: input.stopLoss ?? null,
       takeProfit: input.takeProfit ?? null,
+
+      spreadType: input.spreadType ?? null,
+      netCredit: input.netCredit ?? null,
+      spreadWidth: input.spreadWidth ?? null,
+      maxLoss: input.maxLoss ?? null,
+      maxProfit: input.maxProfit ?? null,
+      shortLegOptionSymbol: input.shortLegOptionSymbol ?? null,
+      shortLegStrikePrice: input.shortLegStrikePrice ?? null,
+      longLegOptionSymbol: input.longLegOptionSymbol ?? null,
+      longLegStrikePrice: input.longLegStrikePrice ?? null,
 
       createdAt: new Date().toISOString(),
     };
