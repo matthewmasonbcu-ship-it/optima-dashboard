@@ -128,6 +128,29 @@ async function autoSavePaperTrade(
     return { saved: false, reason: "Daily limit of 3 trades reached." };
   }
 
+  const todaysClosedIds = (
+    await supabase
+      .from("paper_trades")
+      .select("id")
+      .eq("status", "closed")
+      .gte("closed_at", startOfTodayISO)
+  ).data?.map((r) => r.id) ?? [];
+
+  if (todaysClosedIds.length > 0) {
+    const lossCheck = await supabase
+      .from("option_trade_details")
+      .select("id")
+      .in("paper_trade_id", todaysClosedIds)
+      .lt("option_pnl", 0);
+
+    if ((lossCheck.data?.length ?? 0) >= 2) {
+      return {
+        saved: false,
+        reason: "Daily loss lockout: 2 losses today. Trading locked until tomorrow.",
+      };
+    }
+  }
+
   const duplicateCheck = await supabase
     .from("paper_trades")
     .select("id")

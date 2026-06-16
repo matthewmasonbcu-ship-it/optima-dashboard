@@ -1001,6 +1001,29 @@ export default function Home() {
         return;
       }
 
+      const todaysClosedIds = (
+        await supabase
+          .from("paper_trades")
+          .select("id")
+          .eq("status", "closed")
+          .gte("closed_at", startOfDay.toISOString())
+      ).data?.map((r) => r.id) ?? [];
+
+      if (todaysClosedIds.length > 0) {
+        const lossCheck = await supabase
+          .from("option_trade_details")
+          .select("id")
+          .in("paper_trade_id", todaysClosedIds)
+          .lt("option_pnl", 0);
+
+        if ((lossCheck.data?.length ?? 0) >= 2) {
+          setStatusMessage(
+            "OPTIMA LOCKOUT: 2 losses today. Trading locked until tomorrow. Protect the account."
+          );
+          return;
+        }
+      }
+
       const duplicateCheck = await supabase
         .from("paper_trades")
         .select("id")
