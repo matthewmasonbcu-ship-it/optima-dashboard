@@ -727,6 +727,7 @@ export default function Home() {
   const [statusMessage, setStatusMessage] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [testingOverrideEnabled, setTestingOverrideEnabled] = useState(false);
+  const [tradeReason, setTradeReason] = useState("");
   const [activeTab, setActiveTab] = useState<TabId>("trade");
   const [openTradesCount, setOpenTradesCount] = useState(0);
   const [tickerQuotes, setTickerQuotes] = useState<Record<string, QuoteData | null>>({});
@@ -1026,6 +1027,7 @@ export default function Home() {
         take_profit: takeProfit,
         status: "open",
         strategy: testingOverrideEnabled ? "manual_override_test" : "manual",
+        trade_reason: tradeReason.trim() || null,
       };
 
       const { data: paperTradeData, error: paperTradeError } = await supabase
@@ -1096,6 +1098,7 @@ export default function Home() {
         `Paper trade and option details saved successfully: ${selectedSymbol}. Risk Guard: ${latestRiskCheck.status}. Contract Quality: ${selectedContractGrade}.`
       );
 
+      setTradeReason("");
       setRefreshKey((prev) => prev + 1);
 
       window.dispatchEvent(new Event("paper-trade-saved"));
@@ -1432,6 +1435,8 @@ const sendSelectedContractToApprovalQueue = () => {
                       preTradeWarnings={preTradeCheck.warnings}
                       preTradeBlocks={preTradeCheck.blocks}
                       onSavePaperTrade={savePaperTrade}
+                      tradeReason={tradeReason}
+                      onTradeReasonChange={setTradeReason}
                       marketCondition={marketCondition}
                       testingOverrideEnabled={testingOverrideEnabled}
                       setTestingOverrideEnabled={setTestingOverrideEnabled}

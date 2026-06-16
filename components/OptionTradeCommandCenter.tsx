@@ -85,6 +85,8 @@ type OptionTradeCommandCenterProps = {
   preTradeWarnings?: string[];
   preTradeBlocks?: string[];
   onSavePaperTrade?: () => void;
+  tradeReason?: string;
+  onTradeReasonChange?: (value: string) => void;
   marketCondition?: string;
   testingOverrideEnabled?: boolean;
   setTestingOverrideEnabled?: (enabled: boolean) => void;
@@ -366,6 +368,8 @@ export default function OptionTradeCommandCenter({
   preTradeWarnings = [],
   preTradeBlocks = [],
   onSavePaperTrade,
+  tradeReason = "",
+  onTradeReasonChange,
   marketCondition = "UNKNOWN",
   testingOverrideEnabled = false,
   setTestingOverrideEnabled,
@@ -524,38 +528,53 @@ export default function OptionTradeCommandCenter({
               style={{ background: "linear-gradient(90deg, transparent, #10b981, transparent)" }}
             />
           )}
-          <div className="flex flex-col gap-3 px-5 py-4 pl-6 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-500">
-                Paper Trade Action
-              </p>
-              <p className="mt-0.5 font-mono text-sm font-black text-white">
-                {selectedContract
-                  ? `Contract selected · ${selectedContractSymbol || "ready"}`
-                  : "No contract selected"}
-              </p>
-              <p className="mt-1 font-mono text-[9px] text-slate-600">
-                {testingOverrideEnabled
-                  ? "Override armed — blocked trades can be saved as test entries."
-                  : "Save only when Risk Guard and Pre-Trade Checklist are approved."}
-              </p>
+          <div className="flex flex-col gap-3 px-5 py-4 pl-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-500">
+                  Paper Trade Action
+                </p>
+                <p className="mt-0.5 font-mono text-sm font-black text-white">
+                  {selectedContract
+                    ? `Contract selected · ${selectedContractSymbol || "ready"}`
+                    : "No contract selected"}
+                </p>
+                <p className="mt-1 font-mono text-[9px] text-slate-600">
+                  {testingOverrideEnabled
+                    ? "Override armed — blocked trades can be saved as test entries."
+                    : "Save only when Risk Guard and Pre-Trade Checklist are approved."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onSavePaperTrade}
+                disabled={!canAttemptSave}
+                className={`shrink-0 rounded-lg border px-5 py-3 font-mono text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:cursor-not-allowed disabled:opacity-40
+                  ${testingOverrideEnabled
+                    ? "border-orange-500/60 bg-orange-500/15 text-orange-300 hover:bg-orange-500/25"
+                    : String(riskGuardStatus || "").toUpperCase() === "APPROVED"
+                    ? "border-emerald-500/60 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25"
+                    : String(riskGuardStatus || "").toUpperCase() === "CAUTION"
+                    ? "border-yellow-500/60 bg-yellow-500/15 text-yellow-300 hover:bg-yellow-500/25"
+                    : "border-slate-700/60 bg-slate-800/60 text-slate-500"
+                  }`}
+              >
+                {testingOverrideEnabled ? "Save Override Trade ›" : "Save Paper Trade ›"}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={onSavePaperTrade}
-              disabled={!canAttemptSave}
-              className={`shrink-0 rounded-lg border px-5 py-3 font-mono text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:cursor-not-allowed disabled:opacity-40
-                ${testingOverrideEnabled
-                  ? "border-orange-500/60 bg-orange-500/15 text-orange-300 hover:bg-orange-500/25"
-                  : String(riskGuardStatus || "").toUpperCase() === "APPROVED"
-                  ? "border-emerald-500/60 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25"
-                  : String(riskGuardStatus || "").toUpperCase() === "CAUTION"
-                  ? "border-yellow-500/60 bg-yellow-500/15 text-yellow-300 hover:bg-yellow-500/25"
-                  : "border-slate-700/60 bg-slate-800/60 text-slate-500"
-                }`}
-            >
-              {testingOverrideEnabled ? "Save Override Trade ›" : "Save Paper Trade ›"}
-            </button>
+            <div>
+              <p className="mb-1 font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-500">
+                Why this trade? (optional)
+              </p>
+              <input
+                type="text"
+                value={tradeReason}
+                onChange={(e) => onTradeReasonChange?.(e.target.value)}
+                placeholder="One sentence — the edge you saw."
+                maxLength={280}
+                className="w-full rounded-lg border border-slate-700/60 bg-slate-900/60 px-3 py-2 font-mono text-[11px] text-slate-200 placeholder-slate-600 outline-none focus:border-slate-500/80 focus:ring-1 focus:ring-slate-500/40"
+              />
+            </div>
           </div>
         </div>
 
