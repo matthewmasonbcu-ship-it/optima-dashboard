@@ -12,6 +12,7 @@ import PaperTradeAnalytics from "../components/PaperTradeAnalytics";
 import OptionPerformanceScoreboard from "../components/OptionPerformanceScoreboard";
 import PerformanceCharts from "../components/PerformanceCharts";
 import ScannerResultsPanel from "../components/ScannerResultsPanel";
+import DrawdownTracker from "../components/DrawdownTracker";
 import OptionTradeCommandCenter from "../components/OptionTradeCommandCenter";
 import AutoTradeJournal from "../components/AutoTradeJournal";
 import AutoPositionMonitor from "../components/AutoPositionMonitor";
@@ -1470,6 +1471,7 @@ const sendSelectedContractToApprovalQueue = () => {
 
               {activeTab === "positions" && (
                 <div className="h-full space-y-4 overflow-y-auto">
+                  <DrawdownTracker key={`drawdown-${refreshKey}`} />
                   <PaperTradeTracker key={`tracker-${refreshKey}`} />
 
                   <AutoPositionMonitor refreshKey={refreshKey} />
