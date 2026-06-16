@@ -885,7 +885,7 @@ export default function Home() {
       const quotes: Record<string, QuoteData | null> = {};
 
       for (const symbol of symbols) {
-        const quote = await fetchQuote(symbol);
+        const quote = await fetchQuote(symbol, "", true);
         quotes[symbol] = quote;
       }
 
