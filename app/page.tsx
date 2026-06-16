@@ -388,6 +388,31 @@ function getPreTradeEnforcementStatus(params: {
     if (typeof recommendationScore === "number" && recommendationScore < 60) {
       warnings.push("Recommendation score is weak.");
     }
+
+    // DTE hard block — must be 30–45 days
+    const expDateRaw = String(
+      getContractValue(selectedContract, ["expiration_date", "expirationDate"], "") || ""
+    );
+    if (!expDateRaw) {
+      blocks.push("No expiration date on contract. Cannot verify DTE.");
+    } else {
+      const expMs = new Date(expDateRaw).getTime();
+      const todayMs = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); })();
+      const dte = Math.ceil((expMs - todayMs) / 86_400_000);
+      if (dte < 30 || dte > 45) {
+        blocks.push(
+          `DTE is ${dte} day${dte === 1 ? "" : "s"} — must be 30–45. Select a contract within the target expiration window.`
+        );
+      }
+    }
+
+    // Spread type hard block — must be a credit spread, not single leg
+    const spreadTypeVal = getContractValue(selectedContract, ["spread_type"], "single_leg");
+    if (!spreadTypeVal || spreadTypeVal === "single_leg") {
+      blocks.push(
+        "Single-leg contracts are not allowed. Must use a credit spread (bull put or bear call)."
+      );
+    }
   }
 
   let status: PreTradeEnforcementStatus = "READY";
