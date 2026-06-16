@@ -48,34 +48,121 @@
    - Delivery order swapped: email-to-SMS gateway tried first (primary), Twilio as fallback (`904e55d`)
    - **Tested end-to-end on deployed Vercel URL**: test rows inserted into `paper_order_previews`, `/api/alerts/phone-review` called live, SMS delivered successfully via both paths (email-to-SMS gateway primary success confirmed, and Twilio fallback success confirmed on a separate run). All test rows and linked `phone_alert_events`/`phone_review_tokens` rows cleaned up afterward.
 
+---
+
+## Session Date: June 15, 2026
+
+## What Was Built This Session
+
+### Infrastructure Fix
+
+1. **Fixed Vercel deploy pipeline — cron config was silently blocking all deploys**
+   - The `vercel.json` cron configuration was malformed in a way that passed local build checks but caused Vercel to reject deploys silently (no build error shown in UI)
+   - Corrected the config and triggered a fresh deploy; Vercel came back green
+   - **Impact**: All subsequent deploys in this session went through cleanly
+
+2. **Watchlist now syncs via Supabase** (`watchlist_symbols` table)
+   - Added migration for `watchlist_symbols` table
+   - Scanner fetches the live watchlist from Supabase on each run; falls back to `DEFAULT_WATCHLIST` constant only if the table is unreachable
+   - Added fetch logging to aid debugging when the Supabase read fails
+
+### Phase 8 — Discipline Engine (COMPLETE)
+
+3. **21-DTE auto-close logic + `trade_reason` journal field**
+   - Auto-close cron now flags positions at 21 DTE for review (matches Wheel/spread exit discipline)
+   - `trade_reason` free-text field added to `paper_trades` table and surfaced in the UI; displayed in trade history panel
+   - Daily trade count badge added to the Positions tab header
+
+4. **Anti-revenge lockout (2-loss daily lockout)**
+   - `savePaperTrade()` in `app/page.tsx` now checks today's closed `option_trade_details` for losses; blocks a 3rd save if 2 losses have already been logged today
+   - Identical guard added to `autoSavePaperTrade()` in the phone approval respond route
+   - Block message surfaced in the UI status banner
+
+5. **Real-time drawdown calculator — `DrawdownTracker.tsx`**
+   - Fetches all closed trades from `option_trade_details`, computes running balance from `$50,000` starting
+   - Tracks: realized P&L, current drawdown from peak, daily P&L for today
+   - Constants updated to **Black Eagle's real limits**: `$5,000` max total drawdown (10%), `$2,500` max daily drawdown (5%), `$4,000` profit target (8%)
+   - Progress bars for total drawdown, daily drawdown, and a **profit target progress bar** (cyan → emerald fill as you approach $4,000)
+   - Placed in the Analytics tab
+
+6. **Pre-trade discipline checklist (8 rows) in `OptionTradeCommandCenter.tsx`**
+   - Inline checklist rendered above the Save button; updates live as you select contracts
+   - Rows: Contract Grade A/B · Short Leg Delta 0.20–0.25 · DTE 30–45 Days · Risk Guard APPROVED · < 3 Trades Today · < 2 Losses Today · Max Loss Within Limit · No Sector Correlation
+   - Hard fails (red `✗`) block the accent bar from going green; correlation row is advisory amber `⚠` — never a hard fail
+   - Badge shows `N / 8 PASS`; accent bar goes emerald only when all 8 pass
+
+7. **Personal daily loss stop ($2,000)**
+   - Added as a third gate in `savePaperTrade()` (after trade-count and loss-count checks): sums today's `option_pnl` from closed trades; blocks at `≤ -$2,000` (80% of Black Eagle's $2,500 firm limit)
+   - Same gate added to `autoSavePaperTrade()` in the phone approval route
+   - Preserves a $500 buffer between personal stop and the firm's disqualification threshold
+
+### Phase 9 — Evaluation Simulator (COMPLETE)
+
+8. **`EvaluationSimulator.tsx` — Black Eagle pass/fail readiness check**
+   - Feeds all closed trades through Black Eagle's exact evaluation rules in a single O(n) pass
+   - Four criteria evaluated independently:
+     - Profit target: realized P&L ≥ $4,000 (8% of $50K)
+     - No total drawdown breach: never exceeded $5,000 (10%)
+     - No daily drawdown breach: no single day exceeded $2,500 (5%)
+     - Minimum trading days: ≥ 10 distinct trading days with closed trades
+   - Verdict: `READY TO EVALUATE` (green) / `NOT READY YET` (amber) / `DISQUALIFIED` (red)
+   - Card chrome (glow, top/bottom edge, accent bars) color-coded by verdict
+   - Placed at the top of the Analytics tab
+
+### Phase 10 — Risk Intelligence (CORE COMPLETE)
+
+9. **VIX market regime filter**
+   - `classifyVixRegime(vixPrice)` added to `lib/scanner.ts` — returns `CALM / ELEVATED / HIGH_RISK / UNKNOWN`
+   - Thresholds: VIX < 20 = CALM, 20–30 = ELEVATED, > 30 = HIGH_RISK
+   - `^VIX` fetched via existing Finnhub `fetchQuote` inside `runScanner()`; `vixLevel` and `vixRegime` stored in state
+   - Advisory banners appear above the trade grid for ELEVATED (amber) and HIGH_RISK (red); no banner for CALM/UNKNOWN
+   - VIX Regime `StatusCard` added to the System tab (alongside broker mode and safety lock indicators)
+   - Advisory only — never blocks `savePaperTrade()`
+
+10. **Correlation guard (8th checklist row)**
+    - `SECTOR_MAP` constant in `app/page.tsx` maps tickers to sectors: TECH, FINANCIALS, BROAD MARKET
+    - `loadOpenTradesCount` changed to fetch `symbol` column (same query, now stores `openSymbols` state)
+    - Derived `selectedSector`, `openSectorCount`, `openSectorName` passed as props to `OptionTradeCommandCenter`
+    - Checklist row shows amber `⚠` when `openSectorCount >= 2` in the same sector (3rd position = correlated risk)
+    - Advisory only — excluded from `clAnyHardFail`; never turns the checklist header red
+
+---
+
 ## Current Phase Status
 
-- **Phase 2 — Paper Trading Proof (current)**: Scanner runs on live Finnhub quotes; daily 3-trade guardrail enforced. Credit spread infrastructure (two-leg contracts, schema, UI, Risk Guard math) is now built — ready to start logging the 30 credit spread paper trades required by the roadmap.
-- **Phase 3 — Phone Approval Workflow: COMPLETE**. Full pipeline working end to end: scanner → approval queue → human review → sandbox preview → human WATCH review → `/api/alerts/phone-review` SMS with tappable approve/reject link → `/phone-review/[token]` mobile page → `/api/alerts/phone-review/respond`. Verified live on the deployed Vercel app.
+- **Phase 2 — Paper Trading Proof (active)**: All infrastructure is ready. The funded-account-critical builds are done. The only remaining variable is the trading track record itself — need to log real paper trades.
+- **Phase 3 — Phone Approval Workflow: COMPLETE**
+- **Phase 8 — Discipline Engine: COMPLETE** (21-DTE, journal, anti-revenge lockout, drawdown tracker, pre-trade checklist, personal daily stop)
+- **Phase 9 — Evaluation Simulator: COMPLETE** (Black Eagle 8% target / 5% daily / 10% total / 10 min days — wired to real numbers)
+- **Phase 10 — Risk Intelligence: CORE COMPLETE** (VIX regime filter + correlation guard — both advisory)
 
 ## What's Working Today
 
-- Scanner pulls live Finnhub quotes for SPY + watchlist, classifies market condition, and grades setups by `setupScore`
+- Scanner pulls live Finnhub quotes for SPY + watchlist (synced from Supabase `watchlist_symbols`), classifies market condition, fetches VIX regime
 - Live scrolling price ticker in the header (30s refresh)
 - Contract selector auto-loads real Tradier sandbox option chains by default, with two-leg credit spread support
-- `savePaperTrade()` enforces: no duplicate open trade per symbol, and max 3 trades/day
-- Full approval pipeline including remote phone approval/rejection via SMS link — verified live at `https://optima-dashboard-azm9.vercel.app`
-- Scanner FYI SMS alert (non-actionable, separate from approval pipeline)
-- Animated dashboard: sidebar active-tab pill, tab transitions, staggered trade columns, animated background layers, Risk Guard pulse glow, scanline overlay
+- `savePaperTrade()` enforces: no duplicate open trade per symbol · max 3 trades/day · max 2 losses/day · $2,000 personal daily loss stop
+- Same four guards in `autoSavePaperTrade()` (phone approval route)
+- Full approval pipeline including remote phone approval/rejection via SMS link — verified live
+- Pre-trade 8-row discipline checklist (live in OptionTradeCommandCenter)
+- DrawdownTracker with Black Eagle real limits + profit target progress bar (Analytics tab)
+- EvaluationSimulator with READY / NOT READY / DISQUALIFIED verdict (Analytics tab)
+- VIX regime advisory banners (Trade tab) and StatusCard (System tab)
+- Correlation guard advisory row in discipline checklist
 
-## What's Remaining Before First Paper Trade
+## Next Session Priority
 
-- Begin logging credit spread paper trades toward the 30-trade minimum (Phase 2)
-- Verify the Tradier sandbox auto-load works end-to-end for two-leg spreads in practice (token validity, expirations, contract enrichment)
-- Email-to-SMS gateway (SMTP) delivery is intermittent (succeeded on one test run, failed on another with Twilio catching the fallback) — not blocking since the fallback chain works, but worth monitoring
-
-## Next Session Priority List
-
-1. Start logging credit spread paper trades toward the 30-trade minimum required by Phase 2.
-2. Verify live Tradier auto-load behavior for two-leg spreads across multiple symbols/directions in the running dashboard.
-3. Physically test the phone-review Approve/Reject buttons via a real scanner-triggered alert (not just the test harness).
-4. Track progress toward Black Eagle evaluation readiness (8-10% profit target within drawdown limits).
+1. **Log the first real paper trade** — this is the only thing that matters right now. Everything is built. Scanner → contract → checklist → save.
+2. **Phase 11 — Capital Allocation** — once real trades are flowing and there is realized P&L data to work with.
+3. Monitor SMTP vs Twilio SMS delivery reliability across real scanner-triggered alerts.
 
 ## Target Firm Reminder
 
-**Black Eagle Financial Group** — credit spreads strategy (bull put / bear call), evaluation fee $150-500, funded accounts up to $250K, 80% profit split. Pass criteria: hit 8-10% profit target within drawdown limits. Long-term goal: Maverick Trading after a proven funded track record.
+**Black Eagle Financial Group** — credit spreads (bull put / bear call), evaluation fee $150–500, funded accounts up to $250K, 80% profit split.
+Pass criteria (all wired into EvaluationSimulator):
+- Profit target: ≥ $4,000 (8% of $50K starting balance)
+- Max total drawdown: ≤ $5,000 (10%)
+- Max daily drawdown: ≤ $2,500 (5%)
+- Minimum trading days: ≥ 10
+
+Long-term goal: Maverick Trading after a proven funded track record.
