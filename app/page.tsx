@@ -895,7 +895,7 @@ export default function Home() {
       setMarketCondition(newMarketCondition);
       setSpyPrice(spyQuote.c);
 
-      const vixQuote = await fetchQuote("^VIX");
+      const vixQuote = await fetchQuote("VIXY", "", true);
       const newVixLevel = vixQuote?.c ?? null;
       setVixLevel(newVixLevel);
       setVixRegime(classifyVixRegime(newVixLevel));
@@ -1469,11 +1469,11 @@ const sendSelectedContractToApprovalQueue = () => {
                         </span>
                         <span className="text-slate-700">›</span>
                         <span className="font-mono text-[10px] text-slate-300">
-                          Market regime HIGH RISK — VIX above 30. No new positions recommended.
+                          Market regime HIGH RISK — VIXY above 35 (VIX proxy). No new positions recommended.
                         </span>
                         {vixLevel !== null && (
                           <span className="ml-auto shrink-0 font-mono text-[10px] font-bold text-red-400">
-                            VIX {vixLevel.toFixed(1)}
+                            VIXY {vixLevel.toFixed(1)}
                           </span>
                         )}
                       </div>
@@ -1489,11 +1489,11 @@ const sendSelectedContractToApprovalQueue = () => {
                         </span>
                         <span className="text-slate-700">›</span>
                         <span className="font-mono text-[10px] text-slate-400">
-                          Market regime ELEVATED — VIX 20–30. Trade with caution.
+                          Market regime ELEVATED — VIXY 22–35 (VIX proxy). Trade with caution.
                         </span>
                         {vixLevel !== null && (
                           <span className="ml-auto shrink-0 font-mono text-[10px] font-bold text-amber-300">
-                            VIX {vixLevel.toFixed(1)}
+                            VIXY {vixLevel.toFixed(1)}
                           </span>
                         )}
                       </div>
@@ -1676,7 +1676,7 @@ const sendSelectedContractToApprovalQueue = () => {
                     <StatusCard
                       label="VIX Regime"
                       value={vixRegime === "HIGH_RISK" ? "HIGH RISK" : vixRegime}
-                      subtext={vixLevel !== null ? `VIX ${vixLevel.toFixed(1)}` : "Run scanner to load"}
+                      subtext={vixLevel !== null ? `VIXY ${vixLevel.toFixed(1)} (proxy)` : "Run scanner to load"}
                       className={
                         vixRegime === "HIGH_RISK"
                           ? "border-red-500/40 bg-red-500/10 text-red-300"

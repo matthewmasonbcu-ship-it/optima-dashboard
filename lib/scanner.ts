@@ -60,7 +60,8 @@ export function getNumber(value: any, fallback: number | null = 0): number | nul
 
 export async function fetchQuote(
   symbol: string,
-  baseUrl = ""
+  baseUrl = "",
+  silent = false
 ): Promise<QuoteData | null> {
   try {
     const res = await fetch(`${baseUrl}/api/quote?symbol=${encodeURIComponent(symbol)}`, {
@@ -70,28 +71,30 @@ export async function fetchQuote(
     const data = await res.json();
 
     if (!res.ok || !data?.success || !data?.quote) {
-      console.error("QUOTE FAILED:", symbol, data);
+      if (!silent) console.error("QUOTE FAILED:", symbol, data);
       return null;
     }
 
     const quote = data.quote;
 
     if (!quote || typeof quote.c !== "number" || quote.c <= 0) {
-      console.error("INVALID QUOTE:", symbol, quote);
+      if (!silent) console.error("INVALID QUOTE:", symbol, quote);
       return null;
     }
 
     return quote;
   } catch (error) {
-    console.error("fetchQuote error:", symbol, error);
+    if (!silent) console.error("fetchQuote error:", symbol, error);
     return null;
   }
 }
 
+// Thresholds calibrated for VIXY (ProShares VIX Short-Term Futures ETF),
+// used as a free-tier proxy for the VIX index.
 export function classifyVixRegime(vixPrice: number | null): VixRegime {
   if (vixPrice === null || vixPrice <= 0) return "UNKNOWN";
-  if (vixPrice < 20) return "CALM";
-  if (vixPrice <= 30) return "ELEVATED";
+  if (vixPrice < 22) return "CALM";
+  if (vixPrice <= 35) return "ELEVATED";
   return "HIGH_RISK";
 }
 
