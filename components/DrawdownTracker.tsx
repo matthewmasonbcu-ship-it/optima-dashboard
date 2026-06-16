@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 
-// ── Configurable limits — update to Black Eagle's real numbers before evaluation
+// ── Black Eagle Financial Group evaluation limits
 const STARTING_BALANCE = 50_000;
-const MAX_TOTAL_DRAWDOWN = 2_000;
-const MAX_DAILY_DRAWDOWN = 1_000;
+const MAX_TOTAL_DRAWDOWN = 5_000;  // 10%
+const MAX_DAILY_DRAWDOWN = 2_500;  // 5%
+const PROFIT_TARGET = 4_000;       // 8%
 
 type ClosedTrade = {
   option_pnl: number;
@@ -24,6 +25,7 @@ type DrawdownState = {
   dailyDrawdown: number;
   dailyBuffer: number;
   dailyBufferPct: number;
+  profitPct: number;
 };
 
 function computeDrawdown(trades: ClosedTrade[]): DrawdownState {
@@ -56,6 +58,7 @@ function computeDrawdown(trades: ClosedTrade[]): DrawdownState {
     dailyDrawdown,
     dailyBuffer,
     dailyBufferPct: (dailyBuffer / MAX_DAILY_DRAWDOWN) * 100,
+    profitPct: Math.min(100, Math.max(0, ((runningBalance - STARTING_BALANCE) / PROFIT_TARGET) * 100)),
   };
 }
 
@@ -137,6 +140,56 @@ function fmt(value: number, showSign = false): string {
   if (value > 0) return `+$${formatted}`;
   if (value < 0) return `-$${formatted}`;
   return `$${formatted}`;
+}
+
+// ── Profit target progress bar
+function ProfitTargetBar({
+  realized,
+  target,
+}: {
+  realized: number;
+  target: number;
+}) {
+  const pct = Math.min(100, Math.max(0, (Math.max(0, realized) / target) * 100));
+  const hit = realized >= target;
+
+  return (
+    <div className="relative overflow-hidden rounded-xl border border-slate-700/60 bg-slate-900/60">
+      <div className={`absolute inset-y-0 left-0 w-[3px] ${hit ? "bg-emerald-500" : "bg-cyan-500"}`} />
+      <div className="px-5 py-4 pl-6">
+        <div className="mb-2 flex items-center justify-between">
+          <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-500">
+            Profit Target Progress
+          </p>
+          <span className={`font-mono text-[9px] font-bold uppercase tracking-[0.2em] ${hit ? "text-emerald-400" : "text-cyan-400"}`}>
+            {hit ? "TARGET HIT" : "IN PROGRESS"}
+          </span>
+        </div>
+        <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className={`font-mono text-sm font-black ${realized >= 0 ? "text-emerald-300" : "text-red-400"}`}>
+            {fmt(realized, true)} realized
+          </span>
+          <span className="font-mono text-[9px] text-slate-700">/</span>
+          <span className="font-mono text-[10px] text-slate-400">{fmt(target)} target</span>
+          <span className="font-mono text-[9px] text-slate-700">·</span>
+          <span className={`font-mono text-[10px] font-bold ${hit ? "text-emerald-400" : "text-slate-300"}`}>
+            {hit ? "Evaluation threshold cleared" : `${fmt(Math.max(0, target - realized))} to go`}
+          </span>
+        </div>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800/80">
+          <div
+            className={`h-2 rounded-full transition-all duration-500 ${hit ? "bg-emerald-500" : "bg-cyan-500"}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <div className="mt-1 text-right">
+          <span className="font-mono text-[8px] text-slate-600">
+            {pct.toFixed(1)}% of {fmt(target)} target reached
+          </span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ── Stat cell — matches OptionTradeCommandCenter context strip style
@@ -316,9 +369,9 @@ export default function DrawdownTracker() {
             </span>
           </h2>
           <p className="mt-1 font-mono text-[10px] leading-5 text-slate-500">
-            Black Eagle limits — ${MAX_TOTAL_DRAWDOWN.toLocaleString()} total ·
-            ${MAX_DAILY_DRAWDOWN.toLocaleString()} daily · starting $
-            {STARTING_BALANCE.toLocaleString()}
+            Black Eagle limits — ${MAX_TOTAL_DRAWDOWN.toLocaleString()} total (10%) ·
+            ${MAX_DAILY_DRAWDOWN.toLocaleString()} daily (5%) · profit target $
+            {PROFIT_TARGET.toLocaleString()} (8%)
           </p>
         </div>
 
@@ -375,7 +428,7 @@ export default function DrawdownTracker() {
               />
             </div>
 
-            {/* Drawdown bars */}
+            {/* Drawdown bars + profit target */}
             <div className="space-y-3">
               <DrawdownBar
                 label="Total Drawdown"
@@ -391,6 +444,7 @@ export default function DrawdownTracker() {
                 buffer={state.dailyBuffer}
                 color={dailyColor}
               />
+              <ProfitTargetBar realized={state.realizedPnl} target={PROFIT_TARGET} />
             </div>
 
             {/* Status footer */}
