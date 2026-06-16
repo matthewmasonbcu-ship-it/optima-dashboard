@@ -65,6 +65,8 @@ const SAFETY_LOCKS = {
   submitted_to_broker: false,
 };
 
+const PERSONAL_DAILY_LOSS_STOP = 2000; // 80% of Black Eagle's $2,500 (5%) daily limit
+
 function getNewYorkUtcOffsetHours(date: Date): number {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
@@ -147,6 +149,26 @@ async function autoSavePaperTrade(
       return {
         saved: false,
         reason: "Daily loss lockout: 2 losses today. Trading locked until tomorrow.",
+      };
+    }
+  }
+
+  if (todaysClosedIds.length > 0) {
+    const dailyPnlCheck = await supabase
+      .from("option_trade_details")
+      .select("option_pnl")
+      .in("paper_trade_id", todaysClosedIds)
+      .not("option_pnl", "is", null);
+
+    const totalDailyPnl = (dailyPnlCheck.data ?? []).reduce(
+      (acc: number, r: { option_pnl: number }) => acc + r.option_pnl,
+      0
+    );
+
+    if (totalDailyPnl <= -PERSONAL_DAILY_LOSS_STOP) {
+      return {
+        saved: false,
+        reason: `OPTIMA DAILY STOP: $${PERSONAL_DAILY_LOSS_STOP.toLocaleString()} personal loss limit hit (80% of firm limit). Trading locked until tomorrow. This buffer protects the account.`,
       };
     }
   }

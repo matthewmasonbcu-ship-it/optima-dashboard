@@ -114,6 +114,7 @@ type PreTradeEnforcementStatus = "READY" | "CAUTION" | "BLOCKED";
 const ACCOUNT_SIZE = 10000;
 const MAX_RISK_PERCENT = 1;
 const MAX_SPREAD_PERCENT = 20;
+const PERSONAL_DAILY_LOSS_STOP = 2000; // 80% of Black Eagle's $2,500 (5%) daily limit
 
 function formatMoney(value: number) {
   return value.toLocaleString("en-US", {
@@ -1060,6 +1061,26 @@ export default function Home() {
         if ((lossCheck.data?.length ?? 0) >= 2) {
           setStatusMessage(
             "OPTIMA LOCKOUT: 2 losses today. Trading locked until tomorrow. Protect the account."
+          );
+          return;
+        }
+      }
+
+      if (todaysClosedIds.length > 0) {
+        const dailyPnlCheck = await supabase
+          .from("option_trade_details")
+          .select("option_pnl")
+          .in("paper_trade_id", todaysClosedIds)
+          .not("option_pnl", "is", null);
+
+        const totalDailyPnl = (dailyPnlCheck.data ?? []).reduce(
+          (acc: number, r: { option_pnl: number }) => acc + r.option_pnl,
+          0
+        );
+
+        if (totalDailyPnl <= -PERSONAL_DAILY_LOSS_STOP) {
+          setStatusMessage(
+            `OPTIMA DAILY STOP: $${PERSONAL_DAILY_LOSS_STOP.toLocaleString()} personal loss limit hit (80% of firm limit). Trading locked until tomorrow. This buffer protects the account.`
           );
           return;
         }
