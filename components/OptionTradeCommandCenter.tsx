@@ -95,6 +95,8 @@ type OptionTradeCommandCenterProps = {
   marketCondition?: string;
   testingOverrideEnabled?: boolean;
   setTestingOverrideEnabled?: (enabled: boolean) => void;
+  onAutoSelect?: () => void;
+  autoSelectLoading?: boolean;
 };
 
 // ─── All helper functions untouched ──────────────────────────────────────────
@@ -390,6 +392,8 @@ export default function OptionTradeCommandCenter({
   marketCondition = "UNKNOWN",
   testingOverrideEnabled = false,
   setTestingOverrideEnabled,
+  onAutoSelect,
+  autoSelectLoading = false,
 }: OptionTradeCommandCenterProps) {
 
   // ─── All derived values — untouched ─────────────────────────────────────────
@@ -737,6 +741,49 @@ export default function OptionTradeCommandCenter({
 
           {/* ── LEFT COLUMN ───────────────────────────────────────────── */}
           <div className="space-y-4">
+
+            {/* Auto-Select Banner — only when setup is ready and no contract selected yet */}
+            {symbol && direction !== "NO TRADE" && !selectedContract && (
+              <div className="relative overflow-hidden rounded-xl border border-cyan-500/25 bg-cyan-500/5 ring-1 ring-cyan-500/10">
+                <div
+                  className="absolute inset-x-0 top-0 h-px opacity-60"
+                  style={{ background: "linear-gradient(90deg, transparent, #06b6d4, transparent)" }}
+                />
+                <div className="absolute inset-y-0 left-0 w-[3px] bg-cyan-500" />
+                <div className="flex flex-col gap-3 px-5 py-4 pl-6 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-cyan-600">
+                      OPTIMA-SYS · Pipeline 2
+                    </p>
+                    <p className="mt-0.5 font-mono text-xs font-black text-slate-300">
+                      Auto-Select Best Credit Spread
+                    </p>
+                    <p className="mt-0.5 font-mono text-[9px] leading-4 text-slate-600">
+                      Fetches the Tradier chain, finds the best short leg near Δ 0.225 in the 30–45 DTE window, adds a long leg 5 strikes OTM. Respects all hard blocks.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onAutoSelect}
+                    disabled={autoSelectLoading || !symbol || direction === "NO TRADE"}
+                    className="group relative shrink-0 overflow-hidden rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-5 py-2.5 font-mono text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300 transition-all hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <span
+                      className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
+                      style={{ background: "linear-gradient(90deg, transparent, #06b6d4, transparent)" }}
+                    />
+                    {autoSelectLoading ? (
+                      <span className="flex items-center gap-2">
+                        <span className="h-1.5 w-1.5 animate-ping rounded-full bg-cyan-400" />
+                        Selecting…
+                      </span>
+                    ) : (
+                      "Auto-Select ›"
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Contract Selector */}
             <SectionCard

@@ -773,6 +773,7 @@ export default function Home() {
   const [dailyTradeCount, setDailyTradeCount] = useState(0);
   const [dailyLossCount, setDailyLossCount] = useState(0);
   const [tickerQuotes, setTickerQuotes] = useState<Record<string, QuoteData | null>>({});
+  const [autoSelectLoading, setAutoSelectLoading] = useState(false);
 
   const selectedSymbol = selectedSetup?.symbol || "";
 
@@ -1010,6 +1011,35 @@ export default function Home() {
   function clearSelectedContract() {
     setSelectedContract(null);
     setStatusMessage("Selected contract cleared.");
+  }
+
+  async function autoSelectBestSpread() {
+    if (!selectedSymbol || tradeDirection === "NO TRADE") {
+      setStatusMessage("Auto-select requires a scanner setup with CALL or PUT direction.");
+      return;
+    }
+    setAutoSelectLoading(true);
+    setStatusMessage("Auto-selecting best credit spread…");
+    try {
+      const stockPrice = spyPrice && selectedSymbol === "SPY" ? spyPrice : undefined;
+      const qs = new URLSearchParams({ symbol: selectedSymbol, direction: tradeDirection });
+      if (stockPrice) qs.set("stockPrice", String(stockPrice));
+      const res = await fetch(`/api/options/auto-select?${qs.toString()}`, { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        setStatusMessage(`Auto-select failed: ${data?.reason || "Unknown error."}`);
+        return;
+      }
+      handleSelectContract(data.contract);
+      setStatusMessage(
+        `Auto-selected ${data.spreadTypeLabel || data.spreadType} for ${selectedSymbol} (${data.expiration}, ${data.dte} DTE)${data.usedFallback ? " — ATM fallback used (no Greek data)" : ""}.`
+      );
+    } catch (err) {
+      console.error("autoSelectBestSpread error:", err);
+      setStatusMessage("Auto-select failed: network error. Check console.");
+    } finally {
+      setAutoSelectLoading(false);
+    }
   }
 
   async function savePaperTrade() {
@@ -1631,6 +1661,8 @@ const sendSelectedContractToApprovalQueue = () => {
                       marketCondition={marketCondition}
                       testingOverrideEnabled={testingOverrideEnabled}
                       setTestingOverrideEnabled={setTestingOverrideEnabled}
+                      onAutoSelect={autoSelectBestSpread}
+                      autoSelectLoading={autoSelectLoading}
                     />
                   </motion.div>
                   </motion.div>
