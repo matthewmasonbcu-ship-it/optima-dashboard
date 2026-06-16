@@ -90,6 +90,8 @@ type OptionTradeCommandCenterProps = {
   onTradeReasonChange?: (value: string) => void;
   dailyTradeCount?: number;
   dailyLossCount?: number;
+  openSectorCount?: number;
+  openSectorName?: string;
   marketCondition?: string;
   testingOverrideEnabled?: boolean;
   setTestingOverrideEnabled?: (enabled: boolean) => void;
@@ -383,6 +385,8 @@ export default function OptionTradeCommandCenter({
   onTradeReasonChange,
   dailyTradeCount = 0,
   dailyLossCount = 0,
+  openSectorCount = 0,
+  openSectorName = "",
   marketCondition = "UNKNOWN",
   testingOverrideEnabled = false,
   setTestingOverrideEnabled,
@@ -415,6 +419,9 @@ export default function OptionTradeCommandCenter({
   const clRiskGuardPass = String(riskGuardStatus || "").toUpperCase() === "APPROVED";
   const clTradeCountPass = dailyTradeCount < 3;
   const clLossCountPass = dailyLossCount < 2;
+  const clCorrelationAvail = !!symbol && !!openSectorName;
+  const clCorrelationWarn = clCorrelationAvail && openSectorCount >= 2;
+  const clCorrelationPass = clCorrelationAvail && openSectorCount < 2;
   const rawMaxLoss = getContractValue(selectedContract, ["max_risk", "maxRisk", "max_loss", "maxLoss"], null);
   const maxLossNum = rawMaxLoss !== null ? getNumber(rawMaxLoss, 0) : null;
   const clAllowedRisk = accountSize * (maxRiskPercent / 100);
@@ -428,6 +435,7 @@ export default function OptionTradeCommandCenter({
     clTradeCountPass,
     clLossCountPass,
     clMaxLossAvail && clMaxLossPass,
+    clCorrelationPass,
   ].filter(Boolean).length;
   const clAnyHardFail = [
     clGradeAvail && !clGradePass,
@@ -437,6 +445,7 @@ export default function OptionTradeCommandCenter({
     !clTradeCountPass,
     !clLossCountPass,
     clMaxLossAvail && !clMaxLossPass,
+    // correlation is advisory — never triggers hard fail
   ].some(Boolean);
 
   // ─── All handlers — untouched ────────────────────────────────────────────────
@@ -569,11 +578,11 @@ export default function OptionTradeCommandCenter({
 
         {/* ── DISCIPLINE RULES CHECKLIST ──────────────────────────────── */}
         <div className="mb-5 relative overflow-hidden rounded-xl border border-slate-700/60 bg-slate-900/40">
-          <div className={`absolute inset-y-0 left-0 w-[3px] ${clAnyHardFail ? "bg-red-500" : clPassCount === 7 ? "bg-emerald-500" : "bg-amber-400"}`} />
+          <div className={`absolute inset-y-0 left-0 w-[3px] ${clAnyHardFail ? "bg-red-500" : clPassCount === 8 ? "bg-emerald-500" : "bg-amber-400"}`} />
           <div className="flex items-center justify-between border-b border-slate-800/60 px-5 py-2.5 pl-6">
             <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-500">Discipline Rules</p>
-            <span className={`font-mono text-[9px] font-bold ${clAnyHardFail ? "text-red-400" : clPassCount === 7 ? "text-emerald-400" : "text-amber-300"}`}>
-              {clPassCount} / 7 PASS
+            <span className={`font-mono text-[9px] font-bold ${clAnyHardFail ? "text-red-400" : clPassCount === 8 ? "text-emerald-400" : "text-amber-300"}`}>
+              {clPassCount} / 8 PASS
             </span>
           </div>
           <div className="space-y-1.5 px-5 py-3 pl-6">
@@ -632,15 +641,28 @@ export default function OptionTradeCommandCenter({
                     ? `$${(maxLossNum ?? 0).toFixed(0)} max loss ≤ $${clAllowedRisk.toFixed(0)} limit`
                     : `$${(maxLossNum ?? 0).toFixed(0)} exceeds $${clAllowedRisk.toFixed(0)} limit`,
               },
-            ] as { label: string; pass: boolean; unavail: boolean; detail: string }[]).map((row, i) => (
+              {
+                label: "No Sector Correlation",
+                pass: clCorrelationPass,
+                warn: clCorrelationWarn,
+                unavail: !clCorrelationAvail,
+                detail: !clCorrelationAvail
+                  ? "Symbol not in a tracked sector"
+                  : clCorrelationWarn
+                    ? `${openSectorCount} open positions in ${openSectorName} — correlated risk`
+                    : openSectorCount === 1
+                      ? `1 open position in ${openSectorName}`
+                      : "No correlated open positions",
+              },
+            ] as { label: string; pass: boolean; warn?: boolean; unavail: boolean; detail: string }[]).map((row, i) => (
               <div key={i} className="flex items-baseline gap-2">
-                <span className={`w-3 shrink-0 text-center font-mono text-[10px] font-black leading-none ${row.unavail ? "text-slate-600" : row.pass ? "text-emerald-400" : "text-red-400"}`}>
-                  {row.unavail ? "—" : row.pass ? "✓" : "✗"}
+                <span className={`w-3 shrink-0 text-center font-mono text-[10px] font-black leading-none ${row.unavail ? "text-slate-600" : row.warn ? "text-amber-400" : row.pass ? "text-emerald-400" : "text-red-400"}`}>
+                  {row.unavail ? "—" : row.warn ? "⚠" : row.pass ? "✓" : "✗"}
                 </span>
                 <span className="shrink-0 font-mono text-[9px] font-bold text-slate-300">
                   {row.label}
                 </span>
-                <span className={`font-mono text-[9px] ${row.unavail ? "text-slate-700" : row.pass ? "text-slate-500" : "text-red-500/80"}`}>
+                <span className={`font-mono text-[9px] ${row.unavail ? "text-slate-700" : row.warn ? "text-amber-500/80" : row.pass ? "text-slate-500" : "text-red-500/80"}`}>
                   · {row.detail}
                 </span>
               </div>

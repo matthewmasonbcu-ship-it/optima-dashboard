@@ -118,6 +118,13 @@ const MAX_RISK_PERCENT = 1;
 const MAX_SPREAD_PERCENT = 20;
 const PERSONAL_DAILY_LOSS_STOP = 2000; // 80% of Black Eagle's $2,500 (5%) daily limit
 
+const SECTOR_MAP: Record<string, string> = {
+  AAPL: "TECH", MSFT: "TECH", NVDA: "TECH", AMD: "TECH",
+  META: "TECH", GOOGL: "TECH", AMZN: "TECH", QQQ: "TECH", TSLA: "TECH",
+  JPM: "FINANCIALS",
+  SPY: "BROAD MARKET", IWM: "BROAD MARKET",
+};
+
 function formatMoney(value: number) {
   return value.toLocaleString("en-US", {
     style: "currency",
@@ -737,11 +744,20 @@ export default function Home() {
   const [tradeReason, setTradeReason] = useState("");
   const [activeTab, setActiveTab] = useState<TabId>("trade");
   const [openTradesCount, setOpenTradesCount] = useState(0);
+  const [openSymbols, setOpenSymbols] = useState<string[]>([]);
   const [dailyTradeCount, setDailyTradeCount] = useState(0);
   const [dailyLossCount, setDailyLossCount] = useState(0);
   const [tickerQuotes, setTickerQuotes] = useState<Record<string, QuoteData | null>>({});
 
   const selectedSymbol = selectedSetup?.symbol || "";
+
+  const selectedSector = selectedSymbol
+    ? (SECTOR_MAP[selectedSymbol.toUpperCase()] ?? null)
+    : null;
+  const openSectorCount = selectedSector
+    ? openSymbols.filter((s) => SECTOR_MAP[s.toUpperCase()] === selectedSector).length
+    : 0;
+  const openSectorName = selectedSector ?? "";
 
   const tradeDirection: TradeDirection =
     selectedSetup?.tradeDirection || selectedSetup?.direction || "NO TRADE";
@@ -778,9 +794,9 @@ export default function Home() {
 
   useEffect(() => {
     async function loadOpenTradesCount() {
-      const { count, error } = await supabase
+      const { data, error } = await supabase
         .from("paper_trades")
-        .select("id", { count: "exact", head: true })
+        .select("symbol")
         .eq("status", "open");
 
       if (error) {
@@ -788,9 +804,11 @@ export default function Home() {
         return;
       }
 
-      if (typeof count === "number") {
-        setOpenTradesCount(count);
-      }
+      const syms = (data ?? [])
+        .map((r: { symbol: string }) => r.symbol)
+        .filter(Boolean) as string[];
+      setOpenTradesCount(syms.length);
+      setOpenSymbols(syms);
     }
 
     loadOpenTradesCount();
@@ -1583,6 +1601,8 @@ const sendSelectedContractToApprovalQueue = () => {
                       onTradeReasonChange={setTradeReason}
                       dailyTradeCount={dailyTradeCount}
                       dailyLossCount={dailyLossCount}
+                      openSectorCount={openSectorCount}
+                      openSectorName={openSectorName}
                       marketCondition={marketCondition}
                       testingOverrideEnabled={testingOverrideEnabled}
                       setTestingOverrideEnabled={setTestingOverrideEnabled}
