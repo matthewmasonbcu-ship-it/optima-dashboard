@@ -732,6 +732,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<TabId>("trade");
   const [openTradesCount, setOpenTradesCount] = useState(0);
   const [dailyTradeCount, setDailyTradeCount] = useState(0);
+  const [dailyLossCount, setDailyLossCount] = useState(0);
   const [tickerQuotes, setTickerQuotes] = useState<Record<string, QuoteData | null>>({});
 
   const selectedSymbol = selectedSetup?.symbol || "";
@@ -800,6 +801,30 @@ export default function Home() {
       if (typeof count === "number") setDailyTradeCount(count);
     }
     loadDailyTradeCount();
+  }, [refreshKey]);
+
+  useEffect(() => {
+    async function loadDailyLossCount() {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const closedToday = await supabase
+        .from("paper_trades")
+        .select("id")
+        .eq("status", "closed")
+        .gte("closed_at", startOfDay.toISOString());
+      const closedIds = (closedToday.data ?? []).map((r: { id: string }) => r.id);
+      if (closedIds.length === 0) {
+        setDailyLossCount(0);
+        return;
+      }
+      const lossCheck = await supabase
+        .from("option_trade_details")
+        .select("id", { count: "exact", head: true })
+        .in("paper_trade_id", closedIds)
+        .lt("option_pnl", 0);
+      setDailyLossCount(typeof lossCheck.count === "number" ? lossCheck.count : 0);
+    }
+    loadDailyLossCount();
   }, [refreshKey]);
 
   useEffect(() => {
@@ -1484,6 +1509,8 @@ const sendSelectedContractToApprovalQueue = () => {
                       onSavePaperTrade={savePaperTrade}
                       tradeReason={tradeReason}
                       onTradeReasonChange={setTradeReason}
+                      dailyTradeCount={dailyTradeCount}
+                      dailyLossCount={dailyLossCount}
                       marketCondition={marketCondition}
                       testingOverrideEnabled={testingOverrideEnabled}
                       setTestingOverrideEnabled={setTestingOverrideEnabled}
