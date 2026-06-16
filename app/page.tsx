@@ -30,10 +30,12 @@ import {
   type TradeDirection,
   type QuoteData,
   type ScanResult,
+  type VixRegime,
   DEFAULT_WATCHLIST,
   getNumber,
   fetchQuote,
   classifyMarketCondition,
+  classifyVixRegime,
   analyzeSetup,
   sortScanResults,
 } from "../lib/scanner";
@@ -723,6 +725,8 @@ export default function Home() {
 
   const [marketCondition, setMarketCondition] =
     useState<MarketCondition>("UNKNOWN");
+  const [vixLevel, setVixLevel] = useState<number | null>(null);
+  const [vixRegime, setVixRegime] = useState<VixRegime>("UNKNOWN");
 
   const [spyPrice, setSpyPrice] = useState<number | null>(null);
 
@@ -872,6 +876,11 @@ export default function Home() {
       const newMarketCondition = classifyMarketCondition(spyQuote);
       setMarketCondition(newMarketCondition);
       setSpyPrice(spyQuote.c);
+
+      const vixQuote = await fetchQuote("^VIX");
+      const newVixLevel = vixQuote?.c ?? null;
+      setVixLevel(newVixLevel);
+      setVixRegime(classifyVixRegime(newVixLevel));
 
       const symbolsToScan = watchlist.filter((s) => s !== "SPY");
       const results: ScanResult[] = [];
@@ -1431,12 +1440,53 @@ const sendSelectedContractToApprovalQueue = () => {
               className="h-full"
             >
               {activeTab === "trade" && (
-                <motion.div
-                  className="grid h-full grid-cols-1 gap-4 xl:grid-cols-3"
-                  initial="hidden"
-                  animate="visible"
-                  variants={tradeColumnContainerVariants}
-                >
+                <div className="flex h-full flex-col gap-0">
+                  {vixRegime === "HIGH_RISK" && (
+                    <div className="relative mb-4 overflow-hidden rounded-xl border border-red-500/30 bg-red-500/10">
+                      <div className="absolute inset-y-0 left-0 w-[3px] bg-red-500" />
+                      <div className="flex items-center gap-3 px-5 py-3">
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
+                        <span className="font-mono text-[10px] font-black uppercase tracking-[0.2em] text-red-400">
+                          High Risk
+                        </span>
+                        <span className="text-slate-700">›</span>
+                        <span className="font-mono text-[10px] text-slate-300">
+                          Market regime HIGH RISK — VIX above 30. No new positions recommended.
+                        </span>
+                        {vixLevel !== null && (
+                          <span className="ml-auto shrink-0 font-mono text-[10px] font-bold text-red-400">
+                            VIX {vixLevel.toFixed(1)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {vixRegime === "ELEVATED" && (
+                    <div className="relative mb-4 overflow-hidden rounded-xl border border-amber-500/20 bg-amber-500/5">
+                      <div className="absolute inset-y-0 left-0 w-[3px] bg-amber-400" />
+                      <div className="flex items-center gap-3 px-5 py-3">
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
+                        <span className="font-mono text-[10px] font-black uppercase tracking-[0.2em] text-amber-300">
+                          Elevated
+                        </span>
+                        <span className="text-slate-700">›</span>
+                        <span className="font-mono text-[10px] text-slate-400">
+                          Market regime ELEVATED — VIX 20–30. Trade with caution.
+                        </span>
+                        {vixLevel !== null && (
+                          <span className="ml-auto shrink-0 font-mono text-[10px] font-bold text-amber-300">
+                            VIX {vixLevel.toFixed(1)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <motion.div
+                    className="grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-3"
+                    initial="hidden"
+                    animate="visible"
+                    variants={tradeColumnContainerVariants}
+                  >
                   <motion.div
                     variants={tradeColumnItemVariants}
                     transition={{ duration: 0.25, ease: "easeOut" }}
@@ -1538,7 +1588,8 @@ const sendSelectedContractToApprovalQueue = () => {
                       setTestingOverrideEnabled={setTestingOverrideEnabled}
                     />
                   </motion.div>
-                </motion.div>
+                  </motion.div>
+                </div>
               )}
 
               {activeTab === "positions" && (
@@ -1594,12 +1645,27 @@ const sendSelectedContractToApprovalQueue = () => {
                 <div className="h-full space-y-4 overflow-y-auto">
                   <TradingDashboardHeader />
 
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                     <StatusCard
                       label="Market Condition"
                       value={marketCondition}
                       subtext={spyPrice ? `SPY ${formatMoney(spyPrice)}` : "SPY waiting"}
                       className={getMarketTone(marketCondition)}
+                    />
+
+                    <StatusCard
+                      label="VIX Regime"
+                      value={vixRegime === "HIGH_RISK" ? "HIGH RISK" : vixRegime}
+                      subtext={vixLevel !== null ? `VIX ${vixLevel.toFixed(1)}` : "Run scanner to load"}
+                      className={
+                        vixRegime === "HIGH_RISK"
+                          ? "border-red-500/40 bg-red-500/10 text-red-300"
+                          : vixRegime === "ELEVATED"
+                          ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                          : vixRegime === "CALM"
+                          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                          : "border-slate-800 bg-slate-900/80 text-slate-300"
+                      }
                     />
 
                     <StatusCard

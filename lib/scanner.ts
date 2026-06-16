@@ -3,6 +3,7 @@
 export const DEFAULT_WATCHLIST = ["SPY", "AAPL", "MSFT", "NVDA", "TSLA"];
 
 export type MarketCondition = "BULLISH" | "BEARISH" | "CHOPPY" | "UNKNOWN";
+export type VixRegime = "CALM" | "ELEVATED" | "HIGH_RISK" | "UNKNOWN";
 export type TradeDirection = "CALL" | "PUT" | "NO TRADE";
 
 export type QuoteData = {
@@ -85,6 +86,13 @@ export async function fetchQuote(
     console.error("fetchQuote error:", symbol, error);
     return null;
   }
+}
+
+export function classifyVixRegime(vixPrice: number | null): VixRegime {
+  if (vixPrice === null || vixPrice <= 0) return "UNKNOWN";
+  if (vixPrice < 20) return "CALM";
+  if (vixPrice <= 30) return "ELEVATED";
+  return "HIGH_RISK";
 }
 
 export function classifyMarketCondition(spyQuote: QuoteData | null): MarketCondition {
