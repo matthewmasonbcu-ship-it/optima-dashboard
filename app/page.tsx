@@ -731,6 +731,7 @@ export default function Home() {
   const [tradeReason, setTradeReason] = useState("");
   const [activeTab, setActiveTab] = useState<TabId>("trade");
   const [openTradesCount, setOpenTradesCount] = useState(0);
+  const [dailyTradeCount, setDailyTradeCount] = useState(0);
   const [tickerQuotes, setTickerQuotes] = useState<Record<string, QuoteData | null>>({});
 
   const selectedSymbol = selectedSetup?.symbol || "";
@@ -786,6 +787,19 @@ export default function Home() {
     }
 
     loadOpenTradesCount();
+  }, [refreshKey]);
+
+  useEffect(() => {
+    async function loadDailyTradeCount() {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const { count } = await supabase
+        .from("paper_trades")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", startOfDay.toISOString());
+      if (typeof count === "number") setDailyTradeCount(count);
+    }
+    loadDailyTradeCount();
   }, [refreshKey]);
 
   useEffect(() => {
@@ -1345,6 +1359,15 @@ const sendSelectedContractToApprovalQueue = () => {
               <span className="relative z-10 text-[8px] font-bold uppercase tracking-wider">
                 {tab.label}
               </span>
+              {tab.id === "positions" && (
+                <span
+                  className={`relative z-10 font-mono text-[7px] font-bold ${
+                    dailyTradeCount >= 3 ? "text-red-400" : "text-cyan-400"
+                  }`}
+                >
+                  {dailyTradeCount}/3
+                </span>
+              )}
             </button>
           ))}
         </nav>

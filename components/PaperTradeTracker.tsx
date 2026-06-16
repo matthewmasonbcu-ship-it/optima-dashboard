@@ -25,6 +25,7 @@ type PaperTrade = {
   confidence_score?: number | null;
   block_reason?: string | null;
   market_condition?: string | null;
+  trade_reason?: string | null;
 };
 
 type OptionTradeDetail = {
@@ -740,6 +741,21 @@ export default function PaperTradeTracker() {
                           <p className="mt-0.5 font-mono text-[9px] leading-4 text-orange-700">
                             Forced through for testing. Excluded from clean system performance stats.
                           </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Why I Took This ─────────────────────────────── */}
+                    {trade.trade_reason && (
+                      <div className="relative mt-3 overflow-hidden rounded-lg border border-cyan-500/20 bg-cyan-500/5">
+                        <div className="absolute inset-y-0 left-0 w-[2px] bg-cyan-500" />
+                        <div className="px-4 py-2.5 pl-5">
+                          <span className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-cyan-600">
+                            Why I Took This ›{" "}
+                          </span>
+                          <span className="font-mono text-[9px] leading-4 text-slate-400">
+                            {trade.trade_reason}
+                          </span>
                         </div>
                       </div>
                     )}
