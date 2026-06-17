@@ -149,6 +149,23 @@
 **Known gap — phone-approved trades capture null for all 6 AI Coach metadata fields.**
 The `autoSavePaperTrade()` server route has no access to real-time market data at approval time (the phone tap happens hours after the alert is sent). Future enhancement: at alert-send time (when the user clicks "Send to Approval Queue" from the dashboard), capture `vix_level`, `vix_regime`, `market_condition`, `setup_score`, `time_of_day_bucket`, and `day_of_week` and store them on the `paper_order_previews` row. The `autoSavePaperTrade()` route can then copy those values into `paper_trades` at save time. Until this is built, the AI Coach should treat null values on these fields as "context unavailable — phone-approved trade."
 
+### Correctness Fix 1 — Grading Engine Unification (COMPLETE)
+
+- `OptionContractSelector.tsx` was maintaining ~28 local copies of grading/scoring functions identical to `lib/contractGrading.ts`
+- Refactored: all duplicates deleted from the client; functions are now imported from the lib
+- `getContracts` and `getEstimatedCost` exported from lib (were previously private)
+- Both copies of `buildCreditSpreadContract` (client + lib) are intentionally kept separate due to divergent display text (`recommendationReason`/`whyThisContract`) and UI-specific `optionType` derivation — but the net_credit/max_loss math is identical and flagged for future unification
+- Parity warning comment added to both copies of `buildCreditSpreadContract`
+- Build passes clean. No behavior change — pure refactor.
+- Commit: `37ce590`
+
+### Correctness Fix 2 — Visual Checklist vs Enforcement Logic (PENDING)
+
+- Known gap: the pre-trade discipline checklist in `OptionTradeCommandCenter.tsx` displays pass/fail visually, but the underlying enforcement gates in `savePaperTrade()` (page.tsx) may use different thresholds or omit checks entirely
+- The delta rule is the confirmed example: the checklist shows a delta row, but it is unclear whether `savePaperTrade()` independently enforces the delta range at save time
+- Risk: a trade can display "PASS" on the checklist but go unenforced at the save gate — the checklist becomes decorative, not protective
+- Next session: audit every checklist row against the actual save-path enforcement in `savePaperTrade()` and `autoSavePaperTrade()`; align any gaps
+
 ---
 
 ## Current Phase Status
