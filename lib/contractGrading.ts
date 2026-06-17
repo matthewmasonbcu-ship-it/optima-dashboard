@@ -1,7 +1,6 @@
 // Pure-TypeScript contract grading and auto-selection for server-side use.
-// Functions are copied from OptionContractSelector.tsx local helpers.
-// OptionContractSelector.tsx keeps its own local copies — do not modify
-// both files simultaneously without verifying parity.
+// Single source of truth for all grading/scoring logic.
+// OptionContractSelector.tsx imports from here — do not add local copies there.
 
 import type { SpreadType, OptionLeg } from "./dashboardTypes";
 
@@ -121,11 +120,11 @@ export function getExpiration(contract: TradierContract): string {
   return String(getContractValue(contract, ["expiration_date", "expirationDate"], ""));
 }
 
-function getContracts(contract: TradierContract): number {
+export function getContracts(contract: TradierContract): number {
   return getNumber(getContractValue(contract, ["contracts"]), 1);
 }
 
-function getEstimatedCost(contract: TradierContract): number {
+export function getEstimatedCost(contract: TradierContract): number {
   const mid = getMid(contract);
   const contracts = getContracts(contract);
   return getNumber(
@@ -424,6 +423,10 @@ export function enrichTradierContract(
 }
 
 // --- Credit spread builder ---------------------------------------------------
+// INTENTIONAL DUPLICATE: OptionContractSelector.tsx keeps a local copy with
+// divergent display text (recommendationReason/whyThisContract) and a
+// UI-specific optionType derivation. The net_credit / max_loss math MUST stay
+// in parity with the client copy. Flag for future unification.
 
 export function buildCreditSpreadContract(params: {
   shortLeg: TradierContract;

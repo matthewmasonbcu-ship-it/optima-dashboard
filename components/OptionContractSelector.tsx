@@ -4,6 +4,37 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { SpreadType, OptionLeg } from "../lib/dashboardTypes";
+import {
+  getNumber,
+  getContractValue,
+  getBid,
+  getAsk,
+  getMid,
+  getStrike,
+  getExpiration,
+  getContracts,
+  getEstimatedCost,
+  getMaxRisk,
+  getSpreadPercent,
+  getLiquidityScore,
+  getRecommendationScore,
+  getOpenInterest,
+  getVolume,
+  getDelta,
+  getDeltaAbs,
+  getOptionSymbol,
+  normalizeGradeValue,
+  getGrade,
+  getGradeRank,
+  getDefaultSpreadType,
+  getSpreadTypeLabel,
+  getDeltaFitScore,
+  getTradierExpirationDays,
+  getExpirationFitScore,
+  getTradierLiquidityScore,
+  getTradierQualityGrade,
+  getTradierRecommendationScore,
+} from "../lib/contractGrading";
 
 type TradeDirection = "CALL" | "PUT" | "NO TRADE";
 
@@ -92,20 +123,7 @@ type OptionContractSelectorProps = {
   maxSpreadPercent?: number;
 };
 
-// --- All helper functions untouched ------------------------------------------
-function getNumber(value: any, fallback = 0) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function getContractValue(contract: OptionContract | null | undefined, keys: string[], fallback: any = null) {
-  if (!contract) return fallback;
-  for (const key of keys) {
-    const value = (contract as any)[key];
-    if (value !== undefined && value !== null && value !== "") return value;
-  }
-  return fallback;
-}
+// --- UI-specific helpers (not shared with lib/contractGrading.ts) -------------
 
 function normalizeDirection(direction?: string): TradeDirection {
   if (direction === "CALL") return "CALL";
@@ -113,74 +131,11 @@ function normalizeDirection(direction?: string): TradeDirection {
   return "NO TRADE";
 }
 
-// --- Credit spread helpers -----------------------------------------------
-function getDefaultSpreadType(direction: TradeDirection): SpreadType {
-  if (direction === "CALL") return "bull_put_spread";
-  if (direction === "PUT") return "bear_call_spread";
-  return "single_leg";
-}
-
 // Bull put spread sells/buys PUTs. Bear call spread sells/buys CALLs.
 function getSpreadOptionType(spreadType: SpreadType, direction: TradeDirection): TradeDirection {
   if (spreadType === "bull_put_spread") return "PUT";
   if (spreadType === "bear_call_spread") return "CALL";
   return direction;
-}
-
-function getSpreadTypeLabel(spreadType: SpreadType) {
-  if (spreadType === "bull_put_spread") return "Bull Put Spread";
-  if (spreadType === "bear_call_spread") return "Bear Call Spread";
-  return "Single Leg";
-}
-
-function getOptionSymbol(contract: OptionContract | null | undefined) {
-  return String(getContractValue(contract, ["option_symbol", "optionSymbol", "symbol"], ""));
-}
-
-function normalizeGradeValue(value: unknown) {
-  const grade = String(value || "").trim().toUpperCase();
-
-  if (!grade || grade === "UNKNOWN" || grade === "N/A" || grade === "NULL") {
-    return "";
-  }
-
-  if (grade === "IDEAL") return "A+";
-  if (grade === "GOOD") return "A";
-  if (grade === "ACCEPTABLE") return "B";
-  if (grade === "AVOID") return "BLOCKED";
-
-  if (
-    grade === "A+" ||
-    grade === "A" ||
-    grade === "B" ||
-    grade === "C" ||
-    grade === "BLOCKED"
-  ) {
-    return grade;
-  }
-
-  return "";
-}
-
-function getGrade(contract: OptionContract | null | undefined) {
-  if (!contract) return "UNKNOWN";
-
-  const gradeCandidates = [
-    contract.contract_quality,
-    contract.qualityGrade,
-    contract.contractQualityGrade,
-    contract.grade,
-    contract.quality_grade,
-    contract.contract_quality_grade,
-  ];
-
-  for (const candidate of gradeCandidates) {
-    const normalized = normalizeGradeValue(candidate);
-
-    if (normalized) return normalized;
-  }
-
-  return "UNKNOWN";
 }
 
 function withSyncedContractQuality(contract: OptionContract | null): OptionContract | null {
@@ -197,136 +152,6 @@ function withSyncedContractQuality(contract: OptionContract | null): OptionContr
     quality_grade: syncedGrade,
     contract_quality_grade: syncedGrade,
   };
-}
-
-function getBid(contract: OptionContract) {
-  return getNumber(getContractValue(contract, ["bid_price", "bidPrice", "bid"]), 0);
-}
-
-function getAsk(contract: OptionContract) {
-  return getNumber(getContractValue(contract, ["ask_price", "askPrice", "ask"]), 0);
-}
-
-function getMid(contract: OptionContract) {
-  const bid = getBid(contract);
-  const ask = getAsk(contract);
-  return getNumber(getContractValue(contract, ["mid_price", "midPrice", "mid"]), bid > 0 && ask > 0 ? (bid + ask) / 2 : 0);
-}
-
-function getStrike(contract: OptionContract) {
-  return getNumber(getContractValue(contract, ["strike_price", "strikePrice"]), 0);
-}
-
-function getExpiration(contract: OptionContract) {
-  return String(getContractValue(contract, ["expiration_date", "expirationDate"], ""));
-}
-
-function getContracts(contract: OptionContract) {
-  return getNumber(getContractValue(contract, ["contracts"]), 1);
-}
-
-function getEstimatedCost(contract: OptionContract) {
-  const mid = getMid(contract);
-  const contracts = getContracts(contract);
-  return getNumber(getContractValue(contract, ["estimated_cost", "estimatedCost"]), mid * contracts * 100);
-}
-
-function getMaxRisk(contract: OptionContract) {
-  return getNumber(getContractValue(contract, ["max_risk", "maxRisk"]), getEstimatedCost(contract));
-}
-
-function getSpreadPercent(contract: OptionContract) {
-  const bid = getBid(contract);
-  const ask = getAsk(contract);
-  const mid = getMid(contract);
-  return getNumber(getContractValue(contract, ["spreadPercent", "spread_percent", "bidAskSpreadPercent"]), bid > 0 && ask > 0 && mid > 0 ? ((ask - bid) / mid) * 100 : 999);
-}
-
-function getLiquidityScore(contract: OptionContract) {
-  return getNumber(getContractValue(contract, ["liquidityScore", "liquidity_score"]), 0);
-}
-
-function getRecommendationScore(contract: OptionContract) {
-  return getNumber(getContractValue(contract, ["recommendationScore", "recommendation_score"]), 0);
-}
-
-function getOpenInterest(contract: OptionContract) {
-  return getNumber(getContractValue(contract, ["openInterest", "open_interest"]), 0);
-}
-
-function getVolume(contract: OptionContract) {
-  return getNumber(getContractValue(contract, ["volume"]), 0);
-}
-
-function getDelta(contract: OptionContract) {
-  const value = getContractValue(contract, ["delta"], null);
-
-  if (value === null || value === undefined || value === "") return null;
-
-  const delta = Number(value);
-
-  if (!Number.isFinite(delta)) return null;
-
-  return delta;
-}
-
-function getDeltaAbs(contract: OptionContract) {
-  const delta = getDelta(contract);
-
-  if (delta === null) return null;
-
-  return Math.abs(delta);
-}
-
-function getDeltaFitScore(contract: OptionContract) {
-  const deltaAbs = getDeltaAbs(contract);
-
-  // If Greeks are missing, do not block the contract, but do not reward it either.
-  if (deltaAbs === null) return 50;
-
-  if (deltaAbs >= 0.30 && deltaAbs <= 0.55) return 100;
-  if (deltaAbs >= 0.25 && deltaAbs < 0.30) return 85;
-  if (deltaAbs > 0.55 && deltaAbs <= 0.70) return 75;
-  if (deltaAbs >= 0.18 && deltaAbs < 0.25) return 60;
-  if (deltaAbs > 0.70 && deltaAbs <= 0.85) return 45;
-
-  return 20;
-}
-
-function getTradierExpirationDays(contract: OptionContract) {
-  const expiration = String(getContractValue(contract, ["expiration_date", "expirationDate"], ""));
-
-  if (!expiration) return null;
-
-  const expirationTime = new Date(`${expiration}T16:00:00`).getTime();
-
-  if (!Number.isFinite(expirationTime)) return null;
-
-  const now = Date.now();
-  const days = Math.ceil((expirationTime - now) / (1000 * 60 * 60 * 24));
-
-  return days;
-}
-
-function getExpirationFitScore(contract: OptionContract) {
-  const days = getTradierExpirationDays(contract);
-
-  if (days === null) return 50;
-  if (days >= 7 && days <= 45) return 100;
-  if (days >= 3 && days < 7) return 75;
-  if (days > 45 && days <= 90) return 65;
-  if (days > 90) return 45;
-
-  return 20;
-}
-
-function getGradeRank(grade: string) {
-  if (grade === "A+") return 5;
-  if (grade === "A") return 4;
-  if (grade === "B") return 3;
-  if (grade === "C") return 2;
-  if (grade === "BLOCKED") return 1;
-  return 0;
 }
 
 // --- Visual helpers -----------------------------------------------------------
@@ -423,6 +248,9 @@ function buildManualContract(params: { stockSymbol: string; direction: TradeDire
 }
 
 // --- buildCreditSpreadContract - combines a short + long leg into one contract --
+// INTENTIONAL DUPLICATE: lib/contractGrading.ts keeps a server-side copy with
+// different display text and a simpler optionType derivation. The net_credit /
+// max_loss math MUST stay in parity with the lib copy. Flag for future unification.
 function buildCreditSpreadContract(params: {
   shortLeg: OptionContract;
   longLeg: OptionContract;
@@ -465,7 +293,7 @@ function buildCreditSpreadContract(params: {
     mid_price: longMid,
   };
 
-  const optionType = getSpreadOptionType(spreadType, normalizeDirection(getContractValue(shortLeg, ["trade_direction", "tradeDirection"], "")));
+  const optionType = getSpreadOptionType(spreadType, normalizeDirection(String(getContractValue(shortLeg, ["trade_direction", "tradeDirection"], ""))));
 
   return {
     option_symbol: shortLegSummary.option_symbol,
@@ -534,87 +362,6 @@ function getRawOptionType(contract: OptionContract) {
       ""
     )
   ).toUpperCase();
-}
-
-function getTradierLiquidityScore(contract: OptionContract) {
-  const volume = getVolume(contract);
-  const openInterest = getOpenInterest(contract);
-
-  if (volume >= 500 && openInterest >= 1000) return 100;
-  if (volume >= 250 || openInterest >= 1000) return 90;
-  if (volume >= 100 || openInterest >= 500) return 80;
-  if (volume >= 50 || openInterest >= 250) return 70;
-  if (volume >= 20 || openInterest >= 100) return 55;
-  if (volume >= 5 || openInterest >= 25) return 35;
-  if (volume > 0 || openInterest > 0) return 20;
-
-  return 0;
-}
-
-function getTradierQualityGrade(
-  contract: OptionContract,
-  params: {
-    accountSize: number;
-    maxRiskPercent: number;
-    maxSpreadPercent: number;
-  }
-) {
-  const bid = getBid(contract);
-  const ask = getAsk(contract);
-  const mid = getMid(contract);
-  const spread = getSpreadPercent(contract);
-  const maxRisk = getMaxRisk(contract);
-  const allowedRisk = params.accountSize * (params.maxRiskPercent / 100);
-  const liquidityScore = getTradierLiquidityScore(contract);
-  const deltaFitScore = getDeltaFitScore(contract);
-  const expirationFitScore = getExpirationFitScore(contract);
-  const volume = getVolume(contract);
-  const openInterest = getOpenInterest(contract);
-
-  if (bid <= 0 || ask <= 0 || mid <= 0) return "BLOCKED";
-  if (ask < bid) return "BLOCKED";
-  if (maxRisk > allowedRisk) return "BLOCKED";
-  if (spread > params.maxSpreadPercent * 1.5) return "BLOCKED";
-
- const hasLiquidityData = volume > 0 || openInterest > 0;
-
-// A+ should still require real liquidity confirmation.
-if (
-  hasLiquidityData &&
-  spread <= 8 &&
-  liquidityScore >= 80 &&
-  deltaFitScore >= 85 &&
-  expirationFitScore >= 65 &&
-  maxRisk <= allowedRisk * 0.75
-) {
-  return "A+";
-}
-
-// A should still require decent liquidity confirmation.
-if (
-  hasLiquidityData &&
-  spread <= 12 &&
-  liquidityScore >= 55 &&
-  deltaFitScore >= 60 &&
-  expirationFitScore >= 50 &&
-  maxRisk <= allowedRisk
-) {
-  return "A";
-}
-
-// B is acceptable for paper/funded-filter testing when pricing is clean,
-// risk is within limits, and spread is acceptable, even if sandbox liquidity
-// data is missing or stale.
-if (
-  spread <= params.maxSpreadPercent &&
-  deltaFitScore >= 35 &&
-  expirationFitScore >= 35 &&
-  maxRisk <= allowedRisk
-) {
-  return "B";
-}
-
-return "C";
 }
 
 function getTradierQualityDiagnostics(
@@ -747,63 +494,6 @@ function getTradierQualityDiagnostics(
   };
 }
 
-function getTradierRecommendationScore(
-  contract: OptionContract,
-  params: {
-    accountSize: number;
-    maxRiskPercent: number;
-    maxSpreadPercent: number;
-  }
-) {
-  const grade = getTradierQualityGrade(contract, params);
-  const spread = getSpreadPercent(contract);
-  const liquidityScore = getTradierLiquidityScore(contract);
-  const deltaFitScore = getDeltaFitScore(contract);
-  const expirationFitScore = getExpirationFitScore(contract);
-  const maxRisk = getMaxRisk(contract);
-  const allowedRisk = params.accountSize * (params.maxRiskPercent / 100);
-  const mid = getMid(contract);
-
-  const riskFitScore =
-    allowedRisk > 0 ? Math.max(0, 100 - (maxRisk / allowedRisk) * 100) : 0;
-
-  const spreadScore = Math.max(
-    0,
-    100 - (spread / Math.max(params.maxSpreadPercent, 1)) * 100
-  );
-
-  const priceScore =
-    mid >= 0.5 && mid <= 5
-      ? 100
-      : mid >= 0.25 && mid < 0.5
-      ? 75
-      : mid > 5 && mid <= 10
-      ? 60
-      : mid > 10
-      ? 35
-      : 25;
-
-  const gradeScore =
-    grade === "A+"
-      ? 100
-      : grade === "A"
-      ? 85
-      : grade === "B"
-      ? 65
-      : grade === "C"
-      ? 30
-      : 0;
-
-  return Math.round(
-    gradeScore * 0.28 +
-      liquidityScore * 0.22 +
-      spreadScore * 0.18 +
-      deltaFitScore * 0.14 +
-      expirationFitScore * 0.08 +
-      riskFitScore * 0.06 +
-      priceScore * 0.04
-  );
-}
 
 function enrichTradierContract(
   contract: OptionContract,
