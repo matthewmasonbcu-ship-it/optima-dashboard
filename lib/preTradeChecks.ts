@@ -1,0 +1,267 @@
+// Single source of truth for pre-trade enforcement logic.
+// Used by BOTH the dashboard (app/page.tsx) and the auto-pipeline cron.
+//
+// PARITY NOTE: Any change to the 8 enforcement blocks in
+// getPreTradeEnforcementStatus must be reflected in BOTH callers.
+// This lib is the authoritative gate — the cron and dashboard are
+// identical because they import from here, not from each other.
+
+import type { MarketCondition, TradeDirection } from "./scanner";
+import type { ContractQuality } from "../types/trades";
+import {
+  getNumber,
+  getContractValue,
+  getGrade,
+  normalizeGradeValue,
+  type TradierContract,
+} from "./contractGrading";
+
+// --- Shared types ------------------------------------------------------------
+
+export type RiskGuardCheck = {
+  status: "APPROVED" | "CAUTION" | "BLOCKED";
+  reason: string;
+};
+
+export type PreTradeEnforcementStatus = "READY" | "CAUTION" | "BLOCKED";
+
+// --- Shared constants --------------------------------------------------------
+// Centralised here so the dashboard and cron use identical limits.
+
+export const ACCOUNT_SIZE = 10000;
+export const MAX_RISK_PERCENT = 1;
+export const MAX_SPREAD_PERCENT = 20;
+export const PERSONAL_DAILY_LOSS_STOP = 2000; // 80% of Black Eagle's $2,500 (5%) daily limit
+
+// --- Grade helpers -----------------------------------------------------------
+// getContractGrade wraps getGrade from contractGrading.ts with an explicit
+// ContractQuality return type — required by createTradeAlert and related call sites.
+// normalizeContractGradeValue re-exports normalizeGradeValue under the name used in page.tsx.
+
+export function getContractGrade(contract: TradierContract | null | undefined): ContractQuality {
+  return getGrade(contract) as ContractQuality;
+}
+export { normalizeGradeValue as normalizeContractGradeValue } from "./contractGrading";
+
+export function isCleanContractGrade(grade: string): boolean {
+  return grade === "A+" || grade === "A" || grade === "B";
+}
+
+export function gradeRequiresTestingOverride(grade: string): boolean {
+  return !isCleanContractGrade(grade);
+}
+
+// --- calculateRiskGuard ------------------------------------------------------
+// Evaluates position risk against account limits.
+// TradierContract is structurally compatible with OptionContract (page.tsx) —
+// all fields are optional and the shared keys have identical types.
+
+export function calculateRiskGuard(params: {
+  selectedContract: TradierContract | null;
+  accountSize: number;
+  maxRiskPercent: number;
+  maxSpreadPercent: number;
+}): RiskGuardCheck {
+  const { selectedContract, accountSize, maxRiskPercent, maxSpreadPercent } = params;
+
+  if (!selectedContract) {
+    return { status: "BLOCKED", reason: "No option contract selected." };
+  }
+
+  const bid = getNumber(
+    getContractValue(selectedContract, ["bid_price", "bidPrice", "bid"]),
+    0
+  );
+  const ask = getNumber(
+    getContractValue(selectedContract, ["ask_price", "askPrice", "ask"]),
+    0
+  );
+  const mid = getNumber(
+    getContractValue(selectedContract, ["mid_price", "midPrice", "mid"]),
+    bid > 0 && ask > 0 ? (bid + ask) / 2 : 0
+  );
+  const contracts = getNumber(getContractValue(selectedContract, ["contracts"]), 1);
+  const estimatedCost = getNumber(
+    getContractValue(selectedContract, ["estimated_cost", "estimatedCost"]),
+    mid * contracts * 100
+  );
+  const maxRisk = getNumber(
+    getContractValue(selectedContract, ["max_risk", "maxRisk"]),
+    estimatedCost
+  );
+
+  const allowedRisk = accountSize * (maxRiskPercent / 100);
+  const spreadPercent =
+    bid > 0 && ask > 0 && mid > 0 ? ((ask - bid) / mid) * 100 : 999;
+
+  if (mid <= 0) {
+    return { status: "BLOCKED", reason: "Contract mid price is missing." };
+  }
+
+  if (maxRisk > allowedRisk) {
+    return {
+      status: "BLOCKED",
+      reason: `Max risk $${maxRisk.toFixed(2)} is above allowed risk $${allowedRisk.toFixed(2)}.`,
+    };
+  }
+
+  if (spreadPercent > maxSpreadPercent) {
+    return {
+      status: "BLOCKED",
+      reason: `Bid/ask spread is too wide at ${spreadPercent.toFixed(1)}%. Max allowed is ${maxSpreadPercent}%.`,
+    };
+  }
+
+  if (spreadPercent > maxSpreadPercent * 0.75) {
+    return {
+      status: "CAUTION",
+      reason: `Spread is acceptable but not ideal at ${spreadPercent.toFixed(1)}%.`,
+    };
+  }
+
+  return { status: "APPROVED", reason: "Risk Guard approved this contract." };
+}
+
+// --- getPreTradeEnforcementStatus --------------------------------------------
+// Runs all 8 pre-trade enforcement blocks.
+// Hard blocks → status BLOCKED. Warnings only → status CAUTION.
+// All 8 checks must pass (no blocks) for status READY.
+
+export function getPreTradeEnforcementStatus(params: {
+  selectedContract: TradierContract | null;
+  optionRiskCheck: RiskGuardCheck | null;
+  selectedSymbol?: string | null;
+  tradeDirection?: TradeDirection | string | null;
+  marketCondition?: MarketCondition | string | null;
+}) {
+  const {
+    selectedContract,
+    optionRiskCheck,
+    selectedSymbol,
+    tradeDirection,
+    marketCondition,
+  } = params;
+
+  const warnings: string[] = [];
+  const blocks: string[] = [];
+
+  if (!selectedSymbol) {
+    blocks.push("No stock symbol selected.");
+  }
+
+  if (!tradeDirection || tradeDirection === "NO TRADE") {
+    blocks.push("Trade direction is NO TRADE.");
+  }
+
+  if (!selectedContract) {
+    blocks.push("No option contract selected.");
+  }
+
+  if (marketCondition === "CHOPPY") {
+    warnings.push(
+      "Market is CHOPPY. Manual testing is allowed, but this is lower quality."
+    );
+  }
+
+  if (optionRiskCheck?.status === "BLOCKED") {
+    blocks.push(optionRiskCheck.reason || "Risk Guard blocked this trade.");
+  }
+
+  if (selectedContract) {
+    const grade = getGrade(selectedContract);
+
+    if (!grade || grade === "UNKNOWN") {
+      blocks.push(
+        "No contract quality grade found. Contract must have A+, A, B, C, or BLOCKED grade before saving."
+      );
+    }
+
+    if (grade === "BLOCKED") {
+      blocks.push("Contract quality grade is BLOCKED.");
+    }
+
+    if (grade === "C") {
+      blocks.push("Contract quality grade is C. Weak contracts are blocked for now.");
+    }
+
+    if (grade === "B") {
+      warnings.push("Contract quality grade is B. This is acceptable, but not ideal.");
+    }
+
+    const spreadPercent = getContractValue(selectedContract, [
+      "spreadPercent",
+      "spread_percent",
+      "bidAskSpreadPercent",
+    ]);
+
+    if (typeof spreadPercent === "number" && spreadPercent > MAX_SPREAD_PERCENT) {
+      blocks.push(`Bid/ask spread is too wide at ${spreadPercent.toFixed(1)}%.`);
+    }
+
+    const liquidityScore = getContractValue(selectedContract, [
+      "liquidityScore",
+      "liquidity_score",
+    ]);
+
+    if (typeof liquidityScore === "number" && liquidityScore < 50) {
+      warnings.push("Liquidity score is low.");
+    }
+
+    const recommendationScore = getContractValue(selectedContract, [
+      "recommendationScore",
+      "recommendation_score",
+    ]);
+
+    if (typeof recommendationScore === "number" && recommendationScore < 60) {
+      warnings.push("Recommendation score is weak.");
+    }
+
+    // DTE hard block — must be 30–45 days
+    const expDateRaw = String(
+      getContractValue(selectedContract, ["expiration_date", "expirationDate"], "") || ""
+    );
+    if (!expDateRaw) {
+      blocks.push("No expiration date on contract. Cannot verify DTE.");
+    } else {
+      const expMs = new Date(expDateRaw).getTime();
+      const todayMs = (() => {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        return d.getTime();
+      })();
+      const dte = Math.ceil((expMs - todayMs) / 86_400_000);
+      if (dte < 30 || dte > 45) {
+        blocks.push(
+          `DTE is ${dte} day${dte === 1 ? "" : "s"} — must be 30–45. Select a contract within the target expiration window.`
+        );
+      }
+    }
+
+    // Spread type hard block — must be a credit spread, not single leg
+    const spreadTypeVal = getContractValue(selectedContract, ["spread_type"], "single_leg");
+    if (!spreadTypeVal || spreadTypeVal === "single_leg") {
+      blocks.push(
+        "Single-leg contracts are not allowed. Must use a credit spread (bull put or bear call)."
+      );
+    }
+  }
+
+  let status: PreTradeEnforcementStatus = "READY";
+  if (blocks.length > 0) {
+    status = "BLOCKED";
+  } else if (warnings.length > 0) {
+    status = "CAUTION";
+  }
+
+  return {
+    status,
+    warnings,
+    blocks,
+    message:
+      status === "READY"
+        ? "Pre-trade checklist approved."
+        : status === "CAUTION"
+        ? warnings.join(" ")
+        : blocks.join(" "),
+  };
+}

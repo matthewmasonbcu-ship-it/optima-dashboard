@@ -39,6 +39,18 @@ import {
   analyzeSetup,
   sortScanResults,
 } from "../lib/scanner";
+import {
+  type RiskGuardCheck,
+  type PreTradeEnforcementStatus,
+  ACCOUNT_SIZE,
+  MAX_RISK_PERCENT,
+  MAX_SPREAD_PERCENT,
+  PERSONAL_DAILY_LOSS_STOP,
+  getContractGrade,
+  gradeRequiresTestingOverride,
+  calculateRiskGuard,
+  getPreTradeEnforcementStatus,
+} from "../lib/preTradeChecks";
 
 type OptionContract = {
   option_symbol?: string;
@@ -106,17 +118,6 @@ type OptionContract = {
   max_profit?: number;
 };
 
-type RiskGuardCheck = {
-  status: "APPROVED" | "CAUTION" | "BLOCKED";
-  reason: string;
-};
-
-type PreTradeEnforcementStatus = "READY" | "CAUTION" | "BLOCKED";
-
-const ACCOUNT_SIZE = 10000;
-const MAX_RISK_PERCENT = 1;
-const MAX_SPREAD_PERCENT = 20;
-const PERSONAL_DAILY_LOSS_STOP = 2000; // 80% of Black Eagle's $2,500 (5%) daily limit
 
 const SECTOR_MAP: Record<string, string> = {
   AAPL: "TECH", MSFT: "TECH", NVDA: "TECH", AMD: "TECH",
@@ -181,291 +182,6 @@ function getContractValue(
   return fallback;
 }
 
-function normalizeContractGradeValue(value: any) {
-  const cleanGrade = String(value || "").trim().toUpperCase();
-
-  if (!cleanGrade || cleanGrade === "UNKNOWN" || cleanGrade === "N/A" || cleanGrade === "NULL") {
-    return "";
-  }
-
-  if (cleanGrade === "IDEAL") return "A+";
-  if (cleanGrade === "GOOD") return "A";
-  if (cleanGrade === "ACCEPTABLE") return "B";
-  if (cleanGrade === "AVOID") return "BLOCKED";
-
-  if (
-    cleanGrade === "A+" ||
-    cleanGrade === "A" ||
-    cleanGrade === "B" ||
-    cleanGrade === "C" ||
-    cleanGrade === "BLOCKED"
-  ) {
-    return cleanGrade;
-  }
-
-  return "";
-}
-
-function getContractGrade(contract: OptionContract | null) {
-  if (!contract) return "UNKNOWN";
-
-  const gradeKeys = [
-    "contract_quality",
-    "qualityGrade",
-    "contractQualityGrade",
-    "grade",
-    "quality_grade",
-    "contract_quality_grade",
-  ];
-
-  for (const key of gradeKeys) {
-    const normalizedGrade = normalizeContractGradeValue((contract as any)[key]);
-
-    if (normalizedGrade) {
-      return normalizedGrade;
-    }
-  }
-
-  return "UNKNOWN";
-}
-
-function isCleanContractGrade(grade: string) {
-  return grade === "A+" || grade === "A" || grade === "B";
-}
-
-function gradeRequiresTestingOverride(grade: string) {
-  return !isCleanContractGrade(grade);
-}
-
-function calculateRiskGuard(params: {
-  selectedContract: OptionContract | null;
-  accountSize: number;
-  maxRiskPercent: number;
-  maxSpreadPercent: number;
-}): RiskGuardCheck {
-  const { selectedContract, accountSize, maxRiskPercent, maxSpreadPercent } =
-    params;
-
-  if (!selectedContract) {
-    return {
-      status: "BLOCKED",
-      reason: "No option contract selected.",
-    };
-  }
-
-  const bid = getNumber(
-    getContractValue(selectedContract, ["bid_price", "bidPrice", "bid"]),
-    0
-  );
-
-  const ask = getNumber(
-    getContractValue(selectedContract, ["ask_price", "askPrice", "ask"]),
-    0
-  );
-
-  const mid = getNumber(
-    getContractValue(selectedContract, ["mid_price", "midPrice", "mid"]),
-    bid > 0 && ask > 0 ? (bid + ask) / 2 : 0
-  );
-
-  const contracts = getNumber(
-    getContractValue(selectedContract, ["contracts"]),
-    1
-  );
-
-  const estimatedCost = getNumber(
-    getContractValue(selectedContract, ["estimated_cost", "estimatedCost"]),
-    mid * contracts * 100
-  );
-
-  const maxRisk = getNumber(
-    getContractValue(selectedContract, ["max_risk", "maxRisk"]),
-    estimatedCost
-  );
-
-  const allowedRisk = accountSize * (maxRiskPercent / 100);
-
-  const spreadPercent =
-    bid > 0 && ask > 0 && mid > 0 ? ((ask - bid) / mid) * 100 : 999;
-
-  if (mid <= 0) {
-    return {
-      status: "BLOCKED",
-      reason: "Contract mid price is missing.",
-    };
-  }
-
-  if (maxRisk > allowedRisk) {
-    return {
-      status: "BLOCKED",
-      reason: `Max risk $${maxRisk.toFixed(
-        2
-      )} is above allowed risk $${allowedRisk.toFixed(2)}.`,
-    };
-  }
-
-  if (spreadPercent > maxSpreadPercent) {
-    return {
-      status: "BLOCKED",
-      reason: `Bid/ask spread is too wide at ${spreadPercent.toFixed(
-        1
-      )}%. Max allowed is ${maxSpreadPercent}%.`,
-    };
-  }
-
-  if (spreadPercent > maxSpreadPercent * 0.75) {
-    return {
-      status: "CAUTION",
-      reason: `Spread is acceptable but not ideal at ${spreadPercent.toFixed(
-        1
-      )}%.`,
-    };
-  }
-
-  return {
-    status: "APPROVED",
-    reason: "Risk Guard approved this contract.",
-  };
-}
-
-function getPreTradeEnforcementStatus(params: {
-  selectedContract: OptionContract | null;
-  optionRiskCheck: RiskGuardCheck | null;
-  selectedSymbol?: string | null;
-  tradeDirection?: TradeDirection | string | null;
-  marketCondition?: MarketCondition | string | null;
-}) {
-  const {
-    selectedContract,
-    optionRiskCheck,
-    selectedSymbol,
-    tradeDirection,
-    marketCondition,
-  } = params;
-
-  const warnings: string[] = [];
-  const blocks: string[] = [];
-
-  if (!selectedSymbol) {
-    blocks.push("No stock symbol selected.");
-  }
-
-  if (!tradeDirection || tradeDirection === "NO TRADE") {
-    blocks.push("Trade direction is NO TRADE.");
-  }
-
-  if (!selectedContract) {
-    blocks.push("No option contract selected.");
-  }
-
-  if (marketCondition === "CHOPPY") {
-    warnings.push(
-      "Market is CHOPPY. Manual testing is allowed, but this is lower quality."
-    );
-  }
-
-  if (optionRiskCheck?.status === "BLOCKED") {
-    blocks.push(optionRiskCheck.reason || "Risk Guard blocked this trade.");
-  }
-
-  if (selectedContract) {
-    const grade = getContractGrade(selectedContract);
-
-    if (!grade || grade === "UNKNOWN") {
-      blocks.push(
-        "No contract quality grade found. Contract must have A+, A, B, C, or BLOCKED grade before saving."
-      );
-    }
-
-    if (grade === "BLOCKED") {
-      blocks.push("Contract quality grade is BLOCKED.");
-    }
-
-    if (grade === "C") {
-      blocks.push("Contract quality grade is C. Weak contracts are blocked for now.");
-    }
-
-    if (grade === "B") {
-      warnings.push("Contract quality grade is B. This is acceptable, but not ideal.");
-    }
-
-    const spreadPercent = getContractValue(selectedContract, [
-      "spreadPercent",
-      "spread_percent",
-      "bidAskSpreadPercent",
-    ]);
-
-    if (
-      typeof spreadPercent === "number" &&
-      spreadPercent > MAX_SPREAD_PERCENT
-    ) {
-      blocks.push(`Bid/ask spread is too wide at ${spreadPercent.toFixed(1)}%.`);
-    }
-
-    const liquidityScore = getContractValue(selectedContract, [
-      "liquidityScore",
-      "liquidity_score",
-    ]);
-
-    if (typeof liquidityScore === "number" && liquidityScore < 50) {
-      warnings.push("Liquidity score is low.");
-    }
-
-    const recommendationScore = getContractValue(selectedContract, [
-      "recommendationScore",
-      "recommendation_score",
-    ]);
-
-    if (typeof recommendationScore === "number" && recommendationScore < 60) {
-      warnings.push("Recommendation score is weak.");
-    }
-
-    // DTE hard block — must be 30–45 days
-    const expDateRaw = String(
-      getContractValue(selectedContract, ["expiration_date", "expirationDate"], "") || ""
-    );
-    if (!expDateRaw) {
-      blocks.push("No expiration date on contract. Cannot verify DTE.");
-    } else {
-      const expMs = new Date(expDateRaw).getTime();
-      const todayMs = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); })();
-      const dte = Math.ceil((expMs - todayMs) / 86_400_000);
-      if (dte < 30 || dte > 45) {
-        blocks.push(
-          `DTE is ${dte} day${dte === 1 ? "" : "s"} — must be 30–45. Select a contract within the target expiration window.`
-        );
-      }
-    }
-
-    // Spread type hard block — must be a credit spread, not single leg
-    const spreadTypeVal = getContractValue(selectedContract, ["spread_type"], "single_leg");
-    if (!spreadTypeVal || spreadTypeVal === "single_leg") {
-      blocks.push(
-        "Single-leg contracts are not allowed. Must use a credit spread (bull put or bear call)."
-      );
-    }
-  }
-
-  let status: PreTradeEnforcementStatus = "READY";
-
-  if (blocks.length > 0) {
-    status = "BLOCKED";
-  } else if (warnings.length > 0) {
-    status = "CAUTION";
-  }
-
-  return {
-    status,
-    warnings,
-    blocks,
-    message:
-      status === "READY"
-        ? "Pre-trade checklist approved."
-        : status === "CAUTION"
-        ? warnings.join(" ")
-        : blocks.join(" "),
-  };
-}
 
 function normalizeContractForSave(
   contract: OptionContract | null,
