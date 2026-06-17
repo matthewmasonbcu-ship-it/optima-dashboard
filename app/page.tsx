@@ -132,6 +132,37 @@ function formatMoney(value: number) {
   });
 }
 
+function getTimeOfDayBucket(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const hour = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0");
+  const minute = parseInt(parts.find((p) => p.type === "minute")?.value ?? "0");
+  const t = hour * 60 + minute;
+  if (t >= 570 && t < 600) return "OPEN_30";
+  if (t >= 600 && t < 720) return "MID_MORNING";
+  if (t >= 720 && t < 810) return "LUNCH";
+  if (t >= 810 && t < 930) return "AFTERNOON";
+  if (t >= 930 && t < 960) return "CLOSE_30";
+  return "AFTER_HOURS";
+}
+
+function getDayOfWeek(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    weekday: "short",
+  }).formatToParts(date);
+  const weekday = parts.find((p) => p.type === "weekday")?.value ?? "";
+  const map: Record<string, string> = {
+    Mon: "MON", Tue: "TUE", Wed: "WED", Thu: "THU", Fri: "FRI",
+    Sat: "SAT", Sun: "SUN",
+  };
+  return map[weekday] ?? "OTHER";
+}
+
 function getContractValue(
   contract: OptionContract | null,
   keys: string[],
@@ -1187,6 +1218,7 @@ export default function Home() {
         return;
       }
 
+      const now = new Date();
       const paperTradePayload = {
         symbol: selectedSymbol,
         entry_price: entryPrice,
@@ -1195,6 +1227,12 @@ export default function Home() {
         status: "open",
         strategy: testingOverrideEnabled ? "manual_override_test" : "manual",
         trade_reason: tradeReason.trim() || null,
+        vix_level: vixLevel,
+        vix_regime: vixRegime,
+        market_condition: marketCondition,
+        setup_score: selectedSetup?.setupScore ?? null,
+        time_of_day_bucket: getTimeOfDayBucket(now),
+        day_of_week: getDayOfWeek(now),
       };
 
       const { data: paperTradeData, error: paperTradeError } = await supabase

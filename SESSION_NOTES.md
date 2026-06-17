@@ -128,6 +128,29 @@
 
 ---
 
+---
+
+## Session Date: June 16, 2026
+
+### Pipeline 2 Phone Approval Gap — Closed
+
+- Fixed 7-layer gap where auto-selected credit spreads were degraded to `single_leg` through the phone approval path
+- Two Supabase migrations: added spread columns (`spread_type`, `short_leg_option_symbol`, `short_leg_strike_price`, `long_leg_option_symbol`, `long_leg_strike_price`, `net_credit`, `spread_width`, `max_loss`, `max_profit`) to both `paper_order_previews` and `phone_alert_events`
+- TypeScript changes across 5 files: `types/alerts.ts`, `hooks/useTradeApprovalAlerts.ts`, `app/page.tsx`, `app/api/alerts/phone-review/route.ts`, `app/api/alerts/phone-review/respond/route.ts`
+- Credit spread data now flows end-to-end: auto-select → approval queue → phone approve → `autoSavePaperTrade` → `option_trade_details`
+
+### AI Coach Foundation — Trade Context Metadata
+
+- Added 6 metadata columns to `paper_trades`: `vix_level`, `vix_regime`, `market_condition`, `setup_score`, `time_of_day_bucket`, `day_of_week`
+- Two pure helpers added to `app/page.tsx`: `getTimeOfDayBucket(date)` and `getDayOfWeek(date)` (both NY-timezone-aware via `Intl.DateTimeFormat`)
+- `savePaperTrade()` now writes all 6 fields at entry time from existing state: `vixLevel`, `vixRegime`, `marketCondition`, `selectedSetup.setupScore`
+- Time-of-day buckets: `OPEN_30` (9:30–10:00) · `MID_MORNING` (10:00–12:00) · `LUNCH` (12:00–13:30) · `AFTERNOON` (13:30–15:30) · `CLOSE_30` (15:30–16:00) · `AFTER_HOURS`
+
+**Known gap — phone-approved trades capture null for all 6 AI Coach metadata fields.**
+The `autoSavePaperTrade()` server route has no access to real-time market data at approval time (the phone tap happens hours after the alert is sent). Future enhancement: at alert-send time (when the user clicks "Send to Approval Queue" from the dashboard), capture `vix_level`, `vix_regime`, `market_condition`, `setup_score`, `time_of_day_bucket`, and `day_of_week` and store them on the `paper_order_previews` row. The `autoSavePaperTrade()` route can then copy those values into `paper_trades` at save time. Until this is built, the AI Coach should treat null values on these fields as "context unavailable — phone-approved trade."
+
+---
+
 ## Current Phase Status
 
 - **Phase 2 — Paper Trading Proof (active)**: All infrastructure is ready. The funded-account-critical builds are done. The only remaining variable is the trading track record itself — need to log real paper trades.
