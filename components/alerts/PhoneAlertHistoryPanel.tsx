@@ -120,7 +120,8 @@ export default function PhoneAlertHistoryPanel({
 
       if (error) {
         console.error("Failed to load phone alert history:", error);
-        setPhoneHistoryError("Could not load phone alert history.");
+        const detail = [error.code && `[${error.code}]`, error.message].filter(Boolean).join(" ");
+        setPhoneHistoryError(`Could not load phone alert history. ${detail}`);
         setPhoneAlertHistory([]);
         setLinkedPreviewsById({});
         return;

@@ -330,7 +330,8 @@ export default function PaperOrderPreviewHistoryPanel({
 
     if (error) {
       console.error("Failed to load paper order preview history:", error);
-      setPaperPreviewHistoryError("Could not load paper order preview history.");
+      const detail = [error.code && `[${error.code}]`, error.message].filter(Boolean).join(" ");
+      setPaperPreviewHistoryError(`Could not load paper order preview history. ${detail}`);
       setPaperOrderPreviewHistory([]);
     } else {
       setPaperOrderPreviewHistory(

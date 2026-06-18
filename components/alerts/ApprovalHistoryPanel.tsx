@@ -70,7 +70,8 @@ export default function ApprovalHistoryPanel({
 
       if (error) {
         console.error("Failed to load approval history:", error);
-        setHistoryError("Could not load approval history.");
+        const detail = [error.code && `[${error.code}]`, error.message].filter(Boolean).join(" ");
+        setHistoryError(`Could not load approval history. ${detail}`);
         setApprovalHistory([]);
       } else {
         setApprovalHistory((data ?? []) as ApprovalHistoryRow[]);
