@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { randomBytes, createHash } from "crypto";
-import { sendPhoneAlertSms } from "@/lib/sms/sendPhoneAlertSms";
+import { sendTelegramAlert } from "@/lib/notify/sendTelegramAlert";
 import { sendPhoneAlertEmailSms } from "@/lib/sms/sendPhoneAlertEmailSms";
 
 const APP_BASE_URL =
@@ -94,17 +94,15 @@ const DELIVERY_LOCKS = {
 };
 
 function buildDeliveryStatus(
-  emailSmsResult: { success: boolean },
-  smsResult: { success: boolean } | null
+  telegramResult: { success: boolean },
+  emailResult: { success: boolean } | null
 ) {
-  const smsSent = smsResult?.success ?? false;
-
   return {
-    smsSent,
-    emailSmsSent: emailSmsResult.success,
+    telegramSent: telegramResult.success,
+    emailSent: emailResult?.success ?? false,
+    smsSent: false,
     pushSent: false,
-    emailSent: false,
-    dashboardLogOnly: !emailSmsResult.success && !smsSent,
+    dashboardLogOnly: !telegramResult.success && !(emailResult?.success ?? false),
   };
 }
 
@@ -122,6 +120,36 @@ function blockedResponse(reason: string, status = 400) {
     },
     { status }
   );
+}
+
+function buildTelegramMessage(preview: PaperOrderPreviewRow, reviewLink: string | null) {
+  const symbol = preview.symbol ?? "UNKNOWN";
+  const direction = preview.option_type ?? "OPTIONS";
+  const spreadSuffix =
+    preview.spread_type && preview.spread_type !== "single_leg" ? " credit spread" : "";
+  const grade = preview.contract_quality ?? "N/A";
+  const riskGuard = preview.risk_guard_status ?? "N/A";
+  const maxRisk =
+    typeof preview.max_risk_dollars === "number"
+      ? `$${preview.max_risk_dollars.toFixed(2)}`
+      : "N/A";
+
+  const lines = [
+    `OPTIMA ALERT — ${symbol} ${direction}${spreadSuffix}`,
+    "",
+    `Grade: ${grade} | Risk Guard: ${riskGuard}`,
+    `Max Risk: ${maxRisk}`,
+  ];
+
+  if (preview.net_credit != null) {
+    lines.push(`Net Credit: $${preview.net_credit.toFixed(2)}`);
+  }
+
+  lines.push("", "No broker order submitted. Review and approve:");
+
+  if (reviewLink) lines.push(reviewLink);
+
+  return lines.join("\n");
 }
 
 function buildPhoneMessage(preview: PaperOrderPreviewRow, reviewLink: string | null) {
@@ -390,11 +418,14 @@ export async function POST(request: Request) {
     const { token, tokenHash, expiresAt } = generatePhoneReviewToken();
     const reviewLink = `${APP_BASE_URL}/phone-review/${token}`;
 
+    const telegramMessage = buildTelegramMessage(preview, reviewLink);
     const phoneMessage = buildPhoneMessage(preview, reviewLink);
-    const emailSmsResult = await sendPhoneAlertEmailSms(phoneMessage);
-    const smsResult = emailSmsResult.success
+
+    // Primary: Telegram. Fallback: direct email to ALERT_EMAIL / SMS_GATEWAY_EMAIL.
+    const telegramResult = await sendTelegramAlert(telegramMessage);
+    const emailResult = telegramResult.success
       ? null
-      : await sendPhoneAlertSms(phoneMessage);
+      : await sendPhoneAlertEmailSms(phoneMessage);
 
     let channel: string;
     let deliveryMode: string;
@@ -402,37 +433,36 @@ export async function POST(request: Request) {
     let deliveryProvider: string | null;
     let deliveryError: string | null;
 
-    if (emailSmsResult.success) {
-      channel = "SMS";
-      deliveryMode = "EMAIL_SMS_GATEWAY";
+    if (telegramResult.success) {
+      channel = "PUSH";
+      deliveryMode = "TELEGRAM";
+      deliveryStatus = "SENT";
+      deliveryProvider = "TELEGRAM";
+      deliveryError = null;
+    } else if (emailResult?.success) {
+      channel = "EMAIL";
+      deliveryMode = "EMAIL_DIRECT";
       deliveryStatus = "SENT";
       deliveryProvider = "SMTP";
       deliveryError = null;
-    } else if (smsResult?.success) {
-      channel = "SMS";
-      deliveryMode = "TWILIO";
-      deliveryStatus = "SENT";
-      deliveryProvider = "TWILIO";
-      deliveryError = null;
     } else {
+      const telegramNotConfigured =
+        !telegramResult.success &&
+        telegramResult.error === "TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not configured.";
       const emailNotConfigured =
-        emailSmsResult.error ===
-        "Email-to-SMS environment variables are not configured.";
-      const twilioNotConfigured =
-        smsResult?.error === "Twilio environment variables are not configured.";
+        emailResult?.error === "Email-to-SMS environment variables are not configured.";
 
       channel = "DASHBOARD_SIMULATION";
       deliveryMode = "DASHBOARD_SIMULATION";
       deliveryStatus =
-        emailNotConfigured && twilioNotConfigured ? "LOGGED_ONLY" : "FAILED";
+        telegramNotConfigured && emailNotConfigured ? "LOGGED_ONLY" : "FAILED";
       deliveryProvider = null;
-      deliveryError = [emailSmsResult.error, smsResult?.error]
-        .filter(Boolean)
-        .join(" | ") || null;
+      deliveryError =
+        [telegramResult.error, emailResult?.error].filter(Boolean).join(" | ") || null;
     }
 
     const deliveredAt =
-      emailSmsResult.success || smsResult?.success
+      telegramResult.success || emailResult?.success
         ? new Date().toISOString()
         : null;
 
@@ -507,14 +537,14 @@ export async function POST(request: Request) {
         route: ROUTE,
         mode: "phone_review_alert_log_only",
         message: deliveredAt
-          ? "Phone review alert logged and linked to preview. SMS sent. No broker order or live order was sent."
-          : "Phone review alert logged and linked to preview. SMS was not sent. No broker order or live order was sent.",
+          ? "Phone review alert logged and linked to preview. Alert sent. No broker order or live order was sent."
+          : "Phone review alert logged and linked to preview. Alert was not sent. No broker order or live order was sent.",
         phoneAlertEvent,
         previewId: preview.id,
         preview: updatedPreview,
         safetyLocks: SAFETY_LOCKS,
         brokerCall: BROKER_CALL_LOCKS,
-        delivery: buildDeliveryStatus(emailSmsResult, smsResult),
+        delivery: buildDeliveryStatus(telegramResult, emailResult),
       },
       { status: 200 }
     );
