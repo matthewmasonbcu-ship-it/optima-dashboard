@@ -17,7 +17,11 @@ function getTradierBaseUrl() {
 }
 
 export async function tradierRequest({ path, method = "GET", body }: TradierRequestOptions) {
-  const token = process.env.TRADIER_ACCESS_TOKEN;
+  const env = (process.env.TRADIER_ENV || "sandbox").toLowerCase() as TradierEnv;
+  const token =
+    env === "production"
+      ? process.env.TRADIER_PRODUCTION_TOKEN
+      : process.env.TRADIER_ACCESS_TOKEN;
 
   if (!token) {
     return {
@@ -25,7 +29,10 @@ export async function tradierRequest({ path, method = "GET", body }: TradierRequ
       status: 500,
       data: {
         success: false,
-        error: "Missing TRADIER_ACCESS_TOKEN in .env.local.",
+        error:
+          env === "production"
+            ? "Missing TRADIER_PRODUCTION_TOKEN in .env.local."
+            : "Missing TRADIER_ACCESS_TOKEN in .env.local.",
       },
     };
   }
