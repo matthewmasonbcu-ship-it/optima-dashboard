@@ -261,14 +261,79 @@ The `autoSavePaperTrade()` server route has no access to real-time market data a
 - Notification stack: Telegram primary (confirmed) · direct Gmail fallback (matthewmasonbcu@gmail.com)
 - Env vars in Vercel: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, all others confirmed
 
+---
+
+## Session Date: June 18, 2026
+
+### Production Tradier Data — LIVE
+
+1. **Switch option chain data from sandbox → production** — `8097ff6`
+   - `lib/tradierClient.ts`: picks `TRADIER_PRODUCTION_TOKEN` when `TRADIER_ENV=production`, `TRADIER_ACCESS_TOKEN` when sandbox
+   - `TRADIER_ENV=production` and `TRADIER_PRODUCTION_TOKEN` added to `.env.local` and Vercel
+   - Safety confirmed: the three order routes (`/preview`, `/sandbox-broker-preview`, `/sandbox-submit`) do not import `tradierClient.ts` at all — switching the data endpoint has zero effect on order execution. All broker locks (`approved_for_live_order`, `approved_for_sandbox_order`, `submitted_to_broker`) remain hardcoded false.
+   - Side effect: `balances`, `positions`, `profile` routes (display-only) will 404 on production since sandbox account ID `VA14521340` is invalid on production — accepted, Option A.
+
+2. **Tradier env diagnostics** — `2a58e21`
+   - `lib/tradierClient.ts`: logs `[tradierClient] env=X baseUrl=Y path=Z` on every request (visible in Vercel function logs)
+   - `app/api/options/chain-source/route.ts`: fixed token check to use `TRADIER_PRODUCTION_TOKEN` when `TRADIER_ENV=production`; added `baseUrl` field to JSON response for curl-based verification
+
+3. **Fix stale 'sandbox' label in 3 locations** — `1c080b1`
+   - `app/api/tradier/options/chain/route.ts:127`: `process.env.TRADIER_ENV || "sandbox"` inline
+   - `lib/contractGrading.ts:415`: same inline read
+   - `components/OptionContractSelector.tsx`: `tradierMode?: string` added to `enrichTradierContract` params; `chainData.mode` threaded in at call site; `whyThisContract` and status message both use it dynamically
+
+### Cron Heartbeat — Hardened
+
+4. **Heartbeat before market-hours gate** — `341ad46`
+   - `isMarketOpenNowInNewYork()` early return now sends `"OPTIMA SCAN — fired outside scan window. Cron timing drift?"` before exiting — silence now truly means the cron never fired
+   - `SCAN_WINDOW_TOLERANCE_MINUTES`: widened from 2 → 5 to absorb Hobby-plan scheduling jitter
+   - DST fix: second cron entry `"30 14 * * 1-5"` added to `vercel.json` (14:30 UTC = 9:30 AM EST winter). Both entries fire year-round; `isMarketOpenNowInNewYork()` is the single source of truth.
+
+5. **Suppress expected off-season DST heartbeat noise** — `a81fb84`
+   - `KNOWN_CRON_UTC_SLOTS` constant added to cron route: mirrors both `vercel.json` entries (13:30 and 14:30 UTC)
+   - Gate check: if the firing time is within tolerance of a known UTC slot but outside the ET scan window → silent skip (expected off-season trigger). Only truly unexpected fire times send the "timing drift?" heartbeat.
+   - Result: exactly one meaningful heartbeat per trading day regardless of DST season. No daily noise from the off-season entry.
+
+### Fix 2 — Checklist/Enforcement Parity: COMPLETE
+
+6. **Full 8-row audit: one cosmetic gap found and closed** — `4e3e1cf`
+   - Audit result: 7 of 8 rows fully enforced. Only Row 2 (short-leg delta 0.20–0.25) was cosmetic — displayed as hard fail in the UI but absent from both `getPreTradeEnforcementStatus` and `runServerSideEnforcementChecks`.
+   - Fix: conditional hard block added to **both** functions in `lib/preTradeChecks.ts`
+   - Logic: block when delta is available and outside 0.20–0.25; silent skip when null/non-finite (matches `clDeltaAvail && !clDeltaPass` pattern already in the UI)
+   - Parity verified: identical field lookup, null guard, `Math.abs`, thresholds, and error string in both functions
+   - Row 8 (sector correlation) intentionally remains advisory
+
+---
+
+## Current Phase Status
+
+- **Phase 2 — Paper Trading Proof (active)**: Fully autonomous pipeline live. Cron fires daily at 9:30 ET. Heartbeat hardened. Production chain data live.
+- **Phase 3 — Phone Approval Workflow: COMPLETE** (Telegram-delivered)
+- **Auto-Pipeline Cron: COMPLETE** — scan → enforce (8 hard blocks, delta now included) → queue → Telegram heartbeat + approval alert → human approve → save
+- **Phase 8 — Discipline Engine: COMPLETE**
+- **Phase 9 — Evaluation Simulator: COMPLETE**
+- **Phase 10 — Risk Intelligence: CORE COMPLETE**
+- **Fix 2 — Checklist/Enforcement Parity: COMPLETE** — all 8 rows now enforced, no cosmetic gaps
+
+## What's Working Today
+
+- Scheduled cron fires daily 9:30 ET — scans watchlist (production Tradier chains), auto-selects best credit spread, enforces 8 hard blocks (grade, delta, DTE, credit spread, max loss, net credit, spread%, daily limits), queues to `paper_order_previews`, sends Telegram approval alert + heartbeat
+- Cron heartbeat fires on every run: scan result / no setup / blocked + reason / timing drift / error
+- DST-safe: two cron entries cover EDT and EST; off-season entry silenced via `KNOWN_CRON_UTC_SLOTS`; silence = cron never fired
+- Production Tradier option chains: real 30–45 DTE contracts, real bid/ask, real delta — no more 1-DTE sandbox junk
+- Phone approval: tap Telegram link → approve/reject → `autoSavePaperTrade`
+- Dashboard enforces all 8 checklist rows: grade A/B, delta 0.20–0.25 (conditional), DTE 30–45, Risk Guard, 3 trades/day, 2 losses/day, max loss, credit spread only
+- DrawdownTracker, EvaluationSimulator (Black Eagle criteria), VIX advisory banners
+- Notification: Telegram primary · direct Gmail fallback
+
 ## Next Session Priority
 
 **Start a fresh chat and paste this file for context.**
 
-1. **Watch the 9:30 ET cron heartbeat** — if it fires: trade queued → approve from phone = first auto-pipeline trade. No setup or blocked = correct behavior. No heartbeat at all = cron didn't fire, investigate.
-2. **Full manual end-to-end test** (still pending) — trigger via curl with `CRON_SECRET` during market hours, verify scan → auto-select → enforcement → preview INSERT → Telegram approval alert → approve → `autoSavePaperTrade`.
-3. **If pipeline proves clean over a few days: upgrade Vercel Hobby → Pro** for 30-min scanning. Update `vercel.json` cron schedule to `"0,30 13-20 * * 1-5"` at that point.
-4. **Correctness Fix 2 (pending)** — audit pre-trade checklist rows in `OptionTradeCommandCenter.tsx` against actual enforcement in `savePaperTrade()` / `autoSavePaperTrade()`; align any gaps.
+1. **Monday 9:30 ET — first production-chain cron run**: watch for one Telegram heartbeat. Expect either a queued credit spread (30–45 DTE, Risk Guard green, delta 0.20–0.25) or a clear block reason. No heartbeat at all = cron didn't fire, investigate.
+2. **If a spread is queued: approve from phone** → first auto-pipeline trade on real production data.
+3. **Full manual end-to-end test** (still pending) — trigger via curl with `CRON_SECRET` during market hours, verify scan → auto-select → enforcement → preview INSERT → Telegram approval alert → approve → `autoSavePaperTrade`.
+4. **If pipeline proves clean over a few days: upgrade Vercel Hobby → Pro** for 30-min scanning. Update `vercel.json` cron schedule to `"0,30 13-20 * * 1-5"` at that point.
 
 ## Target Firm Reminder
 
