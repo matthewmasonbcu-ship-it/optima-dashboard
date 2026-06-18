@@ -237,6 +237,17 @@ export function getPreTradeEnforcementStatus(params: {
       }
     }
 
+    // Delta hard block — short leg must be 0.20–0.25 absolute (skip when null/non-finite)
+    const deltaRaw = getContractValue(selectedContract, ["delta"], null);
+    if (deltaRaw !== null && Number.isFinite(Number(deltaRaw))) {
+      const deltaAbs = Math.abs(Number(deltaRaw));
+      if (deltaAbs < 0.20 || deltaAbs > 0.25) {
+        blocks.push(
+          `Short leg delta ${deltaAbs.toFixed(2)} is outside target range 0.20–0.25.`
+        );
+      }
+    }
+
     // Spread type hard block — must be a credit spread, not single leg
     const spreadTypeVal = getContractValue(selectedContract, ["spread_type"], "single_leg");
     if (!spreadTypeVal || spreadTypeVal === "single_leg") {
@@ -310,7 +321,19 @@ export function runServerSideEnforcementChecks(
     return { passed: false, reason: `DTE is ${dte} — must be 30–45.` };
   }
 
-  // 3. Must be a credit spread (not single leg)
+  // 3. Delta — short leg must be 0.20–0.25 absolute (skip when null/non-finite)
+  const deltaRaw = getContractValue(contract, ["delta"], null);
+  if (deltaRaw !== null && Number.isFinite(Number(deltaRaw))) {
+    const deltaAbs = Math.abs(Number(deltaRaw));
+    if (deltaAbs < 0.20 || deltaAbs > 0.25) {
+      return {
+        passed: false,
+        reason: `Short leg delta ${deltaAbs.toFixed(2)} is outside target range 0.20–0.25.`,
+      };
+    }
+  }
+
+  // 4. Must be a credit spread (not single leg)
   const spreadType = getContractValue(contract, ["spread_type"], "single_leg");
   if (!spreadType || spreadType === "single_leg") {
     return { passed: false, reason: "Contract is single-leg. Must be a credit spread." };
