@@ -42,6 +42,15 @@ const SCAN_TIMES_NY = [
   { hour: 14, minute: 0 },
 ];
 
+// Mirrors the two cron entries in vercel.json — one per DST offset.
+// If the route fires at a known UTC slot but outside the ET scan window,
+// it's the expected off-season trigger (not drift). Skip silently.
+// If you change a cron schedule in vercel.json, update this list to match.
+const KNOWN_CRON_UTC_SLOTS = [
+  { hour: 13, minute: 30 }, // 9:30 AM EDT (summer, UTC-4)
+  { hour: 14, minute: 30 }, // 9:30 AM EST (winter, UTC-5)
+];
+
 async function loadWatchlist(): Promise<string[]> {
   const { data, error } = await supabase
     .from("watchlist_symbols")
@@ -124,7 +133,14 @@ export async function GET(request: Request) {
   }
 
   if (!isMarketOpenNowInNewYork()) {
-    await sendHeartbeat("OPTIMA SCAN — fired outside scan window. Cron timing drift?");
+    const utcNow = new Date().getUTCHours() * 60 + new Date().getUTCMinutes();
+    const isExpectedDstFire = KNOWN_CRON_UTC_SLOTS.some(
+      ({ hour, minute }) =>
+        Math.abs(utcNow - (hour * 60 + minute)) <= SCAN_WINDOW_TOLERANCE_MINUTES
+    );
+    if (!isExpectedDstFire) {
+      await sendHeartbeat("OPTIMA SCAN — fired outside scan window. Cron timing drift?");
+    }
     return NextResponse.json({
       success: true,
       route: ROUTE,
