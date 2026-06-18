@@ -23,6 +23,11 @@ import {
   MAX_RISK_PERCENT,
   MAX_SPREAD_PERCENT,
 } from "@/lib/preTradeChecks";
+import { sendTelegramAlert } from "@/lib/notify/sendTelegramAlert";
+
+async function sendHeartbeat(text: string): Promise<void> {
+  await sendTelegramAlert(text).catch(() => {});
+}
 
 const ROUTE = "/api/cron/market-open-scan";
 const MIN_SETUP_SCORE = 75;
@@ -163,9 +168,14 @@ export async function GET(request: Request) {
 
     const sorted = sortScanResults(results);
     const topResult = sorted[0];
+    const scannedCount = results.length;
 
     // --- 3. Gate: score + direction ---
     if (!topResult || (topResult.setupScore ?? 0) < MIN_SETUP_SCORE) {
+      const bestDesc = topResult
+        ? `Best: ${topResult.symbol} score ${topResult.setupScore ?? 0} (threshold ${MIN_SETUP_SCORE}).`
+        : "No symbols returned a setup.";
+      await sendHeartbeat(`OPTIMA SCAN — ${scannedCount} symbols. ${bestDesc} No alert.`);
       return NextResponse.json({
         success: true, route: ROUTE, skipped: true,
         message: `No setup passed score threshold (${MIN_SETUP_SCORE}).`,
@@ -175,6 +185,9 @@ export async function GET(request: Request) {
 
     const rawDirection = topResult.direction ?? topResult.tradeDirection;
     if (rawDirection !== "CALL" && rawDirection !== "PUT") {
+      await sendHeartbeat(
+        `OPTIMA SCAN — ${scannedCount} symbols. Best: ${topResult.symbol} score ${topResult.setupScore ?? 0}, direction ${rawDirection ?? "unknown"}. Skipped.`
+      );
       return NextResponse.json({
         success: true, route: ROUTE, skipped: true,
         message: `Top setup direction is ${rawDirection ?? "unknown"} — not CALL or PUT. Skipping pipeline.`,
@@ -195,6 +208,7 @@ export async function GET(request: Request) {
       .maybeSingle();
 
     if (existingPreview) {
+      await sendHeartbeat(`OPTIMA SCAN — ${symbol} already in approval queue today. Dedup blocked.`);
       return NextResponse.json({
         success: true, route: ROUTE, skipped: true, duplicatePrevented: true,
         message: `Approval entry already exists for ${symbol} today. Dedup blocked duplicate.`,
@@ -217,6 +231,7 @@ export async function GET(request: Request) {
 
     if (!expResult.ok) {
       console.warn(`Tradier expirations failed for ${symbol}:`, expResult.status);
+      await sendHeartbeat(`OPTIMA SCAN — ${symbol} Tradier chain unavailable (${expResult.status}). Skipped.`);
       return NextResponse.json({
         success: true, route: ROUTE, skipped: true,
         message: `Tradier expirations failed for ${symbol} (${expResult.status}). Skipping pipeline.`,
@@ -231,6 +246,7 @@ export async function GET(request: Request) {
       .sort((a, b) => Math.abs(a.dte - MIDPOINT_DTE) - Math.abs(b.dte - MIDPOINT_DTE));
 
     if (inWindow.length === 0) {
+      await sendHeartbeat(`OPTIMA SCAN — ${symbol} no expirations in ${MIN_DTE}–${MAX_DTE} DTE window. Skipped.`);
       return NextResponse.json({
         success: true, route: ROUTE, skipped: true,
         message: `No expirations in ${MIN_DTE}–${MAX_DTE} DTE window for ${symbol}.`,
@@ -279,6 +295,7 @@ export async function GET(request: Request) {
 
     if (!selectedSpread?.success) {
       console.warn(`Auto-select failed for ${symbol}:`, lastAutoSelectFail);
+      await sendHeartbeat(`OPTIMA SCAN — ${symbol} no suitable spread: ${lastAutoSelectFail} Skipped.`);
       return NextResponse.json({
         success: true, route: ROUTE, skipped: true,
         message: `Auto-select found no suitable spread for ${symbol}: ${lastAutoSelectFail}`,
@@ -332,6 +349,7 @@ export async function GET(request: Request) {
 
     if (!enforcement.passed) {
       console.warn(`Enforcement blocked ${symbol}:`, enforcement.reason);
+      await sendHeartbeat(`OPTIMA SCAN — ${symbol} BLOCKED: ${enforcement.reason}`);
       return NextResponse.json({
         success: true, route: ROUTE, skipped: true,
         message: `Enforcement blocked ${symbol}: ${enforcement.reason}`,
@@ -425,6 +443,7 @@ export async function GET(request: Request) {
 
     if (previewError || !previewRow) {
       console.error("Failed to insert paper_order_previews:", previewError);
+      await sendHeartbeat(`OPTIMA SCAN — DB error for ${symbol}: ${previewError?.message ?? "unknown error"}.`);
       return NextResponse.json(
         {
           success: false,
@@ -435,7 +454,14 @@ export async function GET(request: Request) {
       );
     }
 
-    // --- 9. POST phone-review — triggers token generation and SMS ---
+    // --- 9. Heartbeat: pipeline complete ---
+    await sendHeartbeat(
+      `OPTIMA SCAN — ${symbol} ${direction} ${spread.spread_type ?? "credit spread"} queued for approval.\n` +
+      `Grade: ${spreadGrade ?? "N/A"} | Net credit: $${spreadNetCredit != null ? spreadNetCredit.toFixed(2) : "N/A"} | Max loss: $${spreadMaxLoss != null ? spreadMaxLoss.toFixed(2) : "N/A"}\n` +
+      `Approval alert with link is sending now separately.`
+    );
+
+    // --- POST phone-review — triggers token generation and Telegram approval alert ---
     const phoneReviewRes = await fetch(`${baseUrl}/api/alerts/phone-review`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -479,6 +505,7 @@ export async function GET(request: Request) {
         ? error.message
         : "Unexpected server error during market-open scan.";
     console.error("Market open scan route error:", error);
+    await sendHeartbeat(`OPTIMA SCAN — Unexpected error: ${message}`);
     return NextResponse.json(
       { success: false, route: ROUTE, message },
       { status: 500 }
