@@ -38,6 +38,7 @@ export async function tradierRequest({ path, method = "GET", body }: TradierRequ
   }
 
   const baseUrl = getTradierBaseUrl();
+  console.log(`[tradierClient] env=${env} baseUrl=${baseUrl} path=${path}`);
   const url = `${baseUrl}${path}`;
 
   const response = await fetch(url, {

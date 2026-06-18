@@ -12,8 +12,15 @@ export async function GET(request: NextRequest) {
 
     const symbol = searchParams.get("symbol")?.toUpperCase() || "NVDA";
 
-    const tradierToken = process.env.TRADIER_ACCESS_TOKEN;
-    const tradierEnv = process.env.TRADIER_ENV || "sandbox";
+    const tradierEnv = (process.env.TRADIER_ENV || "sandbox").toLowerCase();
+    const tradierToken =
+      tradierEnv === "production"
+        ? process.env.TRADIER_PRODUCTION_TOKEN
+        : process.env.TRADIER_ACCESS_TOKEN;
+    const tradierBaseUrl =
+      tradierEnv === "production"
+        ? "https://api.tradier.com/v1"
+        : "https://sandbox.tradier.com/v1";
 
     const tradierVerified = Boolean(tradierToken);
 
@@ -74,6 +81,7 @@ export async function GET(request: NextRequest) {
           available: tradierVerified,
           active: effectiveSource === "tradier",
           mode: tradierEnv,
+          baseUrl: tradierBaseUrl,
           status: tradierVerified ? "READY" : "WAITING_VERIFICATION",
         },
       },
