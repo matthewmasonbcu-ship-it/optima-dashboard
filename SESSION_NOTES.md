@@ -230,13 +230,45 @@ The `autoSavePaperTrade()` server route has no access to real-time market data a
 - Correlation guard advisory row in discipline checklist
 - Notification: Telegram primary (confirmed delivering) · direct Gmail fallback
 
+### Cron Heartbeat (COMPLETE)
+
+- Every scheduled cron run now sends a Telegram summary regardless of outcome
+- 9 observable exit points covered: no qualifying setup (with symbol + score), NO TRADE direction, dedup blocked, Tradier unavailable, no DTE window, no spread found, enforcement blocked (with reason), DB error, pipeline complete
+- Pipeline-complete heartbeat is explicitly labelled informational — approval alert with link follows separately so the two messages are never confused
+- All message formats confirmed delivering locally
+- Commit: `7f5afb8`
+
+---
+
+## Current Phase Status
+
+- **Phase 2 — Paper Trading Proof (active)**: Fully autonomous pipeline live. Scheduled cron fires daily at 9:30 ET. Heartbeat confirms every run.
+- **Phase 3 — Phone Approval Workflow: COMPLETE** (Telegram-delivered)
+- **Auto-Pipeline Cron: COMPLETE** — scan → enforce → queue → Telegram heartbeat + approval alert → human approve → save
+- **Phase 8 — Discipline Engine: COMPLETE**
+- **Phase 9 — Evaluation Simulator: COMPLETE**
+- **Phase 10 — Risk Intelligence: CORE COMPLETE**
+
+## What's Working Today
+
+- Scheduled cron fires daily 9:30 ET — scans watchlist, auto-selects best credit spread, enforces 8 hard blocks (parity with dashboard), queues to `paper_order_previews`, sends Telegram approval alert + heartbeat summary
+- Telegram heartbeat on every run: queued / no setup / blocked + reason / error
+- Phone approval: tap Telegram link → approve/reject → `autoSavePaperTrade`
+- "AUTO SCAN · MACHINE QUEUED" badge on phone-review page for cron-created entries
+- Dashboard: scanner, contract selector, pre-trade checklist, save trade manually
+- `savePaperTrade()` + `autoSavePaperTrade()` enforce: 3 trades/day, 2 losses/day, $2,000 daily stop, no duplicate open trade
+- DrawdownTracker, EvaluationSimulator (Black Eagle criteria), VIX advisory banners
+- Notification stack: Telegram primary (confirmed) · direct Gmail fallback (matthewmasonbcu@gmail.com)
+- Env vars in Vercel: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, all others confirmed
+
 ## Next Session Priority
 
 **Start a fresh chat and paste this file for context.**
 
-1. **Test full pipeline during market hours** — trigger cron via curl, verify scan → auto-select → enforcement → preview INSERT → Telegram alert → approve from phone → `autoSavePaperTrade`. This is the first end-to-end run with real market data.
-2. **If pipeline test is clean: upgrade Vercel Hobby → Pro** for 30-min scanning (`"0,30 13-20 * * 1-5"`) — fully hands-off pipeline. Update `vercel.json` cron schedule at that point.
-3. **Correctness Fix 2 (pending)** — audit every pre-trade checklist row in `OptionTradeCommandCenter.tsx` against actual enforcement in `savePaperTrade()` and `autoSavePaperTrade()`; align any gaps where checklist shows PASS but save gate doesn't enforce.
+1. **Watch the 9:30 ET cron heartbeat** — if it fires: trade queued → approve from phone = first auto-pipeline trade. No setup or blocked = correct behavior. No heartbeat at all = cron didn't fire, investigate.
+2. **Full manual end-to-end test** (still pending) — trigger via curl with `CRON_SECRET` during market hours, verify scan → auto-select → enforcement → preview INSERT → Telegram approval alert → approve → `autoSavePaperTrade`.
+3. **If pipeline proves clean over a few days: upgrade Vercel Hobby → Pro** for 30-min scanning. Update `vercel.json` cron schedule to `"0,30 13-20 * * 1-5"` at that point.
+4. **Correctness Fix 2 (pending)** — audit pre-trade checklist rows in `OptionTradeCommandCenter.tsx` against actual enforcement in `savePaperTrade()` / `autoSavePaperTrade()`; align any gaps.
 
 ## Target Firm Reminder
 
