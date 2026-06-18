@@ -31,7 +31,7 @@ type PaperOrderPreviewRow = {
 
 function PageShell({ children }: { children: ReactNode }) {
   return (
-    <main className="min-h-screen bg-slate-950 font-mono text-slate-100 flex items-center justify-center p-4">
+    <main className="min-h-screen bg-slate-950 font-mono text-slate-100 flex items-center justify-center px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="w-full max-w-sm rounded-xl border border-slate-700/70 bg-slate-900/80 p-5">
         <p className="text-xs uppercase tracking-widest text-cyan-400 mb-3">
           OPTIMA-SYS · Phone Review

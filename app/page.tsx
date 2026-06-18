@@ -1169,12 +1169,12 @@ const sendSelectedContractToApprovalQueue = () => {
 };
 
   return (
-    <main className="relative flex h-screen flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,_#172554_0,_#020617_35%,_#000_100%)] font-mono text-white">
+    <main className="relative flex flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,_#172554_0,_#020617_35%,_#000_100%)] font-mono text-white" style={{ height: '100dvh' }}>
       <BackgroundPaths />
       <FloatingShapes />
 
       {/* Slim top bar */}
-      <header className="relative z-10 flex h-12 shrink-0 items-center justify-between border-b border-slate-800 bg-slate-950/90 px-4">
+      <header className="relative z-10 flex shrink-0 items-center justify-between border-b border-slate-800 bg-slate-950/90 px-4" style={{ height: 'calc(3rem + env(safe-area-inset-top, 0px))', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="flex items-center gap-2">
           <span className="relative flex h-2 w-2">
             <span className="absolute h-2 w-2 animate-ping rounded-full bg-cyan-400 opacity-60" />
@@ -1213,14 +1213,14 @@ const sendSelectedContractToApprovalQueue = () => {
           </motion.div>
         </div>
 
-        <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em]">
+        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em]">
           <span className={`rounded-md border px-2 py-1 ${getRiskTone(optionRiskCheck.status)} ${getRiskPulse(optionRiskCheck.status)}`}>
             Risk Guard: {optionRiskCheck.status}
           </span>
-          <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-300">
+          <span className="hidden sm:inline-flex rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-300">
             Paper Mode
           </span>
-          <span className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-slate-300">
+          <span className="hidden sm:inline-flex rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-slate-300">
             Open Trades: {openTradesCount}
           </span>
         </div>
@@ -1249,12 +1249,12 @@ const sendSelectedContractToApprovalQueue = () => {
                 />
               )}
               <span className="relative z-10">{tab.icon}</span>
-              <span className="relative z-10 text-[8px] font-bold uppercase tracking-wider">
+              <span className="relative z-10 hidden sm:block text-[8px] font-bold uppercase tracking-wider">
                 {tab.label}
               </span>
               {tab.id === "positions" && (
                 <span
-                  className={`relative z-10 font-mono text-[7px] font-bold ${
+                  className={`relative z-10 font-mono text-[9px] sm:text-[7px] font-bold ${
                     dailyTradeCount >= 3 ? "text-red-400" : "text-cyan-400"
                   }`}
                 >

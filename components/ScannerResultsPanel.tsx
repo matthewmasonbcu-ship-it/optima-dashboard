@@ -179,7 +179,7 @@ function MiniStat({
 }) {
   return (
     <div className="flex flex-col gap-0.5 rounded-lg border border-slate-800/80 bg-black/30 px-3 py-2">
-      <span className="font-mono text-[8px] font-bold uppercase tracking-[0.22em] text-slate-600">
+      <span className="font-mono text-[10px] sm:text-[8px] font-bold uppercase tracking-[0.15em] sm:tracking-[0.22em] text-slate-600">
         {label}
       </span>
       <span className={`font-mono text-xs font-black ${valueClass}`}>

@@ -56,7 +56,7 @@ export default function PhoneReviewActions({ token }: PhoneReviewActionsProps) {
         type="button"
         onClick={() => handleAction("approve")}
         disabled={pending !== null}
-        className="flex-1 rounded-lg border border-emerald-500/40 bg-emerald-500/[0.08] py-2 text-emerald-300 disabled:opacity-50"
+        className="flex-1 rounded-lg border border-emerald-500/40 bg-emerald-500/[0.08] min-h-[44px] py-3 text-sm text-emerald-300 disabled:opacity-50"
       >
         {pending === "approve" ? "..." : "Approve"}
       </button>
@@ -64,7 +64,7 @@ export default function PhoneReviewActions({ token }: PhoneReviewActionsProps) {
         type="button"
         onClick={() => handleAction("reject")}
         disabled={pending !== null}
-        className="flex-1 rounded-lg border border-red-500/40 bg-red-500/[0.08] py-2 text-red-300 disabled:opacity-50"
+        className="flex-1 rounded-lg border border-red-500/40 bg-red-500/[0.08] min-h-[44px] py-3 text-sm text-red-300 disabled:opacity-50"
       >
         {pending === "reject" ? "..." : "Reject"}
       </button>

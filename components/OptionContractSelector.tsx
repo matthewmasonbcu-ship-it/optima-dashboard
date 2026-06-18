@@ -610,8 +610,8 @@ function getFirstExpirationFromResponse(data: any): string {
 function MiniStat({ label, value, valueClass = "text-slate-200" }: { label: string; value: string | number; valueClass?: string; }) {
   return (
     <div className="min-w-0 overflow-hidden rounded-lg border border-slate-800/80 bg-black/30 px-2.5 py-2">
-      <span className="font-mono text-[8px] font-bold uppercase tracking-[0.22em] text-slate-600">{label}</span>
-      <span className={`block truncate font-mono text-[10px] font-black ${valueClass}`}>
+      <span className="font-mono text-[10px] sm:text-[8px] font-bold uppercase tracking-[0.15em] sm:tracking-[0.22em] text-slate-600">{label}</span>
+      <span className={`block truncate font-mono text-[11px] sm:text-[10px] font-black ${valueClass}`}>
   {value}
 </span>
     </div>
@@ -1142,7 +1142,7 @@ export default function OptionContractSelector({
             </div>
             <button
               onClick={handleManualSelect}
-              className="shrink-0 rounded-lg border border-slate-700/80 bg-slate-800/80 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-slate-300 transition hover:border-slate-500 hover:text-slate-200"
+              className="shrink-0 rounded-lg border border-slate-700/80 bg-slate-800/80 px-3 py-2.5 min-h-[44px] font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-slate-300 transition hover:border-slate-500 hover:text-slate-200"
             >
               Select Manual &gt;
             </button>
@@ -1174,7 +1174,7 @@ export default function OptionContractSelector({
         <button
           type="button"
           onClick={() => setHideBlockedContracts(!hideBlockedContracts)}
-          className={`rounded-lg border px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] transition-all ${
+          className={`rounded-lg border px-3 py-2 min-h-[44px] font-mono text-[9px] font-bold uppercase tracking-[0.18em] transition-all ${
             hideBlockedContracts
               ? "border-slate-700/80 bg-slate-900/80 text-slate-400 hover:border-slate-600"
               : "border-orange-500/40 bg-orange-500/10 text-orange-300"
@@ -1190,7 +1190,7 @@ export default function OptionContractSelector({
               if (typeof onClearSelectedContract === "function") onClearSelectedContract();
               else selectContract(null);
             }}
-            className="rounded-lg border border-slate-700/80 bg-slate-900/80 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400 transition hover:border-red-500/30 hover:text-red-400"
+            className="rounded-lg border border-slate-700/80 bg-slate-900/80 px-3 py-2 min-h-[44px] font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400 transition hover:border-red-500/30 hover:text-red-400"
           >
             Clear Selected x
           </button>
@@ -1200,7 +1200,7 @@ export default function OptionContractSelector({
           <select
             value={sortMode}
             onChange={(e) => setSortMode(e.target.value as SortMode)}
-            className="rounded-lg border border-slate-700/60 bg-slate-900/80 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-slate-300 outline-none focus:border-cyan-500/40"
+            className="rounded-lg border border-slate-700/60 bg-slate-900/80 px-3 py-2 h-11 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-slate-300 outline-none focus:border-cyan-500/40"
           >
             <option value="recommendation">Sort - Recommendation</option>
             <option value="quality">Sort - Quality</option>
@@ -1239,7 +1239,7 @@ export default function OptionContractSelector({
             </div>
             <button
               onClick={() => selectContract(recommendedContract)}
-              className="group relative shrink-0 overflow-hidden rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-emerald-300 transition hover:bg-emerald-500/20"
+              className="group relative shrink-0 overflow-hidden rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2.5 min-h-[44px] font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-emerald-300 transition hover:bg-emerald-500/20"
             >
               <span
                 className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
@@ -1319,7 +1319,7 @@ export default function OptionContractSelector({
                       <button
                         type="button"
                         onClick={() => handleSelectLongLeg(contract)}
-                        className="rounded-lg border border-purple-500/40 bg-purple-500/10 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-purple-300 transition hover:bg-purple-500/20"
+                        className="rounded-lg border border-purple-500/40 bg-purple-500/10 px-3 py-2.5 min-h-[44px] font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-purple-300 transition hover:bg-purple-500/20"
                       >
                         Select Long Leg &gt;
                       </button>
@@ -1462,7 +1462,7 @@ export default function OptionContractSelector({
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <button
                       onClick={() => handleSelectShortLeg(contract)}
-                      className={`rounded-lg border px-4 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] transition-all ${
+                      className={`rounded-lg border px-4 py-2.5 min-h-[44px] font-mono text-[9px] font-bold uppercase tracking-[0.18em] transition-all ${
                         isSelected
                           ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20"
                           : isShortLeg
