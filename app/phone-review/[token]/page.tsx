@@ -26,6 +26,7 @@ type PaperOrderPreviewRow = {
   approved_for_sandbox_order: boolean | null;
   approved_for_live_order: boolean | null;
   submitted_to_broker: boolean | null;
+  safety_notes: string | null;
 };
 
 function PageShell({ children }: { children: ReactNode }) {
@@ -96,6 +97,7 @@ export default async function PhoneReviewPage({
         "approved_for_sandbox_order",
         "approved_for_live_order",
         "submitted_to_broker",
+        "safety_notes",
       ].join(",")
     )
     .eq("id", tokenRow.paper_order_preview_id)
@@ -152,6 +154,12 @@ export default async function PhoneReviewPage({
       <p className="text-sm text-slate-400 mb-4">
         {preview.contract_symbol ?? "No contract"}
       </p>
+
+      {preview.safety_notes?.includes("AUTO_SCAN_CRON") && (
+        <p className="inline-block mb-3 rounded px-2 py-0.5 text-[11px] font-bold uppercase tracking-widest bg-cyan-900/50 text-cyan-300 border border-cyan-700/50">
+          AUTO SCAN · MACHINE QUEUED
+        </p>
+      )}
 
       <dl className="space-y-1 text-sm mb-5">
         <div className="flex justify-between">

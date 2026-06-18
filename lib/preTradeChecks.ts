@@ -265,3 +265,117 @@ export function getPreTradeEnforcementStatus(params: {
         : blocks.join(" "),
   };
 }
+
+// --- runServerSideEnforcementChecks -----------------------------------------
+// Runs all 7 hard blocks used by the auto-pipeline cron.
+// dailyGates is pre-fetched by the caller via Supabase before calling this.
+// Returns { passed: true } only if every check clears.
+
+export type DailyGateData = {
+  tradeCount: number;
+  lossCount: number;
+  totalDailyPnl: number;
+};
+
+export type EnforcementResult = {
+  passed: boolean;
+  reason?: string;
+};
+
+export function runServerSideEnforcementChecks(
+  contract: TradierContract,
+  dailyGates: DailyGateData
+): EnforcementResult {
+  // 1. Grade must be A+, A, or B
+  const grade = getGrade(contract);
+  if (!isCleanContractGrade(grade)) {
+    return { passed: false, reason: `Contract grade ${grade} — must be A+, A, or B.` };
+  }
+
+  // 2. DTE must be 30–45
+  const expDateRaw = String(
+    getContractValue(contract, ["expiration_date", "expirationDate"], "") || ""
+  );
+  if (!expDateRaw) {
+    return { passed: false, reason: "No expiration date on contract. Cannot verify DTE." };
+  }
+  const expMs = new Date(expDateRaw).getTime();
+  const todayMs = (() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  })();
+  const dte = Math.ceil((expMs - todayMs) / 86_400_000);
+  if (dte < 30 || dte > 45) {
+    return { passed: false, reason: `DTE is ${dte} — must be 30–45.` };
+  }
+
+  // 3. Must be a credit spread (not single leg)
+  const spreadType = getContractValue(contract, ["spread_type"], "single_leg");
+  if (!spreadType || spreadType === "single_leg") {
+    return { passed: false, reason: "Contract is single-leg. Must be a credit spread." };
+  }
+
+  // 4. Max loss within Risk Guard limit
+  const maxLoss = getNumber(
+    getContractValue(contract, ["max_loss", "max_risk", "maxRisk"]),
+    0
+  );
+  const allowedRisk = ACCOUNT_SIZE * (MAX_RISK_PERCENT / 100);
+  if (maxLoss > allowedRisk) {
+    return {
+      passed: false,
+      reason: `Max loss $${maxLoss.toFixed(2)} exceeds allowed risk $${allowedRisk.toFixed(2)}.`,
+    };
+  }
+
+  // 5. Net credit > 0 and bid/ask spread ≤ MAX_SPREAD_PERCENT
+  // Mirrors calculateRiskGuard exactly so the cron and dashboard enforce the
+  // identical rule. net_credit is the mid-equivalent on a credit spread contract.
+  const cBid = getNumber(
+    getContractValue(contract, ["bid_price", "bidPrice", "bid"]),
+    0
+  );
+  const cAsk = getNumber(
+    getContractValue(contract, ["ask_price", "askPrice", "ask"]),
+    0
+  );
+  const cMid = getNumber(
+    getContractValue(contract, ["net_credit", "mid_price", "midPrice", "mid"]),
+    cBid > 0 && cAsk > 0 ? (cBid + cAsk) / 2 : 0
+  );
+  if (cMid <= 0) {
+    return { passed: false, reason: "Net credit is zero or negative — not a valid credit spread." };
+  }
+  const cSpreadPct =
+    cBid > 0 && cAsk > 0 ? ((cAsk - cBid) / cMid) * 100 : 999;
+  if (cSpreadPct > MAX_SPREAD_PERCENT) {
+    return {
+      passed: false,
+      reason: `Bid/ask spread ${cSpreadPct.toFixed(1)}% exceeds ${MAX_SPREAD_PERCENT}% limit.`,
+    };
+  }
+
+  // 6. Daily trade count < 3
+  if (dailyGates.tradeCount >= 3) {
+    return { passed: false, reason: "Daily limit of 3 trades already reached." };
+  }
+
+  // 7. Daily loss lockout < 2
+  if (dailyGates.lossCount >= 2) {
+    return {
+      passed: false,
+      reason: "Daily loss lockout: 2 losses today. Trading locked until tomorrow.",
+    };
+  }
+
+  // 8. Personal daily loss stop ($2,000)
+  if (dailyGates.totalDailyPnl <= -PERSONAL_DAILY_LOSS_STOP) {
+    return {
+      passed: false,
+      reason: `Personal daily loss stop: $${PERSONAL_DAILY_LOSS_STOP.toLocaleString()} limit reached.`,
+    };
+  }
+
+  return { passed: true };
+}
