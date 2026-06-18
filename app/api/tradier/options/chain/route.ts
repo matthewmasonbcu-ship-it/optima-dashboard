@@ -124,7 +124,7 @@ function normalizeTradierOption(option: TradierOption) {
     recommendationReason:
       "Real Tradier contract loaded read-only. Quality grade will be assigned by dashboard filters.",
     whyThisContract: [
-      "Loaded from Tradier sandbox option chain.",
+      `Loaded from Tradier ${process.env.TRADIER_ENV || "sandbox"} option chain.`,
       "Read-only market data only.",
       "Risk Guard still controls approval before saving.",
     ],

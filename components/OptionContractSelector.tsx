@@ -503,6 +503,7 @@ function enrichTradierContract(
     accountSize: number;
     maxRiskPercent: number;
     maxSpreadPercent: number;
+    tradierMode?: string;
   }
 ): OptionContract {
   const bid = getBid(contract);
@@ -580,7 +581,7 @@ function enrichTradierContract(
         ? "Tradier contract is acceptable, but not ideal. Confirm Risk Guard before saving."
         : "Tradier contract passes current read-only quality filters.",
     whyThisContract: [
-      "Loaded from Tradier sandbox option chain.",
+      `Loaded from Tradier ${params.tradierMode || "sandbox"} option chain.`,
       `Spread ${spread.toFixed(1)}%.`,
       `Liquidity score ${liquidityScore}.`,
       deltaAbs === null ? "Delta unavailable." : `Delta ${deltaAbs.toFixed(2)} absolute.`,
@@ -796,13 +797,14 @@ export default function OptionContractSelector({
           accountSize,
           maxRiskPercent,
           maxSpreadPercent,
+          tradierMode: chainData.mode,
         })
       );
 
       setContracts(enrichedContracts);
       setChainSource("tradier");
       setStatusMessage(
-        `Loaded ${enrichedContracts.length} Tradier ${chainOptionType} contracts for ${finalSymbol} ${expiration}. Read-only sandbox data. Quality ranking is tuned for spread, liquidity, delta, risk, and expiration.`
+        `Loaded ${enrichedContracts.length} Tradier ${chainOptionType} contracts for ${finalSymbol} ${expiration}. Read-only ${chainData.mode || "sandbox"} data. Quality ranking is tuned for spread, liquidity, delta, risk, and expiration.`
       );
     } catch (error) {
       console.error("loadTradierChain error:", error);

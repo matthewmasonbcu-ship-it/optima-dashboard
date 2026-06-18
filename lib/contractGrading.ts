@@ -412,7 +412,7 @@ export function enrichTradierContract(
       qualityGrade === "B" ? "Contract is acceptable, but not ideal. Confirm Risk Guard before saving." :
       "Contract passes current read-only quality filters.",
     whyThisContract: [
-      "Loaded from Tradier sandbox option chain.",
+      `Loaded from Tradier ${process.env.TRADIER_ENV || "sandbox"} option chain.`,
       `Spread ${spread.toFixed(1)}%.`,
       `Liquidity score ${liquidityScore}.`,
       deltaAbs === null ? "Delta unavailable." : `Delta ${deltaAbs.toFixed(2)} absolute.`,
