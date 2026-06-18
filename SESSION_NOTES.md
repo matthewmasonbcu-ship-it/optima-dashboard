@@ -168,10 +168,47 @@ The `autoSavePaperTrade()` server route has no access to real-time market data a
 
 ---
 
+## Session Date: June 17–18, 2026
+
+### Phase 1 — lib/preTradeChecks.ts Extraction (COMPLETE)
+
+- Extracted `calculateRiskGuard`, `getContractGrade`, and `getPreTradeEnforcementStatus` from `app/page.tsx` into `lib/preTradeChecks.ts` as the single source of truth for enforcement logic
+- `app/page.tsx` now imports from the lib; dashboard behavior unchanged (grades and Risk Guard status identical)
+- Parity comment added noting this lib is authoritative for both dashboard and cron
+- Commit: `b84158f`
+
+### Phase 2 — Full Auto-Pipeline Cron (COMPLETE)
+
+- `app/api/cron/market-open-scan/route.ts` fully rewritten: SPY+VIX fetch → scan watchlist → score/direction gate → dedup `paper_order_previews` (before any Tradier calls) → fetch expirations → chain → `selectBestCreditSpread` → daily gate queries → `runServerSideEnforcementChecks` → INSERT `paper_order_previews` → POST `/api/alerts/phone-review` → INSERT `scanner_auto_alerts`
+- `runServerSideEnforcementChecks` added to `lib/preTradeChecks.ts`: 8 hard blocks — grade A+/A/B, DTE 30–45, credit spread only, max loss ≤ $100, net credit > 0, bid/ask spread ≤ 20%, daily trade count < 3, daily loss count < 2, daily P&L > –$2,000
+- Enforcement parity verified: cron hard blocks are identical to `getPreTradeEnforcementStatus` + `savePaperTrade()` combined. No gap where cron could queue a trade the dashboard would block.
+- Dedup confirmed: `paper_order_previews` query runs before any Tradier API call
+- Safety locks confirmed: `approved_for_sandbox_order`, `approved_for_live_order`, `submitted_to_broker` hardcoded `false` — single INSERT, no code path sets them true
+- Bad chain data handling confirmed: empty/failed Tradier responses exit silently at multiple guard points; INSERT never reached without a valid spread
+- FYI SMS (`scanner-notify`) suppressed entirely — cron replaces it with the full approval pipeline
+- `app/phone-review/[token]/page.tsx` updated: displays "AUTO SCAN · MACHINE QUEUED" badge when `safety_notes` contains `AUTO_SCAN_CRON`
+- Commit: `f4ad346`
+
+### Notification Path — Telegram Primary + Direct Gmail Fallback (COMPLETE)
+
+- Twilio diagnosed: error `30034` (carrier A2P 10DLC block) — messages accepted but never delivered
+- T-Mobile email-to-SMS gateway (`@tmomail.net`): silently filtered despite correct carrier — confirmed undeliverable
+- Both SMS paths dropped from active use
+- New `lib/notify/sendTelegramAlert.ts`: POSTs to Telegram Bot API, no new npm packages, returns `{ success, error? }`
+- Bot: `@Matthew_Mason_Bot` (token `8476451788:...`, chat ID `8693900755`)
+- `app/api/alerts/phone-review/route.ts` updated: Telegram primary → direct Gmail email fallback (`SMS_GATEWAY_EMAIL=matthewmasonbcu@gmail.com`)
+- Delivery modes logged: `TELEGRAM` (primary) / `EMAIL_DIRECT` (fallback) / `DASHBOARD_SIMULATION` (both failed)
+- Both paths confirmed delivering locally: Telegram `{ success: true }`, Gmail SMTP `{ success: true }`
+- `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` added to Vercel environment variables
+- Commit: `89c59c0`
+
+---
+
 ## Current Phase Status
 
-- **Phase 2 — Paper Trading Proof (active)**: All infrastructure is ready. The funded-account-critical builds are done. The only remaining variable is the trading track record itself — need to log real paper trades.
-- **Phase 3 — Phone Approval Workflow: COMPLETE**
+- **Phase 2 — Paper Trading Proof (active)**: All infrastructure is ready including the fully automated pipeline. The only remaining variable is the trading track record itself.
+- **Phase 3 — Phone Approval Workflow: COMPLETE** (now Telegram-delivered)
+- **Auto-Pipeline Cron: COMPLETE** — scan → enforce → queue → Telegram alert → human approve → save
 - **Phase 8 — Discipline Engine: COMPLETE** (21-DTE, journal, anti-revenge lockout, drawdown tracker, pre-trade checklist, personal daily stop)
 - **Phase 9 — Evaluation Simulator: COMPLETE** (Black Eagle 8% target / 5% daily / 10% total / 10 min days — wired to real numbers)
 - **Phase 10 — Risk Intelligence: CORE COMPLETE** (VIX regime filter + correlation guard — both advisory)
@@ -183,18 +220,23 @@ The `autoSavePaperTrade()` server route has no access to real-time market data a
 - Contract selector auto-loads real Tradier sandbox option chains by default, with two-leg credit spread support
 - `savePaperTrade()` enforces: no duplicate open trade per symbol · max 3 trades/day · max 2 losses/day · $2,000 personal daily loss stop
 - Same four guards in `autoSavePaperTrade()` (phone approval route)
-- Full approval pipeline including remote phone approval/rejection via SMS link — verified live
+- Full auto-pipeline cron: scan → auto-select credit spread → 8-block enforcement (parity with dashboard) → INSERT `paper_order_previews` → Telegram approval alert
+- Phone approval via Telegram link → approve/reject from phone → `autoSavePaperTrade`
+- "AUTO SCAN · MACHINE QUEUED" badge on phone-review page for cron-created entries
 - Pre-trade 8-row discipline checklist (live in OptionTradeCommandCenter)
 - DrawdownTracker with Black Eagle real limits + profit target progress bar (Analytics tab)
 - EvaluationSimulator with READY / NOT READY / DISQUALIFIED verdict (Analytics tab)
 - VIX regime advisory banners (Trade tab) and StatusCard (System tab)
 - Correlation guard advisory row in discipline checklist
+- Notification: Telegram primary (confirmed delivering) · direct Gmail fallback
 
 ## Next Session Priority
 
-1. **Log the first real paper trade** — this is the only thing that matters right now. Everything is built. Scanner → contract → checklist → save.
-2. **Phase 11 — Capital Allocation** — once real trades are flowing and there is realized P&L data to work with.
-3. Monitor SMTP vs Twilio SMS delivery reliability across real scanner-triggered alerts.
+**Start a fresh chat and paste this file for context.**
+
+1. **Test full pipeline during market hours** — trigger cron via curl, verify scan → auto-select → enforcement → preview INSERT → Telegram alert → approve from phone → `autoSavePaperTrade`. This is the first end-to-end run with real market data.
+2. **If pipeline test is clean: upgrade Vercel Hobby → Pro** for 30-min scanning (`"0,30 13-20 * * 1-5"`) — fully hands-off pipeline. Update `vercel.json` cron schedule at that point.
+3. **Correctness Fix 2 (pending)** — audit every pre-trade checklist row in `OptionTradeCommandCenter.tsx` against actual enforcement in `savePaperTrade()` and `autoSavePaperTrade()`; align any gaps where checklist shows PASS but save gate doesn't enforce.
 
 ## Target Firm Reminder
 
