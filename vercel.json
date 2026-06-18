@@ -5,6 +5,10 @@
       "schedule": "30 13 * * 1-5"
     },
     {
+      "path": "/api/cron/market-open-scan",
+      "schedule": "30 14 * * 1-5"
+    },
+    {
       "path": "/api/cron/daily-summary",
       "schedule": "0 20 * * 1-5"
     },

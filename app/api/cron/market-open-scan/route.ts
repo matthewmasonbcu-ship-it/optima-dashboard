@@ -31,7 +31,7 @@ async function sendHeartbeat(text: string): Promise<void> {
 
 const ROUTE = "/api/cron/market-open-scan";
 const MIN_SETUP_SCORE = 75;
-const SCAN_WINDOW_TOLERANCE_MINUTES = 2;
+const SCAN_WINDOW_TOLERANCE_MINUTES = 5;
 const MIN_DTE = 30;
 const MAX_DTE = 45;
 const MIDPOINT_DTE = 37;
@@ -124,6 +124,7 @@ export async function GET(request: Request) {
   }
 
   if (!isMarketOpenNowInNewYork()) {
+    await sendHeartbeat("OPTIMA SCAN — fired outside scan window. Cron timing drift?");
     return NextResponse.json({
       success: true,
       route: ROUTE,
