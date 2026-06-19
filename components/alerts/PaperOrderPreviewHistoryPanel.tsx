@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -855,7 +855,7 @@ export default function PaperOrderPreviewHistoryPanel({
               return (
                 <div
                   key={row.id}
-                  className="group relative overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/70 p-4 transition-all duration-300 hover:border-slate-700 hover:bg-slate-950/90 hover:shadow-[0_0_28px_-10px_rgba(34,211,238,0.15)]"
+                  className="group relative overflow-hidden rounded-xl border border-slate-800/80 bg-slate-950/70 p-4 transition-all duration-300 hover:border-slate-700 hover:bg-slate-950/90 hover:shadow-[0_0_28px_-10px_rgba(167,139,250,0.15)]"
                 >
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
@@ -1210,7 +1210,7 @@ export default function PaperOrderPreviewHistoryPanel({
                           }}
                           disabled={!canSaveHumanReviewDecision}
                           placeholder="Optional review notes..."
-                          className="min-h-16 w-full rounded-xl border border-slate-700/80 bg-slate-950/80 px-3 py-2 text-left font-mono text-[11px] text-slate-200 outline-none transition-all duration-300 placeholder:text-slate-600 focus:border-cyan-500/60 focus:shadow-[0_0_14px_-6px_rgba(34,211,238,0.45)] disabled:cursor-not-allowed disabled:opacity-45"
+                          className="min-h-16 w-full rounded-xl border border-slate-700/80 bg-slate-950/80 px-3 py-2 text-left font-mono text-[11px] text-slate-200 outline-none transition-all duration-300 placeholder:text-slate-600 focus:border-violet-500/60 focus:shadow-[0_0_14px_-6px_rgba(167,139,250,0.45)] disabled:cursor-not-allowed disabled:opacity-45"
                         />
 
                         <div className="grid grid-cols-3 gap-2">
@@ -1243,7 +1243,7 @@ export default function PaperOrderPreviewHistoryPanel({
                         <button
                           type="button"
                           onClick={() => setSelectedPreview(row)}
-                          className="rounded-xl border border-slate-600/80 bg-slate-900/80 px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-slate-300 transition-all duration-300 hover:border-cyan-500/40 hover:text-cyan-200 hover:shadow-[0_0_14px_-6px_rgba(34,211,238,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 active:scale-[0.97]"
+                          className="rounded-xl border border-slate-600/80 bg-slate-900/80 px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-slate-300 transition-all duration-300 hover:border-violet-500/40 hover:text-violet-200 hover:shadow-[0_0_14px_-6px_rgba(167,139,250,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-400 active:scale-[0.97]"
                         >
                           View Details
                         </button>
@@ -1296,7 +1296,7 @@ export default function PaperOrderPreviewHistoryPanel({
                             runningSandboxPreviewId === row.id ||
                             humanReviewingPreviewId === row.id
                           }
-                          className="rounded-xl border border-cyan-500/30 bg-cyan-500/[0.08] px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-cyan-300 transition-all duration-300 hover:border-cyan-400/60 hover:text-cyan-200 hover:shadow-[0_0_14px_-6px_rgba(34,211,238,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-cyan-500/30 disabled:hover:text-cyan-300 disabled:hover:shadow-none disabled:active:scale-100"
+                          className="rounded-xl border border-violet-500/30 bg-violet-500/[0.08] px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-violet-300 transition-all duration-300 hover:border-violet-400/60 hover:text-violet-200 hover:shadow-[0_0_14px_-6px_rgba(167,139,250,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-400 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-violet-500/30 disabled:hover:text-violet-300 disabled:hover:shadow-none disabled:active:scale-100"
                         >
                           {runningSandboxPreviewId === row.id
                             ? "Running..."

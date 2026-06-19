@@ -300,7 +300,7 @@ export default function WorkModeCommandCenter() {
       <div className="relative px-6 py-6">
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-cyan-600">
+            <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-violet-600">
               OPTIMA-SYS · Work Mode
             </p>
             <h2 className="text-2xl font-black tracking-tight text-white">
@@ -325,7 +325,7 @@ export default function WorkModeCommandCenter() {
           <div className="flex items-center gap-3 self-start lg:self-auto">
             {loading && (
               <span className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">
-                <span className="h-1.5 w-1.5 animate-ping rounded-full bg-cyan-400" />
+                <span className="h-1.5 w-1.5 animate-ping rounded-full bg-violet-400" />
                 Checking...
               </span>
             )}
@@ -340,7 +340,7 @@ export default function WorkModeCommandCenter() {
               type="button"
               onClick={() => void loadWorkModeStatus()}
               disabled={loading}
-              className="rounded-lg border border-slate-700/80 bg-slate-900/80 px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-cyan-500/40 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-lg border border-slate-700/80 bg-slate-900/80 px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-violet-500/40 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
             >
               ⟳ Refresh
             </button>
@@ -381,16 +381,16 @@ export default function WorkModeCommandCenter() {
         </div>
 
         {topReadySetups.length > 0 && (
-          <div className="relative mb-5 overflow-hidden rounded-xl border border-cyan-500/20 bg-cyan-500/[0.03]">
-            <div className="absolute inset-y-0 left-0 w-[3px] bg-cyan-500" />
+          <div className="relative mb-5 overflow-hidden rounded-xl border border-violet-500/20 bg-violet-500/[0.03]">
+            <div className="absolute inset-y-0 left-0 w-[3px] bg-violet-500" />
             <div className="flex flex-col gap-2 px-5 py-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-300/80">
+                <p className="font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-violet-300/80">
                   Top Ready Setups
                 </p>
                 <a
                   href="#phone-review-queue"
-                  className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-200 transition-all hover:border-cyan-400 hover:bg-cyan-500/20"
+                  className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-violet-200 transition-all hover:border-violet-400 hover:bg-violet-500/20"
                 >
                   Jump to Phone Review Queue
                 </a>
@@ -440,8 +440,8 @@ export default function WorkModeCommandCenter() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <span className="flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-cyan-300">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-400" />
+                <span className="flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.15em] text-violet-300">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-400" />
                   Scanner Active
                 </span>
 

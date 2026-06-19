@@ -242,13 +242,13 @@ export default function PaperOrderPreviewQualityAnalytics({
       {/* Ambient top edge */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent"
       />
 
       <div className="relative mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-[0.3em] text-cyan-400/80">
-            <span className="h-1 w-1 rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.9)]" />
+          <p className="flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-[0.3em] text-violet-400/80">
+            <span className="h-1 w-1 rounded-full bg-violet-400 shadow-[0_0_6px_rgba(167,139,250,0.9)]" />
             Preview Quality Analytics
           </p>
 
@@ -306,7 +306,7 @@ export default function PaperOrderPreviewQualityAnalytics({
 
       <div className="relative mt-4 rounded-xl border border-slate-800/80 bg-black/25 p-3 sm:p-4">
         <p className="mb-3 flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-400">
-          <span className="h-px w-4 bg-gradient-to-r from-cyan-500/60 to-transparent" />
+          <span className="h-px w-4 bg-gradient-to-r from-violet-500/60 to-transparent" />
           Contract Grade Distribution
         </p>
 
@@ -350,7 +350,7 @@ function StatCard({
         ? "hover:border-amber-500/30 hover:shadow-[0_0_18px_-8px_rgba(252,211,77,0.35)]"
         : tone === "danger"
           ? "hover:border-rose-500/30 hover:shadow-[0_0_18px_-8px_rgba(251,113,133,0.35)]"
-          : "hover:border-cyan-500/25 hover:shadow-[0_0_18px_-8px_rgba(34,211,238,0.25)]";
+          : "hover:border-violet-500/25 hover:shadow-[0_0_18px_-8px_rgba(167,139,250,0.25)]";
 
   return (
     <div
@@ -373,7 +373,7 @@ function GradePill({ grade, count }: { grade: GradeKey; count: number }) {
     grade === "A+" || grade === "A"
       ? "border-emerald-500/25 bg-emerald-500/[0.08] text-emerald-300 hover:border-emerald-400/50 hover:shadow-[0_0_16px_-6px_rgba(52,211,153,0.4)]"
       : grade === "B"
-        ? "border-cyan-500/25 bg-cyan-500/[0.08] text-cyan-300 hover:border-cyan-400/50 hover:shadow-[0_0_16px_-6px_rgba(34,211,238,0.4)]"
+        ? "border-violet-500/25 bg-violet-500/[0.08] text-violet-300 hover:border-violet-400/50 hover:shadow-[0_0_16px_-6px_rgba(167,139,250,0.4)]"
         : grade === "C"
           ? "border-amber-500/25 bg-amber-500/[0.08] text-amber-300 hover:border-amber-400/50 hover:shadow-[0_0_16px_-6px_rgba(252,211,77,0.4)]"
           : grade === "BLOCKED"
@@ -384,7 +384,7 @@ function GradePill({ grade, count }: { grade: GradeKey; count: number }) {
     grade === "A+" || grade === "A"
       ? "bg-emerald-400 shadow-[0_0_5px_rgba(52,211,153,0.9)]"
       : grade === "B"
-        ? "bg-cyan-400 shadow-[0_0_5px_rgba(34,211,238,0.9)]"
+        ? "bg-violet-400 shadow-[0_0_5px_rgba(167,139,250,0.9)]"
         : grade === "C"
           ? "bg-amber-400 shadow-[0_0_5px_rgba(252,211,77,0.9)]"
           : grade === "BLOCKED"

@@ -1178,10 +1178,10 @@ const sendSelectedContractToApprovalQueue = () => {
       <header className="relative z-10 flex shrink-0 items-center justify-between border-b border-slate-800 bg-slate-950/90 px-4" style={{ height: 'calc(3rem + env(safe-area-inset-top, 0px))', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="flex items-center gap-2">
           <span className="relative flex h-2 w-2">
-            <span className="absolute h-2 w-2 animate-ping rounded-full bg-cyan-400 opacity-60" />
-            <span className="relative h-2 w-2 rounded-full bg-cyan-400" />
+            <span className="absolute h-2 w-2 animate-ping rounded-full bg-violet-400 opacity-60" />
+            <span className="relative h-2 w-2 rounded-full bg-violet-400" />
           </span>
-          <span className="text-sm font-black uppercase tracking-[0.3em] text-cyan-400">
+          <span className="text-sm font-black uppercase tracking-[0.3em] text-violet-400">
             OPTIMA
           </span>
         </div>
@@ -1238,14 +1238,14 @@ const sendSelectedContractToApprovalQueue = () => {
               title={tab.label}
               className={`relative flex h-12 w-12 flex-col items-center justify-center gap-1 rounded-xl border border-transparent transition ${
                 activeTab === tab.id
-                  ? "text-cyan-300"
+                  ? "text-violet-300"
                   : "text-slate-500 hover:bg-slate-900 hover:text-slate-300"
               }`}
             >
               {activeTab === tab.id && (
                 <motion.div
                   layoutId="activeTabPill"
-                  className="absolute inset-0 rounded-xl border border-cyan-400/60 bg-cyan-500/10"
+                  className="absolute inset-0 rounded-xl border border-violet-400/60 bg-violet-500/10"
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 />
               )}
@@ -1256,7 +1256,7 @@ const sendSelectedContractToApprovalQueue = () => {
               {tab.id === "positions" && (
                 <span
                   className={`relative z-10 font-mono text-[9px] sm:text-[7px] font-bold ${
-                    dailyTradeCount >= 3 ? "text-red-400" : "text-cyan-400"
+                    dailyTradeCount >= 3 ? "text-red-400" : "text-violet-400"
                   }`}
                 >
                   {dailyTradeCount}/3

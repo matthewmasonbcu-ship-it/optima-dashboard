@@ -384,11 +384,11 @@ export default function SandboxPreviewPhoneReviewQueue({
   return (
     <section
       id="phone-review-queue"
-      className="mb-5 overflow-hidden rounded-3xl border border-cyan-500/25 bg-cyan-500/[0.045] shadow-[0_0_34px_-18px_rgba(34,211,238,0.7)]"
+      className="mb-5 overflow-hidden rounded-3xl border border-violet-500/25 bg-violet-500/[0.045] shadow-[0_0_34px_-18px_rgba(167,139,250,0.7)]"
     >
-      <div className="flex flex-col gap-3 border-b border-cyan-500/10 px-5 py-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-3 border-b border-violet-500/10 px-5 py-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.28em] text-cyan-300/80">
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.28em] text-violet-300/80">
             Phone Review Queue
           </p>
           <h2 className="mt-1 text-xl font-bold text-slate-100">
@@ -416,7 +416,7 @@ export default function SandboxPreviewPhoneReviewQueue({
           <button
             type="button"
             onClick={() => void loadRows()}
-            className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-bold text-slate-300 transition hover:border-cyan-400/60 hover:text-cyan-200"
+            className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-bold text-slate-300 transition hover:border-violet-400/60 hover:text-violet-200"
           >
             Refresh
           </button>
@@ -547,7 +547,7 @@ export default function SandboxPreviewPhoneReviewQueue({
               return (
                 <article
                   key={id || `${symbol}-${contractSymbol}-${index}`}
-                  className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 transition hover:border-cyan-500/35"
+                  className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 transition hover:border-violet-500/35"
                 >
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 flex-1">
@@ -560,7 +560,7 @@ export default function SandboxPreviewPhoneReviewQueue({
                           VALIDATION PASSED
                         </span>
 
-                        <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-bold text-cyan-300">
+                        <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 text-[11px] font-bold text-violet-300">
                           WATCH
                         </span>
 
@@ -764,7 +764,7 @@ export default function SandboxPreviewPhoneReviewQueue({
                         type="button"
                         disabled={isBusy || phoneAlertAlreadySent}
                         onClick={() => void sendPhoneReviewAlert(row)}
-                        className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-bold text-cyan-200 transition hover:border-cyan-400 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 py-2 text-xs font-bold text-violet-200 transition hover:border-violet-400 hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {phoneAlertAlreadySent
                           ? "Phone Alert Sent"

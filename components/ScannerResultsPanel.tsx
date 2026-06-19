@@ -255,7 +255,7 @@ export default function ScannerResultsPanel({
         {/* ── HEADER ────────────────────────────────────────────────────── */}
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
-            <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-cyan-600">
+            <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-violet-600">
               OPTIMA-SYS · Scanner Intelligence
             </p>
             <h2 className="text-2xl font-black tracking-tight text-white">
@@ -296,14 +296,14 @@ export default function ScannerResultsPanel({
 
         {/* ── BEST SETUP BANNER ─────────────────────────────────────────── */}
         {bestSetup && (
-          <div className="relative mb-4 overflow-hidden rounded-xl border border-cyan-500/20 bg-cyan-500/5 ring-1 ring-cyan-500/10">
+          <div className="relative mb-4 overflow-hidden rounded-xl border border-violet-500/20 bg-violet-500/5 ring-1 ring-violet-500/10">
             <div className="absolute inset-x-0 top-0 h-px opacity-60"
               style={{ background: "linear-gradient(90deg, transparent, #06b6d4, transparent)" }}
             />
-            <div className="absolute inset-y-0 left-0 w-[3px] bg-cyan-500" />
+            <div className="absolute inset-y-0 left-0 w-[3px] bg-violet-500" />
             <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="pl-1">
-                <p className="mb-1 font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-cyan-600">
+                <p className="mb-1 font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-violet-600">
                   Top Ranked Setup
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
@@ -323,7 +323,7 @@ export default function ScannerResultsPanel({
               </div>
               <button
                 onClick={() => handleSelect(bestSetup)}
-                className="group relative shrink-0 overflow-hidden rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-300 transition-all hover:bg-cyan-500/20 hover:text-cyan-200"
+                className="group relative shrink-0 overflow-hidden rounded-lg border border-violet-500/40 bg-violet-500/10 px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-violet-300 transition-all hover:bg-violet-500/20 hover:text-violet-200"
               >
                 <span
                   className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
@@ -374,7 +374,7 @@ export default function ScannerResultsPanel({
                   whileTap={{ scale: 0.99, transition: { duration: 0.15 } }}
                   className={`group relative w-full overflow-hidden rounded-xl border text-left transition-all duration-150
                     ${isSelected
-                      ? "border-cyan-500/40 bg-slate-900/90 ring-1 ring-cyan-500/20 shadow-lg shadow-cyan-950/20"
+                      ? "border-violet-500/40 bg-slate-900/90 ring-1 ring-violet-500/20 shadow-lg shadow-violet-950/20"
                       : `border-slate-700/60 bg-slate-900/60 ring-1 ${getDirectionRing(direction)} hover:border-slate-600/80 hover:bg-slate-900/80`
                     }`}
                 >
@@ -389,7 +389,7 @@ export default function ScannerResultsPanel({
                   {/* Left direction accent bar */}
                   <div
                     className={`absolute inset-y-0 left-0 w-[3px] transition-all ${
-                      isSelected ? "bg-cyan-500" : getDirectionBar(direction)
+                      isSelected ? "bg-violet-500" : getDirectionBar(direction)
                     }`}
                   />
 
@@ -407,7 +407,7 @@ export default function ScannerResultsPanel({
                       </span>
 
                       {isSelected && (
-                        <span className="rounded border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-cyan-300">
+                        <span className="rounded border border-violet-500/40 bg-violet-500/10 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-violet-300">
                           Selected
                         </span>
                       )}
@@ -492,7 +492,7 @@ export default function ScannerResultsPanel({
                       {/* Load arrow — right side */}
                       <span
                         className={`ml-auto font-mono text-[9px] font-bold tracking-widest transition-colors ${
-                          isSelected ? "text-cyan-400" : "text-slate-700 group-hover:text-slate-500"
+                          isSelected ? "text-violet-400" : "text-slate-700 group-hover:text-slate-500"
                         }`}
                       >
                         {isSelected ? "● LOADED" : "LOAD ›"}

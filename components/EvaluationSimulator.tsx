@@ -304,7 +304,7 @@ export default function EvaluationSimulator({ refreshKey }: { refreshKey?: numbe
         {/* Loading */}
         {loading && (
           <div className="flex items-center gap-2 py-6">
-            <span className="h-1.5 w-1.5 animate-ping rounded-full bg-cyan-400" />
+            <span className="h-1.5 w-1.5 animate-ping rounded-full bg-violet-400" />
             <span className="font-mono text-[10px] text-slate-500">Running simulation…</span>
           </div>
         )}

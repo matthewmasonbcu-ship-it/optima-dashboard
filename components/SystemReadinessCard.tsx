@@ -256,7 +256,7 @@ export default function SystemReadinessCard() {
 
           {/* Left — identity */}
           <div>
-            <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-cyan-600">
+            <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-violet-600">
               OPTIMA-SYS · Daily System Check
             </p>
             <h2 className="text-2xl font-black tracking-tight text-white">
@@ -311,7 +311,7 @@ export default function SystemReadinessCard() {
                 type="button"
                 onClick={runReadinessChecks}
                 disabled={isChecking}
-                className="group relative overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900/80 px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-cyan-500/40 hover:bg-slate-800/80 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
+                className="group relative overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900/80 px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-violet-500/40 hover:bg-slate-800/80 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {/* Hover neon shimmer */}
                 <span
@@ -320,7 +320,7 @@ export default function SystemReadinessCard() {
                 />
                 {isChecking ? (
                   <span className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 animate-ping rounded-full bg-cyan-400" />
+                    <span className="h-1.5 w-1.5 animate-ping rounded-full bg-violet-400" />
                     Scanning...
                   </span>
                 ) : (
@@ -344,7 +344,7 @@ export default function SystemReadinessCard() {
           </span>
           <div className="relative h-1 flex-1 overflow-hidden rounded-full bg-slate-800">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-700"
+              className="h-full rounded-full bg-gradient-to-r from-violet-500 to-blue-500 transition-all duration-700"
               style={{ width: `${(readyCount / totalCount) * 100}%` }}
             />
           </div>
@@ -413,7 +413,7 @@ export default function SystemReadinessCard() {
           {/* Left accent bar — blue for info */}
           <div className="absolute inset-y-0 left-0 w-[3px] bg-blue-500" />
           <div className="flex flex-col gap-0.5 px-5 py-3 sm:flex-row sm:items-center sm:gap-3">
-            <span className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-cyan-600">
+            <span className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-violet-600">
               Trading Rule
             </span>
             <span className="hidden text-slate-700 sm:block">›</span>

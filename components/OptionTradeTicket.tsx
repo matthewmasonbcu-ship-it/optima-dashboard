@@ -653,7 +653,7 @@ export default function OptionTradeTicket({
 
         {/* Breakeven */}
         <div className="relative overflow-hidden rounded-xl border border-slate-700/60 bg-slate-900/60 ring-1 ring-slate-700/20">
-          <div className="absolute inset-y-0 left-0 w-[3px] bg-cyan-500" />
+          <div className="absolute inset-y-0 left-0 w-[3px] bg-violet-500" />
           <div className="px-5 py-4 pl-6">
             <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-600">
               Breakeven Estimate
@@ -665,7 +665,7 @@ export default function OptionTradeTicket({
               <span className="font-mono text-[9px] text-slate-600">
                 Formula ›
               </span>
-              <span className="font-mono text-[9px] font-bold text-cyan-500">
+              <span className="font-mono text-[9px] font-bold text-violet-500">
                 {isCreditSpread
                   ? spreadType === "bull_put_spread"
                     ? "Short Strike − Net Credit"

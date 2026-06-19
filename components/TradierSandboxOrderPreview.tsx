@@ -220,7 +220,7 @@ export default function TradierSandboxOrderPreview({
   }
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-cyan-500/25 bg-cyan-500/5 ring-1 ring-cyan-500/15">
+    <div className="relative overflow-hidden rounded-xl border border-violet-500/25 bg-violet-500/5 ring-1 ring-violet-500/15">
       <div className={`absolute inset-y-0 left-0 w-[3px] ${getDirectionBar(direction)}`} />
 
       <div
@@ -233,7 +233,7 @@ export default function TradierSandboxOrderPreview({
       <div className="px-5 py-4 pl-6">
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-cyan-500">
+            <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-violet-500">
               TRADIER SANDBOX · Order Preview
             </p>
 
@@ -261,7 +261,7 @@ export default function TradierSandboxOrderPreview({
             <p className="font-mono text-[8px] font-bold uppercase tracking-[0.22em] text-slate-600">
               Mode
             </p>
-            <p className="font-mono text-xs font-black text-cyan-300">
+            <p className="font-mono text-xs font-black text-violet-300">
               {TRADIER_MODE}
             </p>
           </div>
@@ -309,7 +309,7 @@ export default function TradierSandboxOrderPreview({
           <MiniStat label="Bid" value={formatMoney(bid)} />
           <MiniStat label="Ask" value={formatMoney(ask)} />
           <MiniStat label="Mid" value={formatMoney(mid)} valueClass="text-emerald-300" />
-          <MiniStat label="Limit Preview" value={formatMoney(limitPrice)} valueClass="text-cyan-300" />
+          <MiniStat label="Limit Preview" value={formatMoney(limitPrice)} valueClass="text-violet-300" />
           <MiniStat label="Contracts" value={contracts} />
           <MiniStat label="Est. Debit" value={formatMoney(estimatedDebit)} valueClass="text-white" />
           <MiniStat label="Max Risk" value={formatMoney(maxRisk)} valueClass="text-red-400" />

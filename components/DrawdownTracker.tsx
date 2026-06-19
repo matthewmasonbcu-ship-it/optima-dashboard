@@ -155,13 +155,13 @@ function ProfitTargetBar({
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-slate-700/60 bg-slate-900/60">
-      <div className={`absolute inset-y-0 left-0 w-[3px] ${hit ? "bg-emerald-500" : "bg-cyan-500"}`} />
+      <div className={`absolute inset-y-0 left-0 w-[3px] ${hit ? "bg-emerald-500" : "bg-violet-500"}`} />
       <div className="px-5 py-4 pl-6">
         <div className="mb-2 flex items-center justify-between">
           <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-500">
             Profit Target Progress
           </p>
-          <span className={`font-mono text-[9px] font-bold uppercase tracking-[0.2em] ${hit ? "text-emerald-400" : "text-cyan-400"}`}>
+          <span className={`font-mono text-[9px] font-bold uppercase tracking-[0.2em] ${hit ? "text-emerald-400" : "text-violet-400"}`}>
             {hit ? "TARGET HIT" : "IN PROGRESS"}
           </span>
         </div>
@@ -178,7 +178,7 @@ function ProfitTargetBar({
         </div>
         <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800/80">
           <div
-            className={`h-2 rounded-full transition-all duration-500 ${hit ? "bg-emerald-500" : "bg-cyan-500"}`}
+            className={`h-2 rounded-full transition-all duration-500 ${hit ? "bg-emerald-500" : "bg-violet-500"}`}
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -378,7 +378,7 @@ export default function DrawdownTracker() {
         {/* Loading */}
         {loading && (
           <div className="flex items-center gap-2 py-6">
-            <span className="h-1.5 w-1.5 animate-ping rounded-full bg-cyan-400" />
+            <span className="h-1.5 w-1.5 animate-ping rounded-full bg-violet-400" />
             <span className="font-mono text-[10px] text-slate-500">
               Loading drawdown data…
             </span>
@@ -417,8 +417,8 @@ export default function DrawdownTracker() {
               <StatCell
                 label="Peak Balance"
                 value={fmt(state.peakBalance)}
-                barClass="bg-cyan-500"
-                valueClass="text-cyan-300"
+                barClass="bg-violet-500"
+                valueClass="text-violet-300"
               />
               <StatCell
                 label="Realized P&L"

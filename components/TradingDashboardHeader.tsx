@@ -25,7 +25,7 @@ function LiveClock() {
   if (!time) return null;
 
   return (
-    <span className="font-mono text-sm font-bold tracking-widest text-cyan-300">
+    <span className="font-mono text-sm font-bold tracking-widest text-violet-300">
       {time.slice(0, 2)}
       <span className={blink ? "opacity-100" : "opacity-20"}>:</span>
       {time.slice(3, 5)}
@@ -122,11 +122,11 @@ export default function TradingDashboardHeader() {
             <div className="flex items-center gap-3">
               {/* Blinking cursor dot */}
               <span className="flex h-2 w-2 items-center justify-center">
-                <span className="absolute h-2 w-2 animate-ping rounded-full bg-cyan-400 opacity-60" />
-                <span className="relative h-2 w-2 rounded-full bg-cyan-400" />
+                <span className="absolute h-2 w-2 animate-ping rounded-full bg-violet-400 opacity-60" />
+                <span className="relative h-2 w-2 rounded-full bg-violet-400" />
               </span>
 
-              <span className="font-mono text-[10px] font-bold uppercase tracking-[0.35em] text-cyan-500">
+              <span className="font-mono text-[10px] font-bold uppercase tracking-[0.35em] text-violet-500">
                 OPTIMA-SYS · v2.1 · Paper Mode Active
               </span>
 
@@ -248,7 +248,7 @@ export default function TradingDashboardHeader() {
                 key={item.label}
                 className="flex items-center gap-2 px-4 py-2.5"
               >
-                <span className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-cyan-600">
+                <span className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-violet-600">
                   {item.label}
                 </span>
                 <span className="text-[9px] text-slate-600">›</span>
@@ -260,7 +260,7 @@ export default function TradingDashboardHeader() {
 
             {/* Right-aligned system tag */}
             <div className="ml-auto flex items-center gap-2 px-4 py-2.5">
-              <span className="h-1 w-1 rounded-full bg-cyan-500 opacity-60" />
+              <span className="h-1 w-1 rounded-full bg-violet-500 opacity-60" />
               <span className="font-mono text-[9px] uppercase tracking-[0.25em] text-slate-600">
                 OPTIMA · Paper Trading System
               </span>

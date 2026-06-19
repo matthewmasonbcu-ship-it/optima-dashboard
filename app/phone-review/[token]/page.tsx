@@ -33,7 +33,7 @@ function PageShell({ children }: { children: ReactNode }) {
   return (
     <main className="min-h-screen bg-slate-950 font-mono text-slate-100 flex items-center justify-center px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="w-full max-w-sm rounded-xl border border-slate-700/70 bg-slate-900/80 p-5">
-        <p className="text-xs uppercase tracking-widest text-cyan-400 mb-3">
+        <p className="text-xs uppercase tracking-widest text-violet-400 mb-3">
           OPTIMA-SYS · Phone Review
         </p>
         {children}
@@ -148,7 +148,7 @@ export default async function PhoneReviewPage({
 
   return (
     <PageShell>
-      <h1 className="text-lg font-bold text-cyan-300 mb-1">
+      <h1 className="text-lg font-bold text-violet-300 mb-1">
         {preview.symbol ?? "UNKNOWN"}
       </h1>
       <p className="text-sm text-slate-400 mb-4">
@@ -156,7 +156,7 @@ export default async function PhoneReviewPage({
       </p>
 
       {preview.safety_notes?.includes("AUTO_SCAN_CRON") && (
-        <p className="inline-block mb-3 rounded px-2 py-0.5 text-[11px] font-bold uppercase tracking-widest bg-cyan-900/50 text-cyan-300 border border-cyan-700/50">
+        <p className="inline-block mb-3 rounded px-2 py-0.5 text-[11px] font-bold uppercase tracking-widest bg-violet-900/50 text-violet-300 border border-violet-700/50">
           AUTO SCAN · MACHINE QUEUED
         </p>
       )}

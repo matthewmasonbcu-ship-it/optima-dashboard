@@ -161,7 +161,7 @@ export default function AutoTradeJournal({
         {/* ── HEADER ────────────────────────────────────────────────────── */}
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-cyan-600">
+            <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-violet-600">
               OPTIMA-SYS · Activity Feed
             </p>
             <h2 className="text-2xl font-black tracking-tight text-white">
@@ -186,7 +186,7 @@ export default function AutoTradeJournal({
             type="button"
             onClick={loadAutoTrades}
             disabled={loading}
-            className="group relative shrink-0 self-start overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900/80 px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-cyan-500/40 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
+            className="group relative shrink-0 self-start overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900/80 px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-violet-500/40 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <span
               className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
@@ -196,7 +196,7 @@ export default function AutoTradeJournal({
             />
             {loading ? (
               <span className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 animate-ping rounded-full bg-cyan-400" />
+                <span className="h-1.5 w-1.5 animate-ping rounded-full bg-violet-400" />
                 Refreshing...
               </span>
             ) : (
@@ -218,7 +218,7 @@ export default function AutoTradeJournal({
         {/* ── LOADING STATE ─────────────────────────────────────────────── */}
         {loading && (
           <div className="flex items-center gap-3 rounded-xl border border-slate-800 bg-black/30 px-4 py-3">
-            <span className="h-1.5 w-1.5 animate-ping rounded-full bg-cyan-400" />
+            <span className="h-1.5 w-1.5 animate-ping rounded-full bg-violet-400" />
             <p className="font-mono text-[9px] text-slate-500">
               Loading auto trade journal...
             </p>

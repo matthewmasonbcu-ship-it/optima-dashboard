@@ -46,11 +46,11 @@ export default function AlertPanel({
     <section className="relative overflow-hidden rounded-2xl border border-slate-800/80 bg-gradient-to-b from-slate-950 via-slate-950/95 to-slate-900/60 p-4 shadow-[0_0_40px_-12px_rgba(8,47,73,0.5)] sm:p-6">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-500/60 to-transparent"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/60 to-transparent"
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -top-24 left-1/2 h-48 w-[36rem] -translate-x-1/2 rounded-full bg-cyan-500/[0.07] blur-3xl"
+        className="pointer-events-none absolute -top-24 left-1/2 h-48 w-[36rem] -translate-x-1/2 rounded-full bg-violet-500/[0.07] blur-3xl"
       />
 
       <div className="relative mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -58,18 +58,18 @@ export default function AlertPanel({
           <div className="flex items-center gap-2">
             <span className="relative flex h-2 w-2">
               {hasPending && (
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-60" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-60" />
               )}
               <span
                 className={`relative inline-flex h-2 w-2 rounded-full ${
                   hasPending
-                    ? "bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]"
+                    ? "bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,0.8)]"
                     : "bg-slate-600"
                 }`}
               />
             </span>
 
-            <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-cyan-400/70">
+            <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-violet-400/70">
               Alert Center
             </p>
           </div>
@@ -115,7 +115,7 @@ export default function AlertPanel({
           <div
             className={`group relative flex-1 overflow-hidden rounded-xl border px-4 py-3 transition-all duration-300 lg:flex-none ${
               hasPending
-                ? "border-cyan-500/30 bg-cyan-500/[0.05] shadow-[0_0_24px_-8px_rgba(34,211,238,0.4)]"
+                ? "border-violet-500/30 bg-violet-500/[0.05] shadow-[0_0_24px_-8px_rgba(167,139,250,0.4)]"
                 : "border-slate-800 bg-slate-900/40"
             }`}
           >
@@ -124,7 +124,7 @@ export default function AlertPanel({
             </p>
             <p
               className={`mt-0.5 font-mono text-3xl font-bold tabular-nums transition-colors duration-300 ${
-                hasPending ? "text-cyan-300" : "text-slate-400"
+                hasPending ? "text-violet-300" : "text-slate-400"
               }`}
             >
               {activeAlerts.length}
@@ -133,7 +133,7 @@ export default function AlertPanel({
             {hasPending && (
               <div
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-cyan-400/70 to-transparent"
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-violet-400/70 to-transparent"
               />
             )}
           </div>
@@ -144,7 +144,7 @@ export default function AlertPanel({
             disabled={
               !onClearResolvedAlerts || alerts.length === activeAlerts.length
             }
-            className="rounded-xl border border-slate-700/80 bg-slate-900/80 px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 transition-all duration-300 hover:border-cyan-500/40 hover:bg-slate-800/80 hover:text-cyan-200 hover:shadow-[0_0_16px_-6px_rgba(34,211,238,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-700/80 disabled:hover:bg-slate-900/80 disabled:hover:text-slate-300 disabled:hover:shadow-none"
+            className="rounded-xl border border-slate-700/80 bg-slate-900/80 px-4 py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 transition-all duration-300 hover:border-violet-500/40 hover:bg-slate-800/80 hover:text-violet-200 hover:shadow-[0_0_16px_-6px_rgba(167,139,250,0.4)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-700/80 disabled:hover:bg-slate-900/80 disabled:hover:text-slate-300 disabled:hover:shadow-none"
           >
             Clear Resolved
           </button>
@@ -176,9 +176,9 @@ export default function AlertPanel({
         </div>
       )}
 
-      <div className="mb-5 overflow-hidden rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.045] shadow-[0_0_28px_-16px_rgba(34,211,238,0.5)]">
-        <div className="border-b border-cyan-500/10 px-4 py-3">
-          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.24em] text-cyan-300/80">
+      <div className="mb-5 overflow-hidden rounded-2xl border border-violet-500/20 bg-violet-500/[0.045] shadow-[0_0_28px_-16px_rgba(167,139,250,0.5)]">
+        <div className="border-b border-violet-500/10 px-4 py-3">
+          <p className="font-mono text-[10px] font-bold uppercase tracking-[0.24em] text-violet-300/80">
             Sandbox Preview Human Review Gate
           </p>
           <h3 className="mt-1 text-base font-bold text-slate-100">
@@ -249,7 +249,7 @@ export default function AlertPanel({
         <div className="relative overflow-hidden rounded-2xl border border-dashed border-slate-700/70 bg-black/30 p-8 text-center transition-colors duration-300 hover:border-slate-600/70 sm:p-10">
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute left-1/2 top-1/2 h-32 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-500/[0.04] blur-2xl"
+            className="pointer-events-none absolute left-1/2 top-1/2 h-32 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-violet-500/[0.04] blur-2xl"
           />
           <div className="relative mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 bg-slate-900/80">
             <span className="relative flex h-2 w-2">

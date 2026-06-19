@@ -10,6 +10,25 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* ─── Accent ramp — violet ─────────────────────────────────────────────────
+     One-line palette change: update these values to repaint every accent in
+     the app. Tailwind utilities (text-accent-*, bg-accent-*, etc.) and CSS
+     var() references in style={{}} props both draw from this block.
+     ---------------------------------------------------------------------- */
+  --color-accent:        #8b5cf6; /* violet-500  primary brand */
+  --color-accent-bright: #a855f7; /* purple-500  glows / highlights / active */
+  --color-accent-dim:    #6d28d9; /* violet-700  muted / border accents */
+
+  /* Full ramp — mirrors Tailwind violet-* for shade-relationship parity */
+  --color-accent-200:    #ddd6fe; /* violet-200  very subtle tint */
+  --color-accent-300:    #c4b5fd; /* violet-300  highlight text */
+  --color-accent-400:    #a78bfa; /* violet-400  secondary accent / glows */
+  --color-accent-500:    #8b5cf6; /* violet-500  (= --color-accent) */
+  --color-accent-600:    #7c3aed; /* violet-600  border / muted */
+  --color-accent-700:    #6d28d9; /* violet-700  (= --color-accent-dim) */
+  --color-accent-900:    #4c1d95; /* violet-900  dark bg tint */
+  --color-accent-950:    #2e1065; /* violet-950  deepest bg tint */
 }
 
 @media (prefers-color-scheme: dark) {

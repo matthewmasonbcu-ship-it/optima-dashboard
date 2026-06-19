@@ -129,7 +129,7 @@ export default function PaperTradingControlCenter() {
 
           {/* Left — section identity */}
           <div>
-            <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-cyan-600">
+            <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-violet-600">
               OPTIMA-SYS · Control Panel
             </p>
             <h2 className="text-2xl font-black tracking-tight text-white">
@@ -232,7 +232,7 @@ export default function PaperTradingControlCenter() {
             }}
           />
           <div className="flex flex-col gap-0.5 px-5 py-3 sm:flex-row sm:items-center sm:gap-3">
-            <span className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-cyan-600">
+            <span className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-violet-600">
               Trade Rule
             </span>
             <span className="hidden text-slate-700 sm:block">›</span>

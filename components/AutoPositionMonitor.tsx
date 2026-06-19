@@ -50,21 +50,21 @@ function eventBar(type: MonitorEvent["type"]) {
   if (type === "success") return "bg-emerald-500";
   if (type === "warning") return "bg-amber-400";
   if (type === "error") return "bg-red-500";
-  return "bg-cyan-500";
+  return "bg-violet-500";
 }
 
 function eventBorder(type: MonitorEvent["type"]) {
   if (type === "success") return "border-emerald-500/20";
   if (type === "warning") return "border-amber-500/20";
   if (type === "error") return "border-red-500/20";
-  return "border-cyan-500/20";
+  return "border-violet-500/20";
 }
 
 function eventTextColor(type: MonitorEvent["type"]) {
   if (type === "success") return "text-emerald-300";
   if (type === "warning") return "text-amber-300";
   if (type === "error") return "text-red-400";
-  return "text-cyan-300";
+  return "text-violet-300";
 }
 
 // ─── MiniStat — matches suite ─────────────────────────────────────────────────
@@ -255,7 +255,7 @@ export default function AutoPositionMonitor({
         {/* ── HEADER ────────────────────────────────────────────────────── */}
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-cyan-600">
+            <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-violet-600">
               OPTIMA-SYS · Live Monitor
             </p>
             <h2 className="text-2xl font-black tracking-tight text-white">
@@ -279,7 +279,7 @@ export default function AutoPositionMonitor({
           <button
             onClick={runMonitorNow}
             disabled={loading}
-            className="group relative shrink-0 self-start overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900/80 px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-cyan-500/40 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
+            className="group relative shrink-0 self-start overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900/80 px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-violet-500/40 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <span
               className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
@@ -289,7 +289,7 @@ export default function AutoPositionMonitor({
             />
             {loading ? (
               <span className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 animate-ping rounded-full bg-cyan-400" />
+                <span className="h-1.5 w-1.5 animate-ping rounded-full bg-violet-400" />
                 Checking...
               </span>
             ) : (
@@ -468,7 +468,7 @@ export default function AutoPositionMonitor({
             </span>
             <span className="font-mono text-[9px] leading-5 text-slate-500">
               This monitor finds open trades using{" "}
-              <code className="rounded bg-slate-800 px-1 text-cyan-400">
+              <code className="rounded bg-slate-800 px-1 text-violet-400">
                 exit_price IS NULL
               </code>
               . It does not auto-close using stock prices yet. Real automatic

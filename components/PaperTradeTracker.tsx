@@ -417,7 +417,7 @@ export default function PaperTradeTracker() {
         {/* ── HEADER ────────────────────────────────────────────────────── */}
         <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-cyan-600">
+            <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-violet-600">
               OPTIMA-SYS · Trade Journal
             </p>
             <h2 className="text-2xl font-black tracking-tight text-white">
@@ -469,7 +469,7 @@ export default function PaperTradeTracker() {
             <button
               onClick={loadTrades}
               disabled={loading}
-              className="group relative overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900/80 px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-cyan-500/40 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
+              className="group relative overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900/80 px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-violet-500/40 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <span
                 className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
@@ -477,7 +477,7 @@ export default function PaperTradeTracker() {
               />
               {loading ? (
                 <span className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 animate-ping rounded-full bg-cyan-400" />
+                  <span className="h-1.5 w-1.5 animate-ping rounded-full bg-violet-400" />
                   Loading...
                 </span>
               ) : (
@@ -490,7 +490,7 @@ export default function PaperTradeTracker() {
         {/* ── STATUS MESSAGE ────────────────────────────────────────────── */}
         {message && (
           <div className="relative mb-4 overflow-hidden rounded-lg border border-slate-800 bg-black/30">
-            <div className="absolute inset-y-0 left-0 w-[2px] bg-cyan-500" />
+            <div className="absolute inset-y-0 left-0 w-[2px] bg-violet-500" />
             <p className="px-4 py-2.5 pl-5 font-mono text-[9px] leading-5 text-slate-400">
               {message}
             </p>
@@ -747,10 +747,10 @@ export default function PaperTradeTracker() {
 
                     {/* ── Why I Took This ─────────────────────────────── */}
                     {trade.trade_reason && (
-                      <div className="relative mt-3 overflow-hidden rounded-lg border border-cyan-500/20 bg-cyan-500/5">
-                        <div className="absolute inset-y-0 left-0 w-[2px] bg-cyan-500" />
+                      <div className="relative mt-3 overflow-hidden rounded-lg border border-violet-500/20 bg-violet-500/5">
+                        <div className="absolute inset-y-0 left-0 w-[2px] bg-violet-500" />
                         <div className="px-4 py-2.5 pl-5">
-                          <span className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-cyan-600">
+                          <span className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-violet-600">
                             Why I Took This ›{" "}
                           </span>
                           <span className="font-mono text-[9px] leading-4 text-slate-400">

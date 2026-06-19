@@ -950,7 +950,7 @@ export default function OptionContractSelector({
       {/* -- HEADER + LOAD BUTTON ------------------------------------------ */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-cyan-600">
+          <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-violet-600">
             OPTIMA-SYS - Option Chain Selector
           </p>
           <p className="mt-0.5 font-mono text-xs font-black text-slate-300">
@@ -967,7 +967,7 @@ export default function OptionContractSelector({
             value={tradierExpiration}
             onChange={(e) => setTradierExpiration(e.target.value)}
             placeholder="Tradier expiration YYYY-MM-DD"
-            className="rounded-lg border border-slate-700/60 bg-slate-950/80 px-3 py-2 font-mono text-[10px] text-white outline-none placeholder:text-slate-600 focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/20"
+            className="rounded-lg border border-slate-700/60 bg-slate-950/80 px-3 py-2 font-mono text-[10px] text-white outline-none placeholder:text-slate-600 focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/20"
           />
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -975,7 +975,7 @@ export default function OptionContractSelector({
               type="button"
               onClick={loadMockChain}
               disabled={loadingChain || !finalSymbol || finalDirection === "NO TRADE"}
-              className="group relative shrink-0 overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900/80 px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-cyan-500/40 hover:bg-slate-800/80 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
+              className="group relative shrink-0 overflow-hidden rounded-lg border border-slate-700/80 bg-slate-900/80 px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-violet-500/40 hover:bg-slate-800/80 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <span
                 className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
@@ -983,7 +983,7 @@ export default function OptionContractSelector({
               />
               {loadingChain ? (
                 <span className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 animate-ping rounded-full bg-cyan-400" />
+                  <span className="h-1.5 w-1.5 animate-ping rounded-full bg-violet-400" />
                   Loading...
                 </span>
               ) : (
@@ -1089,7 +1089,7 @@ export default function OptionContractSelector({
       {/* -- STATUS MESSAGE ------------------------------------------------ */}
       {statusMessage && (
         <div className="relative overflow-hidden rounded-lg border border-slate-800 bg-black/30">
-          <div className="absolute inset-y-0 left-0 w-[2px] bg-cyan-500" />
+          <div className="absolute inset-y-0 left-0 w-[2px] bg-violet-500" />
           <p className="px-4 py-2.5 pl-5 font-mono text-[9px] leading-5 text-slate-400">
             {statusMessage}
           </p>
@@ -1119,9 +1119,9 @@ export default function OptionContractSelector({
           <p className="pl-0.5 font-mono text-[10px] font-black text-slate-300">{visibleContracts.length}</p>
         </div>
         <div className="relative overflow-hidden rounded-lg border border-slate-800/80 bg-black/30 px-3 py-2">
-          <div className={`absolute inset-y-0 left-0 w-[2px] ${chainSource === "tradier" ? "bg-emerald-500" : chainSource === "mock" ? "bg-cyan-500" : "bg-slate-600"}`} />
+          <div className={`absolute inset-y-0 left-0 w-[2px] ${chainSource === "tradier" ? "bg-emerald-500" : chainSource === "mock" ? "bg-violet-500" : "bg-slate-600"}`} />
           <p className="pl-0.5 font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-slate-600">Source</p>
-          <p className={`pl-0.5 font-mono text-[10px] font-black ${chainSource === "tradier" ? "text-emerald-300" : chainSource === "mock" ? "text-cyan-300" : "text-slate-400"}`}>
+          <p className={`pl-0.5 font-mono text-[10px] font-black ${chainSource === "tradier" ? "text-emerald-300" : chainSource === "mock" ? "text-violet-300" : "text-slate-400"}`}>
             {chainSource === "tradier" ? "Tradier" : chainSource === "mock" ? "Mock" : "-"}
           </p>
         </div>
@@ -1162,7 +1162,7 @@ export default function OptionContractSelector({
                 value={value}
                 onChange={(e) => setter(e.target.value)}
                 placeholder={placeholder}
-                className="rounded-lg border border-slate-700/60 bg-slate-950/80 px-3 py-2 font-mono text-[10px] text-white outline-none placeholder:text-slate-600 focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/20"
+                className="rounded-lg border border-slate-700/60 bg-slate-950/80 px-3 py-2 font-mono text-[10px] text-white outline-none placeholder:text-slate-600 focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/20"
               />
             ))}
           </div>
@@ -1200,7 +1200,7 @@ export default function OptionContractSelector({
           <select
             value={sortMode}
             onChange={(e) => setSortMode(e.target.value as SortMode)}
-            className="rounded-lg border border-slate-700/60 bg-slate-900/80 px-3 py-2 h-11 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-slate-300 outline-none focus:border-cyan-500/40"
+            className="rounded-lg border border-slate-700/60 bg-slate-900/80 px-3 py-2 h-11 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-slate-300 outline-none focus:border-violet-500/40"
           >
             <option value="recommendation">Sort - Recommendation</option>
             <option value="quality">Sort - Quality</option>
@@ -1372,7 +1372,7 @@ export default function OptionContractSelector({
                 key={optionSymbol}
                 className={`relative overflow-hidden rounded-xl border ring-1 transition-all ${
                   isSelected
-                    ? "border-cyan-500/40 bg-slate-900/90 ring-cyan-500/20"
+                    ? "border-violet-500/40 bg-slate-900/90 ring-violet-500/20"
                     : isShortLeg
                     ? "border-purple-500/40 bg-slate-900/90 ring-purple-500/20"
                     : `border-slate-700/60 bg-slate-900/60 ${getGradeRing(grade)}`
@@ -1393,7 +1393,7 @@ export default function OptionContractSelector({
                   />
                 )}
                 {/* Left grade accent bar */}
-                <div className={`absolute inset-y-0 left-0 w-[3px] ${isSelected ? "bg-cyan-500" : isShortLeg ? "bg-purple-500" : getGradeBar(grade)}`} />
+                <div className={`absolute inset-y-0 left-0 w-[3px] ${isSelected ? "bg-violet-500" : isShortLeg ? "bg-purple-500" : getGradeBar(grade)}`} />
 
                 <div className="px-5 py-4 pl-6">
                   {/* -- Row 1: Symbol + badges --------------------------- */}
@@ -1408,7 +1408,7 @@ export default function OptionContractSelector({
                       {risk.status}
                     </span>
                     {isSelected && (
-                      <span className="rounded border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-cyan-300">
+                      <span className="rounded border border-violet-500/40 bg-violet-500/10 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-violet-300">
                         Selected
                       </span>
                     )}
@@ -1464,12 +1464,12 @@ export default function OptionContractSelector({
                       onClick={() => handleSelectShortLeg(contract)}
                       className={`rounded-lg border px-4 py-2.5 min-h-[44px] font-mono text-[9px] font-bold uppercase tracking-[0.18em] transition-all ${
                         isSelected
-                          ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20"
+                          ? "border-violet-500/40 bg-violet-500/10 text-violet-300 hover:bg-violet-500/20"
                           : isShortLeg
                           ? "border-purple-500/40 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20"
                           : isWeak
                           ? "border-orange-500/40 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20"
-                          : "border-slate-700/80 bg-slate-900/80 text-slate-300 hover:border-cyan-500/30 hover:text-cyan-300"
+                          : "border-slate-700/80 bg-slate-900/80 text-slate-300 hover:border-violet-500/30 hover:text-violet-300"
                       }`}
                     >
                       {isSelected

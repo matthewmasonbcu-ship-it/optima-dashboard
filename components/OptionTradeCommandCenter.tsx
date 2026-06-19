@@ -315,7 +315,7 @@ function MiniStat({
 function SectionCard({
   eyebrow,
   title,
-  accentBar = "bg-cyan-500",
+  accentBar = "bg-violet-500",
   children,
   action,
 }: {
@@ -744,15 +744,15 @@ export default function OptionTradeCommandCenter({
 
             {/* Auto-Select Banner — only when setup is ready and no contract selected yet */}
             {symbol && direction !== "NO TRADE" && !selectedContract && (
-              <div className="relative overflow-hidden rounded-xl border border-cyan-500/25 bg-cyan-500/5 ring-1 ring-cyan-500/10">
+              <div className="relative overflow-hidden rounded-xl border border-violet-500/25 bg-violet-500/5 ring-1 ring-violet-500/10">
                 <div
                   className="absolute inset-x-0 top-0 h-px opacity-60"
                   style={{ background: "linear-gradient(90deg, transparent, #06b6d4, transparent)" }}
                 />
-                <div className="absolute inset-y-0 left-0 w-[3px] bg-cyan-500" />
+                <div className="absolute inset-y-0 left-0 w-[3px] bg-violet-500" />
                 <div className="flex flex-col gap-3 px-5 py-4 pl-6 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-cyan-600">
+                    <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-violet-600">
                       OPTIMA-SYS · Pipeline 2
                     </p>
                     <p className="mt-0.5 font-mono text-xs font-black text-slate-300">
@@ -766,7 +766,7 @@ export default function OptionTradeCommandCenter({
                     type="button"
                     onClick={onAutoSelect}
                     disabled={autoSelectLoading || !symbol || direction === "NO TRADE"}
-                    className="group relative shrink-0 overflow-hidden rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-5 py-2.5 font-mono text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300 transition-all hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="group relative shrink-0 overflow-hidden rounded-lg border border-violet-500/40 bg-violet-500/10 px-5 py-2.5 font-mono text-[10px] font-black uppercase tracking-[0.2em] text-violet-300 transition-all hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <span
                       className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
@@ -774,7 +774,7 @@ export default function OptionTradeCommandCenter({
                     />
                     {autoSelectLoading ? (
                       <span className="flex items-center gap-2">
-                        <span className="h-1.5 w-1.5 animate-ping rounded-full bg-cyan-400" />
+                        <span className="h-1.5 w-1.5 animate-ping rounded-full bg-violet-400" />
                         Selecting…
                       </span>
                     ) : (
@@ -789,7 +789,7 @@ export default function OptionTradeCommandCenter({
             <SectionCard
               eyebrow="OPTIMA-SYS · Mock Option Chain"
               title="Contract Selector"
-              accentBar="bg-cyan-500"
+              accentBar="bg-violet-500"
               action={
                 selectedContract ? (
                   <button

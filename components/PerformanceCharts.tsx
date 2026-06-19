@@ -206,7 +206,7 @@ export default function PerformanceCharts({ refreshKey }: PerformanceChartsProps
       <div className="relative p-5">
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-cyan-600">
+            <p className="mb-1 font-mono text-[10px] font-bold uppercase tracking-[0.3em] text-violet-600">
               OPTIMA-SYS · Analytics
             </p>
             <h2 className="text-2xl font-black tracking-tight text-white">
@@ -233,7 +233,7 @@ export default function PerformanceCharts({ refreshKey }: PerformanceChartsProps
             type="button"
             onClick={loadDetails}
             disabled={loading}
-            className="group relative shrink-0 overflow-hidden self-start rounded-lg border border-slate-700/80 bg-slate-900/80 px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-cyan-500/40 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
+            className="group relative shrink-0 overflow-hidden self-start rounded-lg border border-slate-700/80 bg-slate-900/80 px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 transition-all hover:border-violet-500/40 hover:text-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <span
               className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
@@ -244,7 +244,7 @@ export default function PerformanceCharts({ refreshKey }: PerformanceChartsProps
             />
             {loading ? (
               <span className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 animate-ping rounded-full bg-cyan-400" />
+                <span className="h-1.5 w-1.5 animate-ping rounded-full bg-violet-400" />
                 Loading...
               </span>
             ) : (
@@ -254,14 +254,14 @@ export default function PerformanceCharts({ refreshKey }: PerformanceChartsProps
         </div>
 
         <div className="relative mb-5 overflow-hidden rounded-lg border border-slate-800 bg-black/30">
-          <div className="absolute inset-y-0 left-0 w-[2px] bg-cyan-500" />
+          <div className="absolute inset-y-0 left-0 w-[2px] bg-violet-500" />
           <p className="px-4 py-2.5 pl-5 font-mono text-[9px] leading-5 text-slate-500">
             {message}
           </p>
         </div>
 
         <div className="mb-5 relative overflow-hidden rounded-xl border border-slate-700/60 bg-slate-900/60 ring-1 ring-slate-700/10">
-          <div className="absolute inset-y-0 left-0 w-[3px] bg-cyan-500" />
+          <div className="absolute inset-y-0 left-0 w-[3px] bg-violet-500" />
           <div className="px-5 py-4 pl-6">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-600">
