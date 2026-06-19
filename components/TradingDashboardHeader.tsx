@@ -87,7 +87,7 @@ export default function TradingDashboardHeader() {
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(ellipse 80% 60% at 10% 0%, rgba(6,182,212,0.07) 0%, transparent 60%), radial-gradient(ellipse 60% 80% at 90% 100%, rgba(37,99,235,0.07) 0%, transparent 60%)",
+            "radial-gradient(ellipse 80% 60% at 10% 0%, rgba(139,92,246,0.07) 0%, transparent 60%), radial-gradient(ellipse 60% 80% at 90% 100%, rgba(37,99,235,0.07) 0%, transparent 60%)",
         }}
       />
 
@@ -105,7 +105,7 @@ export default function TradingDashboardHeader() {
         className="absolute inset-x-0 top-0 h-[2px]"
         style={{
           background:
-            "linear-gradient(90deg, transparent 0%, #06b6d4 30%, #3b82f6 60%, transparent 100%)",
+            "linear-gradient(90deg, transparent 0%, #8b5cf6 30%, #3b82f6 60%, transparent 100%)",
         }}
       />
 
@@ -142,7 +142,7 @@ export default function TradingDashboardHeader() {
                 <span
                   className="relative inline-block"
                   style={{
-                    background: "linear-gradient(135deg, #06b6d4 0%, #60a5fa 50%, #818cf8 100%)",
+                    background: "linear-gradient(135deg, #8b5cf6 0%, #60a5fa 50%, #818cf8 100%)",
                     WebkitBackgroundClip: "text",
                     WebkitTextFillColor: "transparent",
                     backgroundClip: "text",
@@ -232,13 +232,13 @@ export default function TradingDashboardHeader() {
         {/* ── BOTTOM RAIL — terminal status ticker ───────────────────── */}
         <div
           className="relative mt-6 overflow-hidden rounded-lg border border-slate-800 bg-black/40"
-          style={{ borderTop: "1px solid rgba(6,182,212,0.12)" }}
+          style={{ borderTop: "1px solid rgba(139,92,246,0.12)" }}
         >
           {/* Rail top accent */}
           <div
             className="absolute inset-x-0 top-0 h-px opacity-40"
             style={{
-              background: "linear-gradient(90deg, transparent, #06b6d4, transparent)",
+              background: "linear-gradient(90deg, transparent, #8b5cf6, transparent)",
             }}
           />
 
@@ -273,7 +273,7 @@ export default function TradingDashboardHeader() {
       <div
         className="absolute inset-x-0 bottom-0 h-px opacity-30"
         style={{
-          background: "linear-gradient(90deg, transparent, #3b82f6, #06b6d4, transparent)",
+          background: "linear-gradient(90deg, transparent, #3b82f6, #8b5cf6, transparent)",
         }}
       />
     </header>

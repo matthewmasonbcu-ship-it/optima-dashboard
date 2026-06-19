@@ -979,7 +979,7 @@ export default function OptionContractSelector({
             >
               <span
                 className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
-                style={{ background: "linear-gradient(90deg, transparent, #06b6d4, transparent)" }}
+                style={{ background: "linear-gradient(90deg, transparent, #8b5cf6, transparent)" }}
               />
               {loadingChain ? (
                 <span className="flex items-center gap-2">
@@ -1382,7 +1382,7 @@ export default function OptionContractSelector({
                 {isSelected && (
                   <div
                     className="absolute inset-x-0 top-0 h-px"
-                    style={{ background: "linear-gradient(90deg, transparent, #06b6d4 40%, #3b82f6 70%, transparent)" }}
+                    style={{ background: "linear-gradient(90deg, transparent, #8b5cf6 40%, #3b82f6 70%, transparent)" }}
                   />
                 )}
                 {/* Short leg in progress: top purple line */}

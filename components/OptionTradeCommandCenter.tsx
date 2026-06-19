@@ -502,7 +502,7 @@ export default function OptionTradeCommandCenter({
       <div
         className="absolute inset-x-0 top-0 h-[2px]"
         style={{
-          background: "linear-gradient(90deg, transparent 0%, #f97316 20%, #06b6d4 60%, transparent 100%)",
+          background: "linear-gradient(90deg, transparent 0%, #f97316 20%, #8b5cf6 60%, transparent 100%)",
         }}
       />
 
@@ -517,7 +517,7 @@ export default function OptionTradeCommandCenter({
             Option Trade{" "}
             <span
               style={{
-                background: "linear-gradient(135deg, #f97316 0%, #06b6d4 100%)",
+                background: "linear-gradient(135deg, #f97316 0%, #8b5cf6 100%)",
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
                 backgroundClip: "text",
@@ -747,7 +747,7 @@ export default function OptionTradeCommandCenter({
               <div className="relative overflow-hidden rounded-xl border border-violet-500/25 bg-violet-500/5 ring-1 ring-violet-500/10">
                 <div
                   className="absolute inset-x-0 top-0 h-px opacity-60"
-                  style={{ background: "linear-gradient(90deg, transparent, #06b6d4, transparent)" }}
+                  style={{ background: "linear-gradient(90deg, transparent, #8b5cf6, transparent)" }}
                 />
                 <div className="absolute inset-y-0 left-0 w-[3px] bg-violet-500" />
                 <div className="flex flex-col gap-3 px-5 py-4 pl-6 sm:flex-row sm:items-center sm:justify-between">
@@ -770,7 +770,7 @@ export default function OptionTradeCommandCenter({
                   >
                     <span
                       className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
-                      style={{ background: "linear-gradient(90deg, transparent, #06b6d4, transparent)" }}
+                      style={{ background: "linear-gradient(90deg, transparent, #8b5cf6, transparent)" }}
                     />
                     {autoSelectLoading ? (
                       <span className="flex items-center gap-2">
@@ -1058,7 +1058,7 @@ export default function OptionTradeCommandCenter({
       {/* Bottom neon edge */}
       <div
         className="absolute inset-x-0 bottom-0 h-px opacity-20"
-        style={{ background: "linear-gradient(90deg, transparent, #f97316, #06b6d4, transparent)" }}
+        style={{ background: "linear-gradient(90deg, transparent, #f97316, #8b5cf6, transparent)" }}
       />
     </div>
   );

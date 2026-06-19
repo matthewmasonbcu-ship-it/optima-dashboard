@@ -98,7 +98,7 @@ function verdictColor(result: SimResult): VerdictColor {
 
 function topGradient(c: VerdictColor) {
   if (c === "green")
-    return "linear-gradient(90deg, transparent 0%, #10b981 40%, #06b6d4 80%, transparent 100%)";
+    return "linear-gradient(90deg, transparent 0%, #10b981 40%, #8b5cf6 80%, transparent 100%)";
   if (c === "amber")
     return "linear-gradient(90deg, transparent 0%, #f59e0b 40%, #f97316 80%, transparent 100%)";
   return "linear-gradient(90deg, transparent 0%, #ef4444 40%, #f97316 80%, transparent 100%)";
@@ -106,7 +106,7 @@ function topGradient(c: VerdictColor) {
 
 function radialGlow(c: VerdictColor) {
   if (c === "green")
-    return "radial-gradient(ellipse 60% 40% at 5% 0%, rgba(16,185,129,0.04) 0%, transparent 55%), radial-gradient(ellipse 50% 50% at 95% 100%, rgba(6,182,212,0.04) 0%, transparent 55%)";
+    return "radial-gradient(ellipse 60% 40% at 5% 0%, rgba(16,185,129,0.04) 0%, transparent 55%), radial-gradient(ellipse 50% 50% at 95% 100%, rgba(139,92,246,0.04) 0%, transparent 55%)";
   if (c === "amber")
     return "radial-gradient(ellipse 60% 40% at 5% 0%, rgba(245,158,11,0.05) 0%, transparent 55%), radial-gradient(ellipse 50% 50% at 95% 100%, rgba(249,115,22,0.04) 0%, transparent 55%)";
   return "radial-gradient(ellipse 60% 40% at 5% 0%, rgba(239,68,68,0.06) 0%, transparent 55%), radial-gradient(ellipse 50% 50% at 95% 100%, rgba(249,115,22,0.04) 0%, transparent 55%)";
@@ -114,14 +114,14 @@ function radialGlow(c: VerdictColor) {
 
 function bottomEdge(c: VerdictColor) {
   if (c === "green")
-    return "linear-gradient(90deg, transparent, #10b981, #06b6d4, transparent)";
+    return "linear-gradient(90deg, transparent, #10b981, #8b5cf6, transparent)";
   if (c === "amber")
     return "linear-gradient(90deg, transparent, #f59e0b, #f97316, transparent)";
   return "linear-gradient(90deg, transparent, #ef4444, #f97316, transparent)";
 }
 
 function titleGradient(c: VerdictColor) {
-  if (c === "green") return "linear-gradient(135deg, #10b981 0%, #06b6d4 100%)";
+  if (c === "green") return "linear-gradient(135deg, #10b981 0%, #8b5cf6 100%)";
   if (c === "amber") return "linear-gradient(135deg, #f59e0b 0%, #f97316 100%)";
   return "linear-gradient(135deg, #ef4444 0%, #f97316 100%)";
 }

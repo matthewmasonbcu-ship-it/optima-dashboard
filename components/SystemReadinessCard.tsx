@@ -229,7 +229,7 @@ export default function SystemReadinessCard() {
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(ellipse 60% 50% at 100% 0%, rgba(6,182,212,0.05) 0%, transparent 55%), radial-gradient(ellipse 50% 60% at 0% 100%, rgba(37,99,235,0.04) 0%, transparent 55%)",
+            "radial-gradient(ellipse 60% 50% at 100% 0%, rgba(139,92,246,0.05) 0%, transparent 55%), radial-gradient(ellipse 50% 60% at 0% 100%, rgba(37,99,235,0.04) 0%, transparent 55%)",
         }}
       />
       {/* Scanline texture */}
@@ -245,7 +245,7 @@ export default function SystemReadinessCard() {
         className="absolute inset-x-0 top-0 h-[2px]"
         style={{
           background:
-            "linear-gradient(90deg, transparent 0%, #06b6d4 30%, #3b82f6 70%, transparent 100%)",
+            "linear-gradient(90deg, transparent 0%, #8b5cf6 30%, #3b82f6 70%, transparent 100%)",
         }}
       />
 
@@ -263,7 +263,7 @@ export default function SystemReadinessCard() {
               System{" "}
               <span
                 style={{
-                  background: "linear-gradient(135deg, #06b6d4 0%, #60a5fa 100%)",
+                  background: "linear-gradient(135deg, #8b5cf6 0%, #60a5fa 100%)",
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
                   backgroundClip: "text",
@@ -316,7 +316,7 @@ export default function SystemReadinessCard() {
                 {/* Hover neon shimmer */}
                 <span
                   className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
-                  style={{ background: "linear-gradient(90deg, transparent, #06b6d4, transparent)" }}
+                  style={{ background: "linear-gradient(90deg, transparent, #8b5cf6, transparent)" }}
                 />
                 {isChecking ? (
                   <span className="flex items-center gap-2">
@@ -404,11 +404,11 @@ export default function SystemReadinessCard() {
         {/* ── RULE RAIL — bottom status bar ───────────────────────────── */}
         <div
           className="relative mt-4 overflow-hidden rounded-lg border border-blue-500/15 bg-blue-500/5"
-          style={{ borderTop: "1px solid rgba(6,182,212,0.10)" }}
+          style={{ borderTop: "1px solid rgba(139,92,246,0.10)" }}
         >
           <div
             className="absolute inset-x-0 top-0 h-px opacity-40"
-            style={{ background: "linear-gradient(90deg, transparent, #06b6d4, transparent)" }}
+            style={{ background: "linear-gradient(90deg, transparent, #8b5cf6, transparent)" }}
           />
           {/* Left accent bar — blue for info */}
           <div className="absolute inset-y-0 left-0 w-[3px] bg-blue-500" />
@@ -429,7 +429,7 @@ export default function SystemReadinessCard() {
       {/* Bottom neon edge */}
       <div
         className="absolute inset-x-0 bottom-0 h-px opacity-20"
-        style={{ background: "linear-gradient(90deg, transparent, #3b82f6, #06b6d4, transparent)" }}
+        style={{ background: "linear-gradient(90deg, transparent, #3b82f6, #8b5cf6, transparent)" }}
       />
     </section>
   );

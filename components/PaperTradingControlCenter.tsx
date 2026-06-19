@@ -102,7 +102,7 @@ export default function PaperTradingControlCenter() {
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(ellipse 70% 50% at 0% 50%, rgba(6,182,212,0.05) 0%, transparent 55%), radial-gradient(ellipse 50% 70% at 100% 50%, rgba(37,99,235,0.05) 0%, transparent 55%)",
+            "radial-gradient(ellipse 70% 50% at 0% 50%, rgba(139,92,246,0.05) 0%, transparent 55%), radial-gradient(ellipse 50% 70% at 100% 50%, rgba(37,99,235,0.05) 0%, transparent 55%)",
         }}
       />
       {/* Scanline texture */}
@@ -118,7 +118,7 @@ export default function PaperTradingControlCenter() {
         className="absolute inset-x-0 top-0 h-[2px]"
         style={{
           background:
-            "linear-gradient(90deg, transparent 0%, #06b6d4 30%, #3b82f6 70%, transparent 100%)",
+            "linear-gradient(90deg, transparent 0%, #8b5cf6 30%, #3b82f6 70%, transparent 100%)",
         }}
       />
 
@@ -136,7 +136,7 @@ export default function PaperTradingControlCenter() {
               Paper Trading{" "}
               <span
                 style={{
-                  background: "linear-gradient(135deg, #06b6d4 0%, #60a5fa 100%)",
+                  background: "linear-gradient(135deg, #8b5cf6 0%, #60a5fa 100%)",
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
                   backgroundClip: "text",
@@ -222,13 +222,13 @@ export default function PaperTradingControlCenter() {
         {/* ── RULE RAIL — bottom status bar ───────────────────────────── */}
         <div
           className="relative mt-4 overflow-hidden rounded-lg border border-slate-800 bg-black/40"
-          style={{ borderTop: "1px solid rgba(6,182,212,0.10)" }}
+          style={{ borderTop: "1px solid rgba(139,92,246,0.10)" }}
         >
           {/* Rail top accent */}
           <div
             className="absolute inset-x-0 top-0 h-px opacity-40"
             style={{
-              background: "linear-gradient(90deg, transparent, #06b6d4, transparent)",
+              background: "linear-gradient(90deg, transparent, #8b5cf6, transparent)",
             }}
           />
           <div className="flex flex-col gap-0.5 px-5 py-3 sm:flex-row sm:items-center sm:gap-3">
@@ -250,7 +250,7 @@ export default function PaperTradingControlCenter() {
       <div
         className="absolute inset-x-0 bottom-0 h-px opacity-20"
         style={{
-          background: "linear-gradient(90deg, transparent, #3b82f6, #06b6d4, transparent)",
+          background: "linear-gradient(90deg, transparent, #3b82f6, #8b5cf6, transparent)",
         }}
       />
     </section>

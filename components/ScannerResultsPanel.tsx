@@ -232,7 +232,7 @@ export default function ScannerResultsPanel({
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(ellipse 70% 40% at 10% 0%, rgba(6,182,212,0.05) 0%, transparent 55%), radial-gradient(ellipse 50% 50% at 90% 100%, rgba(37,99,235,0.04) 0%, transparent 55%)",
+            "radial-gradient(ellipse 70% 40% at 10% 0%, rgba(139,92,246,0.05) 0%, transparent 55%), radial-gradient(ellipse 50% 50% at 90% 100%, rgba(37,99,235,0.04) 0%, transparent 55%)",
         }}
       />
       <div
@@ -246,7 +246,7 @@ export default function ScannerResultsPanel({
         className="absolute inset-x-0 top-0 h-[2px]"
         style={{
           background:
-            "linear-gradient(90deg, transparent 0%, #06b6d4 30%, #3b82f6 70%, transparent 100%)",
+            "linear-gradient(90deg, transparent 0%, #8b5cf6 30%, #3b82f6 70%, transparent 100%)",
         }}
       />
 
@@ -262,7 +262,7 @@ export default function ScannerResultsPanel({
               Live{" "}
               <span
                 style={{
-                  background: "linear-gradient(135deg, #06b6d4 0%, #60a5fa 100%)",
+                  background: "linear-gradient(135deg, #8b5cf6 0%, #60a5fa 100%)",
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
                   backgroundClip: "text",
@@ -298,7 +298,7 @@ export default function ScannerResultsPanel({
         {bestSetup && (
           <div className="relative mb-4 overflow-hidden rounded-xl border border-violet-500/20 bg-violet-500/5 ring-1 ring-violet-500/10">
             <div className="absolute inset-x-0 top-0 h-px opacity-60"
-              style={{ background: "linear-gradient(90deg, transparent, #06b6d4, transparent)" }}
+              style={{ background: "linear-gradient(90deg, transparent, #8b5cf6, transparent)" }}
             />
             <div className="absolute inset-y-0 left-0 w-[3px] bg-violet-500" />
             <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -327,7 +327,7 @@ export default function ScannerResultsPanel({
               >
                 <span
                   className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
-                  style={{ background: "linear-gradient(90deg, transparent, #06b6d4, transparent)" }}
+                  style={{ background: "linear-gradient(90deg, transparent, #8b5cf6, transparent)" }}
                 />
                 Load Best Setup ›
               </button>
@@ -382,7 +382,7 @@ export default function ScannerResultsPanel({
                   {isSelected && (
                     <div
                       className="absolute inset-x-0 top-0 h-px"
-                      style={{ background: "linear-gradient(90deg, transparent, #06b6d4 40%, #3b82f6 70%, transparent)" }}
+                      style={{ background: "linear-gradient(90deg, transparent, #8b5cf6 40%, #3b82f6 70%, transparent)" }}
                     />
                   )}
 
@@ -526,7 +526,7 @@ export default function ScannerResultsPanel({
       {/* Bottom neon edge */}
       <div
         className="absolute inset-x-0 bottom-0 h-px opacity-20"
-        style={{ background: "linear-gradient(90deg, transparent, #3b82f6, #06b6d4, transparent)" }}
+        style={{ background: "linear-gradient(90deg, transparent, #3b82f6, #8b5cf6, transparent)" }}
       />
     </div>
   );

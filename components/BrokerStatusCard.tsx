@@ -307,7 +307,7 @@ export default function BrokerStatusCard() {
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(ellipse 55% 50% at 5% 50%, rgba(6,182,212,0.04) 0%, transparent 55%), radial-gradient(ellipse 45% 55% at 95% 50%, rgba(37,99,235,0.04) 0%, transparent 55%)",
+            "radial-gradient(ellipse 55% 50% at 5% 50%, rgba(139,92,246,0.04) 0%, transparent 55%), radial-gradient(ellipse 45% 55% at 95% 50%, rgba(37,99,235,0.04) 0%, transparent 55%)",
         }}
       />
       <div
@@ -322,7 +322,7 @@ export default function BrokerStatusCard() {
         className="absolute inset-x-0 top-0 h-[2px]"
         style={{
           background:
-            "linear-gradient(90deg, transparent 0%, #06b6d4 30%, #3b82f6 70%, transparent 100%)",
+            "linear-gradient(90deg, transparent 0%, #8b5cf6 30%, #3b82f6 70%, transparent 100%)",
         }}
       />
 
@@ -339,7 +339,7 @@ export default function BrokerStatusCard() {
               <span
                 style={{
                   background:
-                    "linear-gradient(135deg, #06b6d4 0%, #60a5fa 100%)",
+                    "linear-gradient(135deg, #8b5cf6 0%, #60a5fa 100%)",
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
                   backgroundClip: "text",
@@ -364,7 +364,7 @@ export default function BrokerStatusCard() {
               className="pointer-events-none absolute inset-x-0 top-0 h-px opacity-0 transition-opacity group-hover:opacity-100"
               style={{
                 background:
-                  "linear-gradient(90deg, transparent, #06b6d4, transparent)",
+                  "linear-gradient(90deg, transparent, #8b5cf6, transparent)",
               }}
             />
             {loading ? (
@@ -452,13 +452,13 @@ export default function BrokerStatusCard() {
         {/* ── Safety lock banner ──────────────────────────────────────── */}
         <div
           className="relative overflow-hidden rounded-lg border border-emerald-500/15 bg-emerald-500/5"
-          style={{ borderTop: "1px solid rgba(6,182,212,0.10)" }}
+          style={{ borderTop: "1px solid rgba(139,92,246,0.10)" }}
         >
           <div
             className="absolute inset-x-0 top-0 h-px opacity-40"
             style={{
               background:
-                "linear-gradient(90deg, transparent, #06b6d4, transparent)",
+                "linear-gradient(90deg, transparent, #8b5cf6, transparent)",
             }}
           />
           <div className="absolute inset-y-0 left-0 w-[3px] bg-emerald-500" />
@@ -500,7 +500,7 @@ export default function BrokerStatusCard() {
         className="absolute inset-x-0 bottom-0 h-px opacity-20"
         style={{
           background:
-            "linear-gradient(90deg, transparent, #3b82f6, #06b6d4, transparent)",
+            "linear-gradient(90deg, transparent, #3b82f6, #8b5cf6, transparent)",
         }}
       />
     </div>

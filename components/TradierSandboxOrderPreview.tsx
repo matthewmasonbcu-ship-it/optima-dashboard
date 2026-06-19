@@ -226,7 +226,7 @@ export default function TradierSandboxOrderPreview({
       <div
         className="absolute inset-x-0 top-0 h-px opacity-60"
         style={{
-          background: "linear-gradient(90deg, transparent, #06b6d4, transparent)",
+          background: "linear-gradient(90deg, transparent, #8b5cf6, transparent)",
         }}
       />
 
