@@ -23,6 +23,7 @@ import SystemReadinessCard from "../components/SystemReadinessCard";
 import PaperTradingControlCenter from "../components/PaperTradingControlCenter";
 import TradingDashboardHeader from "../components/TradingDashboardHeader";
 import AlertPanel from "@/components/alerts/AlertPanel";
+import CommandCenterPanel from "../components/CommandCenterPanel";
 import AlertErrorBoundary from "@/components/alerts/AlertErrorBoundary";
 import { useTradeApprovalAlerts } from "@/hooks/useTradeApprovalAlerts";
 import type { SpreadType, OptionLeg } from "../lib/dashboardTypes";
@@ -354,9 +355,21 @@ function StatusCard({
   );
 }
 
-type TabId = "trade" | "positions" | "alerts" | "analytics" | "system";
+type TabId = "command-center" | "trade" | "positions" | "alerts" | "analytics" | "system";
 
 const TABS: { id: TabId; label: string; icon: ReactNode }[] = [
+  {
+    id: "command-center",
+    label: "Center",
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+        <rect x="14" y="14" width="7" height="7" rx="1" />
+      </svg>
+    ),
+  },
   {
     id: "trade",
     label: "Trade",
@@ -515,7 +528,7 @@ export default function Home() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [testingOverrideEnabled, setTestingOverrideEnabled] = useState(false);
   const [tradeReason, setTradeReason] = useState("");
-  const [activeTab, setActiveTab] = useState<TabId>("trade");
+  const [activeTab, setActiveTab] = useState<TabId>("command-center");
   const [openTradesCount, setOpenTradesCount] = useState(0);
   const [openSymbols, setOpenSymbols] = useState<string[]>([]);
   const [dailyTradeCount, setDailyTradeCount] = useState(0);
@@ -1277,6 +1290,20 @@ const sendSelectedContractToApprovalQueue = () => {
               transition={{ duration: 0.2, ease: "easeOut" }}
               className="h-full"
             >
+              {activeTab === "command-center" && (
+                <CommandCenterPanel
+                  scannerResults={scannerResults}
+                  marketCondition={marketCondition}
+                  vixLevel={vixLevel}
+                  vixRegime={vixRegime}
+                  optionRiskCheckStatus={optionRiskCheck.status}
+                  dailyTradeCount={dailyTradeCount}
+                  dailyLossCount={dailyLossCount}
+                  isScanning={isScanning}
+                  onSwitchToAlerts={() => setActiveTab("alerts")}
+                />
+              )}
+
               {activeTab === "trade" && (
                 <div className="flex h-full flex-col gap-0">
                   {vixRegime === "HIGH_RISK" && (
