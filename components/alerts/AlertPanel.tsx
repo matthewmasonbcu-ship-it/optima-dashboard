@@ -7,6 +7,7 @@ import ApprovalHistoryPanel from "./ApprovalHistoryPanel";
 import PhoneAlertHistoryPanel from "./PhoneAlertHistoryPanel";
 import PaperOrderPreviewHistoryPanel from "./PaperOrderPreviewHistoryPanel";
 import SandboxPreviewPhoneReviewQueue from "./SandboxPreviewPhoneReviewQueue";
+import AlertErrorBoundary from "./AlertErrorBoundary";
 
 type AlertPanelProps = {
   alerts: TradeApprovalAlert[];
@@ -278,18 +279,26 @@ export default function AlertPanel({
         </div>
       )}
 
-      <SandboxPreviewPhoneReviewQueue
-        refreshKey={combinedHistoryRefreshKey}
-        onPhoneAlertLogged={() =>
-          setPhoneAlertRefreshKey((value) => value + 1)
-        }
-      />
+      <AlertErrorBoundary label="Phone Review Queue">
+        <SandboxPreviewPhoneReviewQueue
+          refreshKey={combinedHistoryRefreshKey}
+          onPhoneAlertLogged={() =>
+            setPhoneAlertRefreshKey((value) => value + 1)
+          }
+        />
+      </AlertErrorBoundary>
 
-      <ApprovalHistoryPanel refreshKey={historyRefreshKey} />
+      <AlertErrorBoundary label="Approval History">
+        <ApprovalHistoryPanel refreshKey={historyRefreshKey} />
+      </AlertErrorBoundary>
 
-      <PhoneAlertHistoryPanel refreshKey={combinedHistoryRefreshKey} />
+      <AlertErrorBoundary label="Phone Alert History">
+        <PhoneAlertHistoryPanel refreshKey={combinedHistoryRefreshKey} />
+      </AlertErrorBoundary>
 
-      <PaperOrderPreviewHistoryPanel refreshKey={combinedHistoryRefreshKey} />
+      <AlertErrorBoundary label="Paper Order Preview History">
+        <PaperOrderPreviewHistoryPanel refreshKey={combinedHistoryRefreshKey} />
+      </AlertErrorBoundary>
     </section>
   );
 }

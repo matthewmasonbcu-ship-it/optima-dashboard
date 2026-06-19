@@ -23,6 +23,7 @@ import SystemReadinessCard from "../components/SystemReadinessCard";
 import PaperTradingControlCenter from "../components/PaperTradingControlCenter";
 import TradingDashboardHeader from "../components/TradingDashboardHeader";
 import AlertPanel from "@/components/alerts/AlertPanel";
+import AlertErrorBoundary from "@/components/alerts/AlertErrorBoundary";
 import { useTradeApprovalAlerts } from "@/hooks/useTradeApprovalAlerts";
 import type { SpreadType, OptionLeg } from "../lib/dashboardTypes";
 import {
@@ -1456,16 +1457,18 @@ const sendSelectedContractToApprovalQueue = () => {
                     </button>
                   </div>
 
-                  <AlertPanel
-                    alerts={tradeApprovalAlerts}
-                    onReviewAlert={reviewAlert}
-                    onApproveAlert={approveAlert}
-                    onRejectAlert={rejectAlert}
-                    onClearResolvedAlerts={clearResolvedAlerts}
-                    approvalActionStatus={approvalActionStatus}
-                    approvalActionError={approvalActionError}
-                    isSavingApprovalDecision={isSavingApprovalDecision}
-                  />
+                  <AlertErrorBoundary label="Alert Panel">
+                    <AlertPanel
+                      alerts={tradeApprovalAlerts}
+                      onReviewAlert={reviewAlert}
+                      onApproveAlert={approveAlert}
+                      onRejectAlert={rejectAlert}
+                      onClearResolvedAlerts={clearResolvedAlerts}
+                      approvalActionStatus={approvalActionStatus}
+                      approvalActionError={approvalActionError}
+                      isSavingApprovalDecision={isSavingApprovalDecision}
+                    />
+                  </AlertErrorBoundary>
 
                   <WorkModeCommandCenter />
                   <BrokerStatusCard />
