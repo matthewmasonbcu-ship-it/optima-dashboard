@@ -368,15 +368,65 @@ The `autoSavePaperTrade()` server route has no access to real-time market data a
 - `trade_approval_decisions` — no migration exists; `ApprovalHistoryPanel` queries this table and will show a `42P01` error panel until the table is created or the panel is removed
 - `phone_alert_events.paper_order_preview_id` — no migration adds this column; `PhoneAlertHistoryPanel` selects it and will show a `42703` error panel; the column is referenced in the type and JSX but never added to the table
 
+---
+
+## Session Date: June 18, 2026 (evening)
+
+### Alerts Tab Crash — Root Cause Fixed
+
+1. **`formatStatus` replaceAll crash from production Tradier 401s** — `dd4db2f`, `63da580`
+   - Root cause: `formatStatus(status: string)` called `.replaceAll("_", " ")` on `routeStatus = status.status || "UNKNOWN"`. When Tradier production routes return a non-string (object, array) on a 401, the `|| "UNKNOWN"` guard doesn't fire and `.replaceAll` throws `TypeError: n.replaceAll is not a function`
+   - `BrokerStatusCard` was outside all error boundaries → throw propagated to root, white-screening the entire Alerts tab
+   - Fix 1: `String(status).replaceAll(...)` in `formatStatus` — cannot throw regardless of input type
+   - Fix 2: `BrokerStatusCard` wrapped in `AlertErrorBoundary` in `page.tsx` — future render throws degrade gracefully
+
+### Violet Color Token Sweep (Full App)
+
+2. **Color token system + cyan→violet sweep** — `f0db88e`, `11c102b`
+   - `globals.css`: defined semantic CSS custom properties for all accent colors
+   - Swept entire app: Tailwind utility classes and inline hex/rgba glow gradients changed from cyan to violet throughout
+   - Semantic colors (emerald for approved/profit, red for blocked/risk, amber for caution) and blue counterpoints preserved — only the primary accent changed
+
+### Command Center — New Landing Screen
+
+3. **`components/CommandCenterPanel.tsx` + tab wiring** — `d316137`
+   - New first sidebar tab "Center" (grid-of-four icon), default landing view on app open
+   - Trade tab untouched — remains the power view users go into to work a setup
+   - **Zone 1 — System Status** (calm, full-width): master state indicator (`SYSTEM NOMINAL` / `ACTION NEEDED` / `ATTENTION`), six heartbeat pills (EXECUTION LOCKED, LIVE TRADING OFF, PAPER MODE, market condition, VIX regime, Risk Guard), last-checked timestamp + refresh button. Auto-refreshes every 60s.
+   - **Zone 2 — Action** (the ONE loud thing): violet glow card with ticker, CALL/PUT badge, grade, "Review & Approve →" link to Alerts tab — only when a `paper_order_previews` WATCH row exists. Otherwise a single muted dim line.
+   - **Zone 3 — Scanner Discipline Log**: last scan results, symbols scanned count, scanner-level block reason breakdown with counts, discipline summary line. Honest note: "Scanner-level reasons only — delta, DTE, and grade checks run after a setup qualifies."
+   - **Zone 4 — Discipline Strip** (quiet footer): Trades today X/3, Losses today X/2, Daily drawdown $X/$2,500, Trading day X/30. Numbers amber→red as limits approach.
+   - Responsive: phone = single-column stack, laptop = Zones 2+3 side-by-side (`lg:grid-cols-2 lg:items-stretch`)
+   - Data: broker-lock query (same pattern as WorkModeCommandCenter), `paper_order_previews` queue (with `option_type`), daily P&L, distinct trading day count — all self-managed in the component, no new shared state
+
+4. **Zone 5 — Market News Feed** — `d316137`
+   - New `/api/news/market` route: calls `finnhub.io/api/v1/news?category=general`, `next: { revalidate: 600 }` server-side cache — Finnhub sees 1 call per 10 min maximum regardless of browser traffic. Zero 429 risk.
+   - Confirmed free tier supports news endpoints — no paid upgrade needed
+   - Component fetches on mount, re-fetches every 15 min; shows 8 headlines as flat mono list
+   - Each row: `SOURCE · Xh ago` metadata (muted), headline text (light, `text-slate-200`), full row is a link
+   - No animation, no glow, no auto-scroll — ambient context only
+
+5. **Layout polish** — `d316137`
+   - Fixed top clip: `pt-1` buffer on scrollable root so Zone 1 card shadow/radius clears container edge
+   - Fixed height imbalance: `lg:items-stretch` on Zone 2/3 grid + `h-full flex-col` on both; Zone 2 centers vertically when empty
+   - `ACTION NEEDED` status word: amber → `text-violet-300/80` dot + text so it doesn't compete with the action card glow below
+   - News headlines: `text-slate-400` → `text-slate-200` (legible); source/timestamp labels stay muted
+
+### Known Remaining Schema Gaps (unchanged)
+
+- `trade_approval_decisions` — no migration exists; `ApprovalHistoryPanel` will show `42P01` error panel
+- `phone_alert_events.paper_order_preview_id` — column never migrated; `PhoneAlertHistoryPanel` will show `42703` error panel
+
 ## Next Session Priority
 
 **Start a fresh chat and paste this file for context.**
 
-1. **Verify Alerts tab loads cleanly** after the `dd4db2f` deploy — the BrokerStatusCard crash and the paper_order_previews query error are both fixed; check whether any panel now shows a schema error box (42P01 / 42703) and decide whether to create the missing tables/columns or remove those panels.
-2. **Monday 9:30 ET — first production-chain cron run**: watch for one Telegram heartbeat. Expect either a queued credit spread (30–45 DTE, Risk Guard green, delta 0.20–0.25) or a clear block reason. No heartbeat at all = cron didn't fire, investigate.
-3. **If a spread is queued: approve from phone** → first auto-pipeline trade on real production data.
-4. **Full manual end-to-end test** (still pending) — trigger via curl with `CRON_SECRET` during market hours, verify scan → auto-select → enforcement → preview INSERT → Telegram approval alert → approve → `autoSavePaperTrade`.
-5. **If pipeline proves clean over a few days: upgrade Vercel Hobby → Pro** for 30-min scanning. Update `vercel.json` cron schedule to `"0,30 13-20 * * 1-5"` at that point.
+1. **Phone-test the Command Center responsive layout** — desktop confirmed good, mobile not yet verified. Known cosmetic issues: `MARKET BULLISH` pill clips on narrow screens; news feed occasionally shows non-market filler stories.
+2. **Re-link `.vercel/project.json` to the `azm9` project** — Vercel link may have drifted; confirm `vercel env pull` pulls the correct production env vars before next deploy.
+3. **Monday June 22, 9:30 ET — first production-chain cron run during market hours**: watch for one Telegram heartbeat. Expect either a queued credit spread (30–45 DTE, Risk Guard green, delta 0.20–0.25) or a clear block reason. No heartbeat = cron didn't fire, investigate.
+4. **If a spread is queued: approve from phone** → first auto-pipeline trade on real production data + first live phone-review flow end-to-end.
+5. **Full manual end-to-end test** (still pending) — trigger via curl with `CRON_SECRET` during market hours, verify scan → auto-select → enforcement → preview INSERT → Telegram approval alert → approve → `autoSavePaperTrade`.
+6. **If pipeline proves clean over a few days: upgrade Vercel Hobby → Pro** for 30-min scanning. Update `vercel.json` cron schedule to `"0,30 13-20 * * 1-5"` at that point.
 
 ## Target Firm Reminder
 
