@@ -35,8 +35,6 @@ type PaperOrderPreviewHistoryRow = PaperOrderPreviewRow & {
   sandbox_preview_validation_message?: string | null;
   sandbox_preview_validation_reason?: string | null;
   sandbox_preview_validation_checked_at?: string | null;
-  sandbox_preview_validation_payload?: unknown | null;
-  sandbox_preview_validation_safety_locks?: unknown | null;
   sandbox_preview_human_review_status?: string | null;
   sandbox_preview_human_review_decision?: HumanReviewDecision | string | null;
   sandbox_preview_human_review_notes?: string | null;
@@ -323,7 +321,7 @@ export default function PaperOrderPreviewHistoryPanel({
     const { data, error } = await supabase
       .from("paper_order_previews")
       .select(
-        "id, created_at, symbol, trade_lane, setup_name, contract_symbol, strike, expiration, option_type, bid, ask, mid, estimated_limit_price, quantity, estimated_order_cost, max_risk_dollars, contract_quality, risk_guard_status, preview_status, broker, order_side, order_type, time_in_force, approved_for_sandbox_order, approved_for_live_order, submitted_to_broker, ready_for_sandbox_preview, ready_for_sandbox_preview_at, sandbox_preview_locked_reason, safety_notes, sandbox_preview_validation_status, sandbox_preview_validation_message, sandbox_preview_validation_reason, sandbox_preview_validation_checked_at, sandbox_preview_validation_payload, sandbox_preview_validation_safety_locks, sandbox_preview_human_review_status, sandbox_preview_human_review_decision, sandbox_preview_human_review_notes, sandbox_preview_human_reviewed_at"
+        "id, created_at, symbol, trade_lane, setup_name, contract_symbol, strike, expiration, option_type, bid, ask, mid, estimated_limit_price, quantity, estimated_order_cost, max_risk_dollars, contract_quality, risk_guard_status, preview_status, broker, order_side, order_type, time_in_force, approved_for_sandbox_order, approved_for_live_order, submitted_to_broker, ready_for_sandbox_preview, ready_for_sandbox_preview_at, sandbox_preview_locked_reason, safety_notes, sandbox_preview_validation_status, sandbox_preview_validation_message, sandbox_preview_validation_reason, sandbox_preview_validation_checked_at, sandbox_preview_human_review_status, sandbox_preview_human_review_decision, sandbox_preview_human_review_notes, sandbox_preview_human_reviewed_at"
       )
       .order("created_at", { ascending: false })
       .limit(8);
@@ -1044,10 +1042,6 @@ export default function PaperOrderPreviewHistoryPanel({
                             <p className="mt-1 leading-relaxed opacity-90">
                               Reason: {row.sandbox_preview_validation_reason}
                             </p>
-                          )}
-
-                          {renderSafetyLocks(
-                            row.sandbox_preview_validation_safety_locks
                           )}
 
                           {row.sandbox_preview_validation_checked_at && (
