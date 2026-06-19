@@ -1471,7 +1471,9 @@ const sendSelectedContractToApprovalQueue = () => {
                   </AlertErrorBoundary>
 
                   <WorkModeCommandCenter />
-                  <BrokerStatusCard />
+                  <AlertErrorBoundary label="Broker Status">
+                    <BrokerStatusCard />
+                  </AlertErrorBoundary>
                 </div>
               )}
 

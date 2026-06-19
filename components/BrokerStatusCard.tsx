@@ -89,7 +89,7 @@ function getToneClasses(tone: "green" | "yellow" | "red" | "blue") {
 
 // ─── formatStatus — untouched logic ──────────────────────────────────────────
 function formatStatus(status: string) {
-  return status.replaceAll("_", " ");
+  return String(status).replaceAll("_", " ");
 }
 
 // ─── StatusPill — redesigned visually, props unchanged ───────────────────────
