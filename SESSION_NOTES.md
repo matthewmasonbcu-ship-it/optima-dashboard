@@ -326,14 +326,57 @@ The `autoSavePaperTrade()` server route has no access to real-time market data a
 - DrawdownTracker, EvaluationSimulator (Black Eagle criteria), VIX advisory banners
 - Notification: Telegram primary · direct Gmail fallback
 
+### Mobile Usability — 44px Tap Targets, Safe-Area Insets, Readable Text
+
+7. **5 high-impact mobile fixes across 6 files** — committed as 4 groups
+   - `app/layout.tsx`: added `export const viewport: Viewport = { viewportFit: "cover" }` — enables `env(safe-area-inset-*)` CSS variables globally for notch/Dynamic Island
+   - `app/phone-review/[token]/page.tsx`: main `<main>` uses `pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]`
+   - `app/phone-review/[token]/PhoneReviewActions.tsx`: Approve/Reject buttons bumped from `py-2` to `min-h-[44px] py-3 text-sm` (44pt minimum tap target)
+   - `app/page.tsx`: `h-screen` → `style={{ height: '100dvh' }}` on main; header gets safe-area-aware height/padding; Paper Mode + Open Trades badges get `hidden sm:inline-flex`; sidebar tab labels `hidden sm:block`; trade count badge responsive text
+   - `components/OptionContractSelector.tsx`: 6 primary action buttons bumped to `min-h-[44px]`; sort select to `h-11`; MiniStat labels/values bumped to readable sizes on mobile
+   - `components/ScannerResultsPanel.tsx`: MiniStat label responsive text fix (`text-[10px] sm:text-[8px]`)
+   - All purely presentational Tailwind changes — zero logic, enforcement, or save-path changes
+
+### Alerts Tab — Root Cause Found and Fixed
+
+8. **Error visibility: propagate real Supabase error details on-screen**
+   - All three history panels (`ApprovalHistoryPanel`, `PhoneAlertHistoryPanel`, `PaperOrderPreviewHistoryPanel`) now show `[error.code] error.message` in the displayed error string instead of a generic fallback
+   - Makes Supabase error codes visible in the browser without DevTools
+
+9. **Remove non-existent columns from `PaperOrderPreviewHistoryPanel` query** — `e328531`
+   - `sandbox_preview_validation_payload` and `sandbox_preview_validation_safety_locks` existed in the TypeScript type and `.select()` string but had no migration and were never written to the DB
+   - Supabase was returning `42703` (column does not exist) on every Alerts tab open, silently blocking the entire `paper_order_previews` query
+   - Both removed from the type definition, select string, and JSX (the `renderSafetyLocks(row.sandbox_preview_validation_safety_locks)` call at line 1049 removed)
+   - `renderSafetyLocks` function kept — still used at line 1114 with `sandboxPreviewResult.safetyLocks` (a non-DB data source)
+
+10. **React error boundaries on all Alerts tab panels** — `63da580`
+    - New `components/alerts/AlertErrorBoundary.tsx`: class component with `getDerivedStateFromError`, shows label + `error.message` + stack in a red box
+    - All 4 sub-panels wrapped inside `AlertPanel`: Phone Review Queue, Approval History, Phone Alert History, Paper Order Preview History
+    - `AlertPanel` itself wrapped in `page.tsx` (outer boundary)
+    - `BrokerStatusCard` wrapped in `page.tsx` (separate boundary — it's outside AlertPanel)
+    - Any future render throw shows an in-place error box instead of crashing the whole tab
+
+11. **Fix full-page Alerts tab crash** — `dd4db2f`
+    - Root cause: `formatStatus(status: string)` in `BrokerStatusCard.tsx:92` called `.replaceAll("_", " ")` on `routeStatus = status.status || "UNKNOWN"`
+    - If a Tradier route response returns `status` as a truthy non-string (object, array), the `|| "UNKNOWN"` guard doesn't fire and `.replaceAll` throws `TypeError: n.replaceAll is not a function` during render
+    - `BrokerStatusCard` was outside all error boundaries → the throw propagated to the root and white-screened the entire Alerts tab
+    - Fix 1: `String(status).replaceAll(...)` in `formatStatus` — cannot throw regardless of input
+    - Fix 2: `BrokerStatusCard` wrapped in `AlertErrorBoundary` in `page.tsx` — future render surprises degrade gracefully
+
+### Known Remaining Schema Gaps (not yet fixed)
+
+- `trade_approval_decisions` — no migration exists; `ApprovalHistoryPanel` queries this table and will show a `42P01` error panel until the table is created or the panel is removed
+- `phone_alert_events.paper_order_preview_id` — no migration adds this column; `PhoneAlertHistoryPanel` selects it and will show a `42703` error panel; the column is referenced in the type and JSX but never added to the table
+
 ## Next Session Priority
 
 **Start a fresh chat and paste this file for context.**
 
-1. **Monday 9:30 ET — first production-chain cron run**: watch for one Telegram heartbeat. Expect either a queued credit spread (30–45 DTE, Risk Guard green, delta 0.20–0.25) or a clear block reason. No heartbeat at all = cron didn't fire, investigate.
-2. **If a spread is queued: approve from phone** → first auto-pipeline trade on real production data.
-3. **Full manual end-to-end test** (still pending) — trigger via curl with `CRON_SECRET` during market hours, verify scan → auto-select → enforcement → preview INSERT → Telegram approval alert → approve → `autoSavePaperTrade`.
-4. **If pipeline proves clean over a few days: upgrade Vercel Hobby → Pro** for 30-min scanning. Update `vercel.json` cron schedule to `"0,30 13-20 * * 1-5"` at that point.
+1. **Verify Alerts tab loads cleanly** after the `dd4db2f` deploy — the BrokerStatusCard crash and the paper_order_previews query error are both fixed; check whether any panel now shows a schema error box (42P01 / 42703) and decide whether to create the missing tables/columns or remove those panels.
+2. **Monday 9:30 ET — first production-chain cron run**: watch for one Telegram heartbeat. Expect either a queued credit spread (30–45 DTE, Risk Guard green, delta 0.20–0.25) or a clear block reason. No heartbeat at all = cron didn't fire, investigate.
+3. **If a spread is queued: approve from phone** → first auto-pipeline trade on real production data.
+4. **Full manual end-to-end test** (still pending) — trigger via curl with `CRON_SECRET` during market hours, verify scan → auto-select → enforcement → preview INSERT → Telegram approval alert → approve → `autoSavePaperTrade`.
+5. **If pipeline proves clean over a few days: upgrade Vercel Hobby → Pro** for 30-min scanning. Update `vercel.json` cron schedule to `"0,30 13-20 * * 1-5"` at that point.
 
 ## Target Firm Reminder
 
