@@ -31,7 +31,7 @@ async function sendHeartbeat(text: string): Promise<void> {
 
 const ROUTE = "/api/cron/market-open-scan";
 const MIN_SETUP_SCORE = 75;
-const SCAN_WINDOW_TOLERANCE_MINUTES = 5;
+const SCAN_WINDOW_TOLERANCE_MINUTES = 20; // widened from 5 — Vercel Hobby jitter can exceed 5 min
 const MIN_DTE = 30;
 const MAX_DTE = 45;
 const MIDPOINT_DTE = 37;
@@ -234,9 +234,24 @@ export async function GET(request: Request) {
     }
 
     // --- 5. Auto-select best credit spread ---
-    if (!process.env.TRADIER_ACCESS_TOKEN) {
+    // Guard on whichever token tradierClient will actually use for the active env —
+    // mirrors tradierClient.ts token selection so this check can never block a
+    // request that would otherwise succeed.
+    const tradierEnv = (process.env.TRADIER_ENV ?? "sandbox").toLowerCase();
+    const tradierToken =
+      tradierEnv === "production"
+        ? process.env.TRADIER_PRODUCTION_TOKEN
+        : process.env.TRADIER_ACCESS_TOKEN;
+    if (!tradierToken) {
       return NextResponse.json(
-        { success: false, route: ROUTE, message: "TRADIER_ACCESS_TOKEN not configured." },
+        {
+          success: false,
+          route: ROUTE,
+          message:
+            tradierEnv === "production"
+              ? "TRADIER_PRODUCTION_TOKEN not configured."
+              : "TRADIER_ACCESS_TOKEN not configured.",
+        },
         { status: 503 }
       );
     }
