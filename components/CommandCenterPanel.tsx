@@ -23,6 +23,7 @@ type NewsItem = {
   source: string;
   datetime: number;
   url: string;
+  image: string;
 };
 
 type MasterState = "NOMINAL" | "ACTION_NEEDED" | "ATTENTION";
@@ -660,6 +661,22 @@ function Zone4Discipline({
   );
 }
 
+// ── News thumbnail — hides itself on missing src or load failure ──────────────
+
+function NewsImage({ src }: { src: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      onError={() => setFailed(true)}
+      className="h-14 w-[5.25rem] shrink-0 rounded-md object-cover opacity-75"
+    />
+  );
+}
+
 // ── Zone 5 — Market news feed ─────────────────────────────────────────────────
 
 function Zone5News() {
@@ -732,21 +749,26 @@ function Zone5News() {
               transition={{ duration: 0.15, ease: "easeOut" }}
               className="block px-5 py-3 transition-colors hover:bg-slate-900/40"
             >
-              <div className="mb-1 flex items-center gap-2">
-                {/* label token — source name */}
-                <span className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">
-                  {item.source}
-                </span>
-                <span className="text-slate-800">·</span>
-                {/* dim metadata — timestamp */}
-                <span className="font-mono text-[9px] tracking-[0.08em] text-slate-700">
-                  {relativeTime(item.datetime)}
-                </span>
+              <div className="flex items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="mb-1 flex items-center gap-2">
+                    {/* label token — source name */}
+                    <span className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                      {item.source}
+                    </span>
+                    <span className="text-slate-800">·</span>
+                    {/* dim metadata — timestamp */}
+                    <span className="font-mono text-[9px] tracking-[0.08em] text-slate-700">
+                      {relativeTime(item.datetime)}
+                    </span>
+                  </div>
+                  {/* body token — headline is content, not label */}
+                  <p className="font-mono text-[11px] leading-[1.45] text-slate-200">
+                    {item.headline}
+                  </p>
+                </div>
+                <NewsImage src={item.image} />
               </div>
-              {/* body token — headline is content, not label */}
-              <p className="font-mono text-[11px] leading-[1.45] text-slate-200">
-                {item.headline}
-              </p>
             </motion.a>
           ))}
         </div>

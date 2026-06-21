@@ -18,6 +18,7 @@ export type MarketNewsItem = {
   source: string;
   datetime: number;
   url: string;
+  image: string;
 };
 
 export async function GET() {
@@ -53,6 +54,7 @@ export async function GET() {
         source: item.source,
         datetime: item.datetime,
         url: item.url,
+        image: item.image ?? "",
       }));
 
     return NextResponse.json({ success: true, items });
