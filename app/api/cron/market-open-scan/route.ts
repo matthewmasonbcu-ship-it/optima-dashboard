@@ -155,12 +155,19 @@ export async function GET(request: Request) {
     const startOfTodayISO = getStartOfTodayNewYorkISO(now);
 
     // --- 1. Fetch SPY + VIX ---
-    const [spyQuote, vixQuote] = await Promise.all([
+    let [spyQuote, vixQuote] = await Promise.all([
       fetchQuote("SPY", baseUrl),
       fetchQuote("^VIX", baseUrl),
     ]);
 
+    // Retry SPY once — it's the critical scan gate; a transient 429 shouldn't silently abort
     if (!spyQuote) {
+      await new Promise((res) => setTimeout(res, 1000));
+      spyQuote = await fetchQuote("SPY", baseUrl);
+    }
+
+    if (!spyQuote) {
+      await sendHeartbeat("OPTIMA SCAN — could not load SPY quote after retry. Scan aborted.");
       return NextResponse.json({
         success: false,
         route: ROUTE,
