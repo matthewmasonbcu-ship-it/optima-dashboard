@@ -148,6 +148,39 @@ function ScanSweep() {
   );
 }
 
+// ── Ambient glow — slow-breathing atmospheric background ─────────────────────
+
+function AmbientGlow() {
+  const reduced = useReducedMotion();
+  if (reduced) return null;
+  return (
+    <div
+      className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
+      aria-hidden="true"
+    >
+      <motion.div
+        className="absolute"
+        style={{
+          width: 640,
+          height: 520,
+          top: "10%",
+          left: "calc(50% - 320px)",
+          background:
+            "radial-gradient(ellipse at center, #8b5cf6 0%, transparent 70%)",
+          filter: "blur(80px)",
+          borderRadius: "50%",
+        }}
+        animate={{
+          x: [0, 30, -15, 20, 0],
+          y: [0, -20, 25, -10, 0],
+          opacity: [0.07, 0.10, 0.05, 0.08, 0.07],
+        }}
+        transition={{ duration: 28, repeat: Infinity, ease: "easeInOut" }}
+      />
+    </div>
+  );
+}
+
 // ── Zone 1 — System Status ────────────────────────────────────────────────────
 
 function Zone1SystemStatus({
@@ -827,9 +860,11 @@ export default function CommandCenterPanel({
         : "NOMINAL";
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="flex flex-col gap-4 pb-4 pt-3">
-        {/* Zone 1 — System Status */}
+    <div className="relative isolate h-full">
+      <AmbientGlow />
+      <div className="h-full overflow-y-auto">
+        <div className="flex flex-col gap-4 pb-4 pt-3">
+          {/* Zone 1 — System Status */}
         <Zone1SystemStatus
           masterState={masterState}
           sandboxOrderUnlocked={sandboxOrderUnlocked}
@@ -868,6 +903,7 @@ export default function CommandCenterPanel({
         {/* Zone 5 — Market news */}
         <Zone5News />
       </div>
+    </div>
     </div>
   );
 }
