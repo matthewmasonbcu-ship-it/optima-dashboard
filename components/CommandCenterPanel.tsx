@@ -102,7 +102,8 @@ function Pill({
         : tone === "amber"
           ? "bg-amber-400"
           : "bg-slate-600";
-  const pillCls = `inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.18em] ${cls}`;
+  // label token: 9px bold, tracking-[0.16em], tone color
+  const pillCls = `inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.16em] ${cls}`;
   const dot = <span className={`h-1 w-1 shrink-0 rounded-full ${dotCls}`} />;
   if (pulse && !reduced) {
     return (
@@ -213,9 +214,6 @@ function Zone1SystemStatus({
         ? "ACTION NEEDED"
         : "SYSTEM NOMINAL";
 
-  // Fix: was text-xl — reduced to text-[11px] uppercase badge style.
-  // The master state is a status indicator, not a heading; it reads
-  // correctly at label scale with color doing the signalling work.
   const masterColor =
     masterState === "ATTENTION"
       ? "text-red-400"
@@ -285,11 +283,11 @@ function Zone1SystemStatus({
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div>
-              <p className="mb-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-600">
+              {/* eyebrow token: 9px bold, tracking-[0.25em], slate-600 (dim — recedes) */}
+              <p className="mb-1 font-mono text-[9px] font-bold uppercase tracking-[0.25em] text-slate-600">
                 GENTRADR · COMMAND CENTER
               </p>
-              <div className="flex items-center gap-2.5">
-                {/* Status indicator dot */}
+              <div className="flex items-center gap-2">
                 <span
                   className={`h-2 w-2 shrink-0 rounded-full ${
                     masterState === "ATTENTION"
@@ -299,13 +297,15 @@ function Zone1SystemStatus({
                         : "bg-emerald-500"
                   }`}
                 />
+                {/* value token: text-xs black, tracking-[0.08em] */}
                 <span
-                  className={`font-mono text-[11px] font-black uppercase tracking-[0.22em] ${masterColor}`}
+                  className={`font-mono text-xs font-black uppercase tracking-[0.08em] ${masterColor}`}
                 >
                   {masterLabel}
                 </span>
                 {masterState === "ATTENTION" && (
-                  <span className="font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-red-500/70">
+                  // label token, dimmed red — qualifier, not primary signal
+                  <span className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-red-500/60">
                     · safety lock breach
                   </span>
                 )}
@@ -315,13 +315,15 @@ function Zone1SystemStatus({
 
           <div className="flex items-center gap-2 self-start">
             {loading && (
-              <span className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.18em] text-slate-600">
+              // label token
+              <span className="flex items-center gap-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-slate-600">
                 <span className="h-1 w-1 animate-ping rounded-full bg-violet-400 opacity-60" />
                 Refreshing
               </span>
             )}
             {lastUpdated && !loading && (
-              <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-slate-700">
+              // dim metadata — no uppercase, compact tracking
+              <span className="font-mono text-[9px] tracking-[0.08em] text-slate-600">
                 {formatTime(lastUpdated)}
               </span>
             )}
@@ -329,7 +331,7 @@ function Zone1SystemStatus({
               type="button"
               onClick={onRefresh}
               disabled={loading}
-              className="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-slate-600 transition hover:border-slate-700 hover:text-slate-400 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-slate-600 transition hover:border-slate-700 hover:text-slate-400 disabled:cursor-not-allowed disabled:opacity-40"
             >
               ⟳
             </button>
@@ -385,7 +387,8 @@ function Zone2Action({
   if (loading && pendingApprovals.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-slate-800/60 bg-slate-950/40 px-5 py-8">
-        <span className="flex items-center gap-2 font-mono text-[10px] text-slate-600">
+        {/* body token */}
+        <span className="flex items-center gap-2 font-mono text-[11px] text-slate-600">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-600" />
           Checking queue…
         </span>
@@ -397,10 +400,12 @@ function Zone2Action({
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 rounded-2xl border border-slate-800/50 bg-slate-950/40 px-5 py-8 text-center">
         <span className="h-1.5 w-1.5 rounded-full bg-slate-700" />
-        <span className="font-mono text-[10px] text-slate-600">
+        {/* body token */}
+        <span className="font-mono text-[11px] text-slate-600">
           No trades awaiting approval.
         </span>
-        <span className="font-mono text-[9px] text-slate-700">
+        {/* dim metadata */}
+        <span className="font-mono text-[9px] tracking-[0.08em] text-slate-700">
           Pipeline runs daily at 9:30 ET.
         </span>
       </div>
@@ -435,25 +440,29 @@ function Zone2Action({
         initial={reduced ? false : { opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: "easeOut" }}
-        className="relative flex flex-1 flex-col justify-between px-5 py-5"
+        className="relative flex flex-1 flex-col justify-between px-5 py-4"
       >
         <div>
-          <p className="mb-3 font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-violet-400/70">
+          {/* eyebrow token — violet context, dimmed */}
+          <p className="mb-3 font-mono text-[9px] font-bold uppercase tracking-[0.25em] text-violet-500/60">
             AWAITING APPROVAL · {pendingApprovals.length} QUEUED
           </p>
 
-          <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            {/* hero token: 2xl black tight — dominates the zone */}
             <span className="font-mono text-2xl font-black tracking-tight text-white">
               {top.symbol ?? "—"}
             </span>
             {top.option_type && (
-              <span className="rounded-md border border-violet-500/40 bg-violet-500/15 px-2.5 py-1 font-mono text-xs font-black uppercase tracking-[0.15em] text-violet-300">
+              // value token badge
+              <span className="rounded-md border border-violet-500/40 bg-violet-500/15 px-2.5 py-1 font-mono text-xs font-black uppercase tracking-[0.16em] text-violet-300">
                 {top.option_type}
               </span>
             )}
             {top.contract_quality && (
+              // value token badge
               <span
-                className={`rounded-md border px-2.5 py-1 font-mono text-xs font-black uppercase tracking-[0.15em] ${gradeColor}`}
+                className={`rounded-md border px-2.5 py-1 font-mono text-xs font-black uppercase tracking-[0.16em] ${gradeColor}`}
               >
                 Grade {top.contract_quality}
               </span>
@@ -461,7 +470,8 @@ function Zone2Action({
           </div>
 
           {top.contract_symbol && (
-            <p className="mb-4 font-mono text-[10px] text-slate-500">
+            // body token
+            <p className="mb-3 font-mono text-[11px] text-slate-500">
               {top.contract_symbol}
             </p>
           )}
@@ -473,7 +483,8 @@ function Zone2Action({
           whileHover={reduced ? undefined : { y: -1 }}
           whileTap={reduced ? undefined : { scale: 0.98 }}
           transition={{ duration: 0.15 }}
-          className="inline-flex items-center gap-2 self-start rounded-xl border border-violet-500/50 bg-violet-500/20 px-5 py-2.5 font-mono text-xs font-black uppercase tracking-[0.15em] text-violet-200 transition hover:border-violet-400/70 hover:bg-violet-500/30 hover:text-white"
+          // value token on button
+          className="inline-flex items-center gap-2 self-start rounded-xl border border-violet-500/50 bg-violet-500/20 px-5 py-2.5 font-mono text-xs font-black uppercase tracking-[0.16em] text-violet-200 transition hover:border-violet-400/70 hover:bg-violet-500/30 hover:text-white"
         >
           Review &amp; Approve
           <span aria-hidden>→</span>
@@ -513,23 +524,27 @@ function Zone3WhyIdle({
     >
       <div className="absolute inset-y-0 left-0 w-[3px] bg-slate-700/50" />
 
-      <div className="flex flex-1 flex-col px-5 py-5">
-        <p className="mb-2 font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-600">
+      <div className="flex flex-1 flex-col px-5 py-4">
+        {/* eyebrow token */}
+        <p className="mb-3 font-mono text-[9px] font-bold uppercase tracking-[0.25em] text-slate-600">
           SCANNER · DISCIPLINE LOG
         </p>
 
         {isScanning ? (
           <div className="flex flex-1 items-center gap-2">
             <span className="h-1.5 w-1.5 animate-ping rounded-full bg-violet-400" />
-            <span className="font-mono text-[10px] text-slate-500">Scanner running…</span>
+            {/* body token */}
+            <span className="font-mono text-[11px] text-slate-500">Scanner running…</span>
           </div>
         ) : total === 0 ? (
-          <p className="flex-1 py-2 font-mono text-[10px] text-slate-600">
+          // body token
+          <p className="flex-1 py-2 font-mono text-[11px] text-slate-600">
             No scan data yet. Run the scanner from the Trade tab.
           </p>
         ) : (
           <div className="flex flex-1 flex-col">
-            <p className="mb-4 font-mono text-sm font-black text-slate-300">
+            {/* value token — primary data read */}
+            <p className="mb-4 font-mono text-xs font-black text-slate-300">
               {passed > 0
                 ? `${passed} of ${total} passed · ready for contract check`
                 : `0 of ${total} passed all rules`}
@@ -539,10 +554,12 @@ function Zone3WhyIdle({
               <div className="mb-4 space-y-1.5">
                 {Array.from(blockCounts.entries()).map(([reason, count]) => (
                   <div key={reason} className="flex items-baseline gap-3">
-                    <span className="w-4 shrink-0 text-right font-mono text-[10px] font-bold text-slate-500">
+                    {/* value token for counts */}
+                    <span className="w-4 shrink-0 text-right font-mono text-xs font-black text-slate-500">
                       {count}
                     </span>
-                    <span className="font-mono text-[10px] text-slate-600">
+                    {/* body token for reason text */}
+                    <span className="font-mono text-[11px] text-slate-600">
                       {reason.toLowerCase()}
                     </span>
                   </div>
@@ -550,13 +567,15 @@ function Zone3WhyIdle({
               </div>
             )}
 
-            <p className="mb-3 font-mono text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+            {/* value token — discipline verdict */}
+            <p className="mb-3 font-mono text-xs font-black uppercase tracking-[0.08em] text-slate-500">
               {passed === 0
                 ? "Discipline holding. No qualifying setups."
                 : `${passed} setup${passed !== 1 ? "s" : ""} passed scanner. Contract checks next.`}
             </p>
 
-            <p className="mt-auto font-mono text-[9px] leading-4 text-slate-700">
+            {/* dim metadata footer */}
+            <p className="mt-auto font-mono text-[9px] leading-4 tracking-[0.08em] text-slate-700">
               Scanner-level reasons only — delta, DTE, and grade checks run after a setup qualifies.
             </p>
           </div>
@@ -591,16 +610,18 @@ function Stat({
       ? "text-amber-300"
       : "text-slate-400";
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-slate-600">
+    <div className="flex flex-col gap-1">
+      {/* label token: 9px bold tracking-[0.16em] — full label contrast */}
+      <span className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-slate-600">
         {label}
       </span>
+      {/* value token: text-xs black tracking-[0.08em] */}
       <motion.span
         key={value}
         initial={reduced || !hasChanged ? false : { opacity: 0, scale: 0.85 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.25, ease: "easeOut" }}
-        className={`font-mono text-xs font-black ${color}`}
+        className={`font-mono text-xs font-black tracking-[0.08em] ${color}`}
       >
         {value}
       </motion.span>
@@ -622,7 +643,7 @@ function Zone4Discipline({
   const reduced = useReducedMotion() ?? false;
 
   return (
-    <div className="flex flex-wrap items-center gap-6 rounded-xl border border-slate-800/50 bg-slate-950/40 px-5 py-3">
+    <div className="flex flex-wrap items-center gap-5 rounded-xl border border-slate-800/50 bg-slate-950/40 px-5 py-3">
       <Stat
         label="Trades today"
         value={`${dailyTradeCount} / 3`}
@@ -687,11 +708,13 @@ function Zone5News() {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-950/40">
       <div className="flex items-center justify-between border-b border-slate-800/40 px-5 py-3">
-        <p className="font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-slate-600">
+        {/* eyebrow token */}
+        <p className="font-mono text-[9px] font-bold uppercase tracking-[0.25em] text-slate-600">
           MARKET NEWS
         </p>
         {lastFetched && (
-          <span className="font-mono text-[9px] text-slate-700">
+          // dim metadata
+          <span className="font-mono text-[9px] tracking-[0.08em] text-slate-700">
             updated {relativeTime(Math.floor(lastFetched.getTime() / 1000))}
           </span>
         )}
@@ -700,13 +723,15 @@ function Zone5News() {
       {loading && items.length === 0 && (
         <div className="flex items-center gap-2 px-5 py-4">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-700" />
-          <span className="font-mono text-[10px] text-slate-600">Loading market news…</span>
+          {/* body token */}
+          <span className="font-mono text-[11px] text-slate-600">Loading market news…</span>
         </div>
       )}
 
       {error && !loading && (
         <div className="px-5 py-4">
-          <span className="font-mono text-[10px] text-slate-600">{error}</span>
+          {/* body token */}
+          <span className="font-mono text-[11px] text-slate-600">{error}</span>
         </div>
       )}
 
@@ -723,14 +748,17 @@ function Zone5News() {
               className="block px-5 py-3 transition-colors hover:bg-slate-900/40"
             >
               <div className="mb-1 flex items-center gap-2">
-                <span className="font-mono text-[9px] font-bold uppercase tracking-[0.12em] text-slate-600">
+                {/* label token — source name */}
+                <span className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">
                   {item.source}
                 </span>
                 <span className="text-slate-800">·</span>
-                <span className="font-mono text-[9px] text-slate-700">
+                {/* dim metadata — timestamp */}
+                <span className="font-mono text-[9px] tracking-[0.08em] text-slate-700">
                   {relativeTime(item.datetime)}
                 </span>
               </div>
+              {/* body token — headline is content, not label */}
               <p className="font-mono text-[11px] leading-[1.45] text-slate-200">
                 {item.headline}
               </p>
@@ -865,7 +893,8 @@ export default function CommandCenterPanel({
     <div className="relative isolate h-full">
       <AmbientGlow />
       <div className="h-full overflow-y-auto">
-        <div className="flex flex-col gap-4 pb-4 pt-3">
+        {/* py-4 both sides — symmetric, on 4px grid */}
+        <div className="flex flex-col gap-4 py-4">
 
           {/* Zone 1 — System Status */}
           <motion.div
