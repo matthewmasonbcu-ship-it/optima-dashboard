@@ -778,45 +778,47 @@ export default function CommandCenterPanel({
         : "NOMINAL";
 
   return (
-    <div className="flex h-full flex-col gap-4 overflow-y-auto pb-2 pt-1">
-      {/* Zone 1 — System Status */}
-      <Zone1SystemStatus
-        masterState={masterState}
-        sandboxOrderUnlocked={sandboxOrderUnlocked}
-        liveOrderEnabled={liveOrderEnabled}
-        marketCondition={marketCondition}
-        vixLevel={vixLevel}
-        vixRegime={vixRegime}
-        optionRiskCheckStatus={optionRiskCheckStatus}
-        lastUpdated={lastUpdated}
-        loading={loading}
-        onRefresh={() => void loadData()}
-      />
-
-      {/* Zones 2 + 3 — equal-height columns on large screens */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
-        <Zone2Action
-          pendingApprovals={pendingApprovals}
+    <div className="h-full overflow-y-auto">
+      <div className="flex flex-col gap-4 pb-4 pt-3">
+        {/* Zone 1 — System Status */}
+        <Zone1SystemStatus
+          masterState={masterState}
+          sandboxOrderUnlocked={sandboxOrderUnlocked}
+          liveOrderEnabled={liveOrderEnabled}
+          marketCondition={marketCondition}
+          vixLevel={vixLevel}
+          vixRegime={vixRegime}
+          optionRiskCheckStatus={optionRiskCheckStatus}
+          lastUpdated={lastUpdated}
           loading={loading}
-          onSwitchToAlerts={onSwitchToAlerts}
+          onRefresh={() => void loadData()}
         />
-        <Zone3WhyIdle
-          scannerResults={scannerResults}
-          isScanning={isScanning}
-          hasPendingAction={pendingApprovals.length > 0}
+
+        {/* Zones 2 + 3 — equal-height columns on large screens */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
+          <Zone2Action
+            pendingApprovals={pendingApprovals}
+            loading={loading}
+            onSwitchToAlerts={onSwitchToAlerts}
+          />
+          <Zone3WhyIdle
+            scannerResults={scannerResults}
+            isScanning={isScanning}
+            hasPendingAction={pendingApprovals.length > 0}
+          />
+        </div>
+
+        {/* Zone 4 — Discipline strip */}
+        <Zone4Discipline
+          dailyTradeCount={dailyTradeCount}
+          dailyLossCount={dailyLossCount}
+          dailyDrawdown={dailyDrawdown}
+          tradingDayCount={tradingDayCount}
         />
+
+        {/* Zone 5 — Market news */}
+        <Zone5News />
       </div>
-
-      {/* Zone 4 — Discipline strip */}
-      <Zone4Discipline
-        dailyTradeCount={dailyTradeCount}
-        dailyLossCount={dailyLossCount}
-        dailyDrawdown={dailyDrawdown}
-        tradingDayCount={tradingDayCount}
-      />
-
-      {/* Zone 5 — Market news */}
-      <Zone5News />
     </div>
   );
 }
