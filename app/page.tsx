@@ -3,8 +3,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../lib/supabaseClient";
-import { BackgroundPaths } from "../components/ui/BackgroundPaths";
-import { FloatingShapes } from "../components/ui/FloatingShapes";
 
 import WatchlistManager from "../components/WatchlistManager";
 import PaperTradeTracker from "../components/PaperTradeTracker";
@@ -1184,8 +1182,7 @@ const sendSelectedContractToApprovalQueue = () => {
 
   return (
     <main className="relative flex flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,_#172554_0,_#020617_35%,_#000_100%)] font-mono text-white" style={{ height: '100dvh' }}>
-      <BackgroundPaths />
-      <FloatingShapes />
+
 
       {/* Slim top bar */}
       <header className="relative z-10 flex shrink-0 items-center justify-between border-b border-slate-800 bg-slate-950/90 px-4" style={{ height: 'calc(3rem + env(safe-area-inset-top, 0px))', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
