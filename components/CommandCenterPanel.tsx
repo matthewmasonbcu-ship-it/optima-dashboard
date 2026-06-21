@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { supabase } from "../lib/supabaseClient";
 import type { MarketCondition, ScanResult, VixRegime } from "../lib/scanner";
 import type { RiskGuardCheck } from "../lib/preTradeChecks";
@@ -108,6 +109,30 @@ function Pill({
   );
 }
 
+// ── Scan sweep — ambient "watching" indicator ─────────────────────────────────
+
+function ScanSweep() {
+  const reduced = useReducedMotion();
+  if (reduced) return null;
+  return (
+    <div
+      className="pointer-events-none absolute inset-0 overflow-hidden"
+      aria-hidden="true"
+    >
+      <motion.div
+        className="absolute inset-x-0 h-[72px]"
+        style={{
+          top: -72,
+          background:
+            "linear-gradient(to bottom, transparent 0%, rgba(139,92,246,0.14) 50%, transparent 100%)",
+        }}
+        animate={{ y: [0, 350] }}
+        transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+      />
+    </div>
+  );
+}
+
 // ── Zone 1 — System Status ────────────────────────────────────────────────────
 
 function Zone1SystemStatus({
@@ -204,6 +229,7 @@ function Zone1SystemStatus({
     <div
       className={`relative overflow-hidden rounded-2xl border ${masterBorder} bg-slate-950/80 shadow-xl shadow-black/40`}
     >
+      <ScanSweep />
       <div className={`absolute inset-x-0 top-0 h-[2px] ${masterBarColor} opacity-60`} />
 
       <div className="px-5 py-4 sm:px-6">
