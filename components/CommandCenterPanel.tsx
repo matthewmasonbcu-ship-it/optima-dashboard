@@ -852,6 +852,8 @@ export default function CommandCenterPanel({
     };
   }, [loadData]);
 
+  const reduced = useReducedMotion() ?? false;
+
   const masterState: MasterState =
     sandboxOrderUnlocked === true || liveOrderEnabled === true
       ? "ATTENTION"
@@ -864,46 +866,78 @@ export default function CommandCenterPanel({
       <AmbientGlow />
       <div className="h-full overflow-y-auto">
         <div className="flex flex-col gap-4 pb-4 pt-3">
+
           {/* Zone 1 — System Status */}
-        <Zone1SystemStatus
-          masterState={masterState}
-          sandboxOrderUnlocked={sandboxOrderUnlocked}
-          liveOrderEnabled={liveOrderEnabled}
-          marketCondition={marketCondition}
-          vixLevel={vixLevel}
-          vixRegime={vixRegime}
-          optionRiskCheckStatus={optionRiskCheckStatus}
-          lastUpdated={lastUpdated}
-          loading={loading}
-          onRefresh={() => void loadData()}
-        />
+          <motion.div
+            initial={reduced ? false : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: "easeOut", delay: 0 }}
+          >
+            <Zone1SystemStatus
+              masterState={masterState}
+              sandboxOrderUnlocked={sandboxOrderUnlocked}
+              liveOrderEnabled={liveOrderEnabled}
+              marketCondition={marketCondition}
+              vixLevel={vixLevel}
+              vixRegime={vixRegime}
+              optionRiskCheckStatus={optionRiskCheckStatus}
+              lastUpdated={lastUpdated}
+              loading={loading}
+              onRefresh={() => void loadData()}
+            />
+          </motion.div>
 
-        {/* Zones 2 + 3 — equal-height columns on large screens */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
-          <Zone2Action
-            pendingApprovals={pendingApprovals}
-            loading={loading}
-            onSwitchToAlerts={onSwitchToAlerts}
-          />
-          <Zone3WhyIdle
-            scannerResults={scannerResults}
-            isScanning={isScanning}
-            hasPendingAction={pendingApprovals.length > 0}
-          />
+          {/* Zones 2 + 3 — equal-height columns on large screens */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
+            <motion.div
+              initial={reduced ? false : { opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: "easeOut", delay: 0.08 }}
+            >
+              <Zone2Action
+                pendingApprovals={pendingApprovals}
+                loading={loading}
+                onSwitchToAlerts={onSwitchToAlerts}
+              />
+            </motion.div>
+            <motion.div
+              initial={reduced ? false : { opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: "easeOut", delay: 0.16 }}
+            >
+              <Zone3WhyIdle
+                scannerResults={scannerResults}
+                isScanning={isScanning}
+                hasPendingAction={pendingApprovals.length > 0}
+              />
+            </motion.div>
+          </div>
+
+          {/* Zone 4 — Discipline strip */}
+          <motion.div
+            initial={reduced ? false : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: "easeOut", delay: 0.24 }}
+          >
+            <Zone4Discipline
+              dailyTradeCount={dailyTradeCount}
+              dailyLossCount={dailyLossCount}
+              dailyDrawdown={dailyDrawdown}
+              tradingDayCount={tradingDayCount}
+            />
+          </motion.div>
+
+          {/* Zone 5 — Market news */}
+          <motion.div
+            initial={reduced ? false : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: "easeOut", delay: 0.32 }}
+          >
+            <Zone5News />
+          </motion.div>
+
         </div>
-
-        {/* Zone 4 — Discipline strip */}
-        <Zone4Discipline
-          dailyTradeCount={dailyTradeCount}
-          dailyLossCount={dailyLossCount}
-          dailyDrawdown={dailyDrawdown}
-          tradingDayCount={tradingDayCount}
-        />
-
-        {/* Zone 5 — Market news */}
-        <Zone5News />
       </div>
-    </div>
     </div>
   );
 }
