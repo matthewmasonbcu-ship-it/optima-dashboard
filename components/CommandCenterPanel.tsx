@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { supabase } from "../lib/supabaseClient";
 import type { MarketCondition, ScanResult, VixRegime } from "../lib/scanner";
@@ -79,10 +79,13 @@ function computeBlockReasonCounts(results: ScanResult[]): Map<string, number> {
 function Pill({
   label,
   tone,
+  pulse,
 }: {
   label: string;
   tone: "green" | "red" | "amber" | "muted";
+  pulse?: boolean;
 }) {
+  const reduced = useReducedMotion() ?? false;
   const cls =
     tone === "green"
       ? "border-emerald-500/25 bg-emerald-500/[0.08] text-emerald-400"
@@ -99,11 +102,23 @@ function Pill({
         : tone === "amber"
           ? "bg-amber-400"
           : "bg-slate-600";
+  const pillCls = `inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.18em] ${cls}`;
+  const dot = <span className={`h-1 w-1 shrink-0 rounded-full ${dotCls}`} />;
+  if (pulse && !reduced) {
+    return (
+      <motion.span
+        className={pillCls}
+        animate={{ opacity: [1, 0.45, 1] }}
+        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+      >
+        {dot}
+        {label}
+      </motion.span>
+    );
+  }
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.18em] ${cls}`}
-    >
-      <span className={`h-1 w-1 shrink-0 rounded-full ${dotCls}`} />
+    <span className={pillCls}>
+      {dot}
       {label}
     </span>
   );
@@ -307,6 +322,7 @@ function Zone1SystemStatus({
                   ? "red"
                   : "amber"
             }
+            pulse={optionRiskCheckStatus === "BLOCKED"}
           />
         </div>
       </div>
@@ -330,6 +346,7 @@ function Zone2Action({
   loading: boolean;
   onSwitchToAlerts: () => void;
 }) {
+  const reduced = useReducedMotion() ?? false;
   const top = pendingApprovals[0] ?? null;
 
   if (loading && pendingApprovals.length === 0) {
@@ -380,7 +397,13 @@ function Zone2Action({
       />
       <div className="absolute inset-y-0 left-0 w-[3px] bg-violet-500" />
 
-      <div className="relative flex flex-1 flex-col justify-between px-5 py-5">
+      <motion.div
+        key={top.id}
+        initial={reduced ? false : { opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: "easeOut" }}
+        className="relative flex flex-1 flex-col justify-between px-5 py-5"
+      >
         <div>
           <p className="mb-3 font-mono text-[9px] font-bold uppercase tracking-[0.28em] text-violet-400/70">
             AWAITING APPROVAL · {pendingApprovals.length} QUEUED
@@ -411,15 +434,18 @@ function Zone2Action({
           )}
         </div>
 
-        <button
+        <motion.button
           type="button"
           onClick={onSwitchToAlerts}
+          whileHover={reduced ? undefined : { y: -1 }}
+          whileTap={reduced ? undefined : { scale: 0.98 }}
+          transition={{ duration: 0.15 }}
           className="inline-flex items-center gap-2 self-start rounded-xl border border-violet-500/50 bg-violet-500/20 px-5 py-2.5 font-mono text-xs font-black uppercase tracking-[0.15em] text-violet-200 transition hover:border-violet-400/70 hover:bg-violet-500/30 hover:text-white"
         >
           Review &amp; Approve
           <span aria-hidden>→</span>
-        </button>
-      </div>
+        </motion.button>
+      </motion.div>
     </div>
   );
 }
@@ -509,6 +535,46 @@ function Zone3WhyIdle({
 
 // ── Zone 4 — Discipline strip ─────────────────────────────────────────────────
 
+function Stat({
+  label,
+  value,
+  warn,
+  crit,
+  reduced,
+}: {
+  label: string;
+  value: string;
+  warn?: boolean;
+  crit?: boolean;
+  reduced: boolean;
+}) {
+  const prevRef = useRef(value);
+  const hasChanged = prevRef.current !== value;
+  useEffect(() => { prevRef.current = value; });
+
+  const color = crit
+    ? "text-red-400"
+    : warn
+      ? "text-amber-300"
+      : "text-slate-400";
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-slate-600">
+        {label}
+      </span>
+      <motion.span
+        key={value}
+        initial={reduced || !hasChanged ? false : { opacity: 0, scale: 0.85 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
+        className={`font-mono text-xs font-black ${color}`}
+      >
+        {value}
+      </motion.span>
+    </div>
+  );
+}
+
 function Zone4Discipline({
   dailyTradeCount,
   dailyLossCount,
@@ -520,31 +586,7 @@ function Zone4Discipline({
   dailyDrawdown: number;
   tradingDayCount: number;
 }) {
-  function Stat({
-    label,
-    value,
-    warn,
-    crit,
-  }: {
-    label: string;
-    value: string;
-    warn?: boolean;
-    crit?: boolean;
-  }) {
-    const color = crit
-      ? "text-red-400"
-      : warn
-        ? "text-amber-300"
-        : "text-slate-400";
-    return (
-      <div className="flex flex-col gap-0.5">
-        <span className="font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-slate-600">
-          {label}
-        </span>
-        <span className={`font-mono text-xs font-black ${color}`}>{value}</span>
-      </div>
-    );
-  }
+  const reduced = useReducedMotion() ?? false;
 
   return (
     <div className="flex flex-wrap items-center gap-6 rounded-xl border border-slate-800/50 bg-slate-950/40 px-5 py-3">
@@ -553,23 +595,27 @@ function Zone4Discipline({
         value={`${dailyTradeCount} / 3`}
         warn={dailyTradeCount >= 2}
         crit={dailyTradeCount >= 3}
+        reduced={reduced}
       />
       <Stat
         label="Losses today"
         value={`${dailyLossCount} / 2`}
         warn={dailyLossCount >= 1}
         crit={dailyLossCount >= 2}
+        reduced={reduced}
       />
       <Stat
         label="Daily drawdown"
         value={`$${dailyDrawdown.toFixed(0)} / $2,500`}
         warn={dailyDrawdown >= 2000}
         crit={dailyDrawdown >= 2500}
+        reduced={reduced}
       />
       <Stat
         label="Trading day"
         value={`Day ${tradingDayCount} / 30`}
         warn={tradingDayCount >= 25}
+        reduced={reduced}
       />
     </div>
   );
@@ -578,6 +624,7 @@ function Zone4Discipline({
 // ── Zone 5 — Market news feed ─────────────────────────────────────────────────
 
 function Zone5News() {
+  const reduced = useReducedMotion() ?? false;
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -633,11 +680,13 @@ function Zone5News() {
       {items.length > 0 && (
         <div className="divide-y divide-slate-800/40">
           {items.map((item, i) => (
-            <a
+            <motion.a
               key={i}
               href={item.url}
               target="_blank"
               rel="noopener noreferrer"
+              whileHover={reduced ? undefined : { x: 2 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
               className="block px-5 py-3 transition-colors hover:bg-slate-900/40"
             >
               <div className="mb-1 flex items-center gap-2">
@@ -652,7 +701,7 @@ function Zone5News() {
               <p className="font-mono text-[11px] leading-[1.45] text-slate-200">
                 {item.headline}
               </p>
-            </a>
+            </motion.a>
           ))}
         </div>
       )}
