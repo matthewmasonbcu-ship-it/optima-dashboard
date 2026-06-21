@@ -127,7 +127,7 @@ function Pill({
 
 // ── Scan sweep — ambient "watching" indicator ─────────────────────────────────
 
-function ScanSweep() {
+function ScanSweep({ sweepRevision }: { sweepRevision: number }) {
   const reduced = useReducedMotion();
   if (reduced) return null;
   return (
@@ -135,16 +135,32 @@ function ScanSweep() {
       className="pointer-events-none absolute inset-0 overflow-hidden"
       aria-hidden="true"
     >
+      {/* Ambient layer — gentle, always looping, "system is watching" */}
       <motion.div
         className="absolute inset-x-0 h-[72px]"
         style={{
           top: -72,
           background:
-            "linear-gradient(to bottom, transparent 0%, rgba(139,92,246,0.14) 50%, transparent 100%)",
+            "linear-gradient(to bottom, transparent 0%, rgba(139,92,246,0.09) 50%, transparent 100%)",
         }}
-        animate={{ y: [0, 350] }}
-        transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+        animate={{ y: [0, 380] }}
+        transition={{ duration: 4, repeat: Infinity, ease: "linear", repeatDelay: 6 }}
       />
+      {/* Radar-lock layer — one deliberate pass per real scan event, then silence */}
+      {sweepRevision > 0 && (
+        <motion.div
+          key={sweepRevision}
+          className="absolute inset-x-0"
+          style={{
+            top: -100,
+            height: 100,
+            background:
+              "linear-gradient(to bottom, transparent 0%, rgba(139,92,246,0.07) 25%, rgba(139,92,246,0.28) 55%, rgba(139,92,246,0.08) 80%, transparent 100%)",
+          }}
+          animate={{ y: [0, 430] }}
+          transition={{ duration: 1.8, ease: "easeIn" }}
+        />
+      )}
     </div>
   );
 }
@@ -195,6 +211,7 @@ function Zone1SystemStatus({
   lastUpdated,
   loading,
   onRefresh,
+  sweepRevision,
 }: {
   masterState: MasterState;
   sandboxOrderUnlocked: boolean | null;
@@ -206,6 +223,7 @@ function Zone1SystemStatus({
   lastUpdated: Date | null;
   loading: boolean;
   onRefresh: () => void;
+  sweepRevision: number;
 }) {
   const masterLabel =
     masterState === "ATTENTION"
@@ -275,7 +293,7 @@ function Zone1SystemStatus({
     <div
       className={`relative overflow-hidden rounded-2xl border ${masterBorder} bg-slate-950/80 shadow-xl shadow-black/40`}
     >
-      <ScanSweep />
+      <ScanSweep sweepRevision={sweepRevision} />
       <div className={`absolute inset-x-0 top-0 h-[2px] ${masterBarColor} opacity-60`} />
 
       <div className="px-5 py-4 sm:px-6">
@@ -791,6 +809,12 @@ export default function CommandCenterPanel({
   const [tradingDayCount, setTradingDayCount] = useState(0);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
+  // Sweep revision — increments on each real scan event to key the radar-lock animation.
+  const [sweepRevision, setSweepRevision] = useState(0);
+  // null sentinel: first observation sets the baseline without firing.
+  const prevApprovalCountRef = useRef<number | null>(null);
+  const prevScanningRef = useRef(false);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -880,6 +904,24 @@ export default function CommandCenterPanel({
     };
   }, [loadData]);
 
+  // Edge: pendingApprovals count increasing → cron or manual scan queued a trade.
+  // null baseline prevents a spurious fire on first poll.
+  useEffect(() => {
+    const count = pendingApprovals.length;
+    if (prevApprovalCountRef.current !== null && count > prevApprovalCountRef.current) {
+      setSweepRevision((n) => n + 1);
+    }
+    prevApprovalCountRef.current = count;
+  }, [pendingApprovals.length]);
+
+  // Edge: isScanning true → false → manual scan just finished in-browser.
+  useEffect(() => {
+    if (prevScanningRef.current && !isScanning) {
+      setSweepRevision((n) => n + 1);
+    }
+    prevScanningRef.current = isScanning;
+  }, [isScanning]);
+
   const reduced = useReducedMotion() ?? false;
 
   const masterState: MasterState =
@@ -913,6 +955,7 @@ export default function CommandCenterPanel({
               lastUpdated={lastUpdated}
               loading={loading}
               onRefresh={() => void loadData()}
+              sweepRevision={sweepRevision}
             />
           </motion.div>
 
