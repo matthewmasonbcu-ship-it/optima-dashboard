@@ -645,7 +645,7 @@ export default function OptionContractSelector({
   onSelectContract,
   onContractSelected,
   onClearSelectedContract,
-  accountSize = 10000,
+  accountSize = 50000,
   maxRiskPercent = 1,
   maxSpreadPercent = 20,
 }: OptionContractSelectorProps) {

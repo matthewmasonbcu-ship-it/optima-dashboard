@@ -28,7 +28,11 @@ export type PreTradeEnforcementStatus = "READY" | "CAUTION" | "BLOCKED";
 // --- Shared constants --------------------------------------------------------
 // Centralised here so the dashboard and cron use identical limits.
 
-export const ACCOUNT_SIZE = 10000;
+// The paper account simulates the $50,000 Black Eagle evaluation account, so all
+// risk math is sized against $50k (see AGENTS.md — options are deliberately
+// governed by the eval limits). 1% per-trade = $500 max loss to start; step to 2%
+// once a win rate is established over 20–30 trades.
+export const ACCOUNT_SIZE = 50000;
 export const MAX_RISK_PERCENT = 1;
 export const MAX_SPREAD_PERCENT = 20;
 export const PERSONAL_DAILY_LOSS_STOP = 2000; // 80% of Black Eagle's $2,500 (5%) daily limit

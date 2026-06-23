@@ -700,7 +700,12 @@ export function selectBestCreditSpread(
     };
   }
 
-  // --- Long leg (5 strikes OTM) -------------------------------------------
+  // --- Long leg — ADAPTIVE width ------------------------------------------
+  // Build the TIGHTEST spread (smallest width) whose max loss fits the account
+  // risk cap, instead of a hardcoded 5-strike width. Candidate long legs are
+  // walked from nearest (narrowest, lowest max loss) outward; the first that
+  // clears both the grade gate and the cap wins. Wider spreads only raise max
+  // loss, so once the cap is exceeded there is nothing tighter left to find.
   const shortStrike = getStrike(shortLeg);
   const shortExpiration = getExpiration(shortLeg);
   const shortSymbol = getOptionSymbol(shortLeg);
@@ -714,7 +719,7 @@ export function selectBestCreditSpread(
     })
     .sort((a, b) => Math.abs(getStrike(a) - shortStrike) - Math.abs(getStrike(b) - shortStrike));
 
-  // Collect unique strikes in ascending distance order
+  // Unique strikes in ascending distance order (nearest first = tightest spread)
   const seen = new Set<number>();
   const byDistance: TradierContract[] = [];
   for (const c of otmCandidates) {
@@ -722,40 +727,50 @@ export function selectBestCreditSpread(
     if (!seen.has(s)) { seen.add(s); byDistance.push(c); }
   }
 
-  if (byDistance.length < 5) {
+  if (byDistance.length === 0) {
     return {
       success: false,
-      reason: `Only ${byDistance.length} unique strike${byDistance.length === 1 ? "" : "s"} available for the long leg — need at least 5 for adequate protection.`,
+      reason: "No out-of-the-money long-leg strike available in this expiration to define the spread.",
     };
   }
 
-  // Index 4 = 5th closest unique strike = closest available ≥5 strikes OTM
-  const longLeg = byDistance[4];
-
-  // --- Build and validate the spread ----------------------------------------
-  const spreadContract = buildCreditSpreadContract({
-    shortLeg,
-    longLeg,
-    spreadType,
-    stockSymbol,
-    contracts: 1,
-  });
-
-  const spreadGrade = getGrade(spreadContract);
-  if (spreadGrade === "BLOCKED" || spreadGrade === "C" || spreadGrade === "UNKNOWN") {
-    return {
-      success: false,
-      reason: `Combined spread grade is ${spreadGrade} (short: ${shortGrade}, long: ${getGrade(longLeg)}). Try a different expiration.`,
-    };
-  }
-
-  // Real max-loss check against account risk limit
-  const maxLoss = spreadContract.max_loss ?? 0;
   const allowedRisk = params.accountSize * (params.maxRiskPercent / 100);
-  if (maxLoss > allowedRisk) {
+
+  let spreadContract: TradierContract | null = null;
+  let lastSpreadFail = "";
+
+  for (const longLeg of byDistance) {
+    const candidate = buildCreditSpreadContract({
+      shortLeg,
+      longLeg,
+      spreadType,
+      stockSymbol,
+      contracts: 1,
+    });
+
+    const candidateGrade = getGrade(candidate);
+    if (candidateGrade === "BLOCKED" || candidateGrade === "C" || candidateGrade === "UNKNOWN") {
+      lastSpreadFail = `width $${(candidate.spread_width ?? 0).toFixed(2)} graded ${candidateGrade} (short ${shortGrade}, long ${getGrade(longLeg)})`;
+      continue;
+    }
+
+    const candidateMaxLoss = candidate.max_loss ?? Infinity;
+    if (candidateMaxLoss > allowedRisk) {
+      // Tightest grade-clean spread already busts the cap; wider ones are worse.
+      lastSpreadFail = `tightest grade-clean spread max loss $${candidateMaxLoss.toFixed(2)} exceeds allowed risk $${allowedRisk.toFixed(2)} (${params.maxRiskPercent}% of $${params.accountSize.toFixed(0)})`;
+      break;
+    }
+
+    spreadContract = candidate;
+    break;
+  }
+
+  if (!spreadContract) {
     return {
       success: false,
-      reason: `Spread max loss $${maxLoss.toFixed(2)} exceeds allowed risk $${allowedRisk.toFixed(2)} (${params.maxRiskPercent}% of $${params.accountSize.toFixed(0)}). Consider a narrower underlying or tighter spread.`,
+      reason: lastSpreadFail
+        ? `No spread within risk cap — ${lastSpreadFail}. Try a different expiration or symbol.`
+        : "Could not construct a spread within the risk cap for this expiration.",
     };
   }
 

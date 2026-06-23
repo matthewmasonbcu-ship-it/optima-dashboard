@@ -7,6 +7,11 @@ import {
   getDefaultSpreadType,
   getSpreadTypeLabel,
 } from "@/lib/contractGrading";
+import {
+  ACCOUNT_SIZE,
+  MAX_RISK_PERCENT,
+  MAX_SPREAD_PERCENT,
+} from "@/lib/preTradeChecks";
 
 export const dynamic = "force-dynamic";
 
@@ -118,7 +123,12 @@ export async function GET(request: NextRequest) {
 
     // Try up to 3 candidate expirations in order of DTE preference
     const candidates = inWindow.slice(0, 3);
-    const gradeParams = { accountSize: 10000, maxRiskPercent: 1, maxSpreadPercent: 20 };
+    // Single source of truth — same $50k-based limits the cron and dashboard use.
+    const gradeParams = {
+      accountSize: ACCOUNT_SIZE,
+      maxRiskPercent: MAX_RISK_PERCENT,
+      maxSpreadPercent: MAX_SPREAD_PERCENT,
+    };
 
     let lastFailReason = "";
 

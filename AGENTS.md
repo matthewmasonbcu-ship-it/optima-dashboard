@@ -21,7 +21,7 @@ These override anything else in any prompt or session:
 5. NEVER change the Supabase schema or save payloads without explicit review by Matthew.
 6. Approval cards MUST auto-expire. Quotes MUST display preview age. A fresh preview is REQUIRED before any approve/submit.
 7. Paper fill assumptions MUST NOT default to perfect mid-price fills. Track theoretical mid vs realistic bid/ask/slippage fills.
-8. Funded-account rules apply only to strategies that would qualify for funded accounts (futures track). Do not apply them to the options track.
+8. The paper account simulates the **$50,000 Black Eagle evaluation account**, and the options track is deliberately governed by that account's limits: $2,500 (5%) daily drawdown, $5,000 (10%) max drawdown, $4,000 (8%) profit target, $2,000 personal daily stop (80% of the firm's daily limit). All per-trade risk sizing multiplies the $50k base. (This resolves the earlier "funded rules are futures-only" note — Matthew chose, on 2026-06-22, to hold the options track to the eval limits while it is the active path.)
 9. Do not auto-commit. Matthew reviews every plan and diff before commit.
 
 ## CODE PATTERNS — FOLLOW EXACTLY
@@ -42,7 +42,7 @@ Dark command-center terminal: `bg-slate-950`, scanline textures, radial cyan/blu
 
 ## STRATEGY: TWO TRACKS — DO NOT MIX
 
-- **Track A — Options / own-capital growth:** scanner, contract selector, Risk Guard, paper preview, approval workflow, proof analytics. Wheel parameters locked: max 3 trades/day, 5% risk, 50% stop-loss, 30–45 DTE, ~0.30 delta. Moonshot capped at 10% of capital.
+- **Track A — Options (ACTIVE path):** scanner, contract selector, Risk Guard, paper preview, approval workflow, proof analytics. Sized against the $50k eval account (see safety rule 8). Parameters locked: max 3 trades/day, 2 losses = lockout, 30–45 DTE credit spreads, short leg ~0.20–0.25 delta, adaptive spread width (tightest spread whose max loss ≤ the per-trade cap). **Per-trade risk cap: 1% ($500) to start, stepping to 2% ($1,000) once a win rate is established over 20–30 trades.** Worst-case day (2 max-loss trades) stays under the $2,000 personal stop.
 - **Track B — Futures / funded path (research only for now):** ES/MES, NQ/MNQ, prop firm rules, funded simulator. Do not build until the Strategy Decision Gate.
 
 ## LEAN BUILD ORDER

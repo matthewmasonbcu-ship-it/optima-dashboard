@@ -158,7 +158,7 @@ export default function PreTradeChecklist({
   marketCondition = "UNKNOWN",
 
   maxSpreadPercent = 20,
-  accountSize = 10000,
+  accountSize = 50000,
   maxRiskPercent = 1,
 }: PreTradeChecklistProps) {
   const contractSymbol = getContractValue(

@@ -22,7 +22,7 @@ export default function RiskEngine({
   stopLoss = 0.75,
   takeProfit = 1.5,
   quantity = 1,
-  accountSize = 5000,
+  accountSize = 50000,
   maxRiskPercent = 1,
 }: RiskEngineProps) {
   const contractMultiplier = 100;

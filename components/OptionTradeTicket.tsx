@@ -401,8 +401,8 @@ export default function OptionTradeTicket({
   stockSymbol,
   tradeDirection,
   scannerDirection,
-  accountSize = 5000,
-  maxRiskPercent = 2,
+  accountSize = 50000,
+  maxRiskPercent = 1,
   maxSpreadPercent = 20,
 }: OptionTradeTicketProps) {
 
