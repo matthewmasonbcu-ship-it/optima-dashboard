@@ -591,18 +591,36 @@ function enrichTradierContract(
   };
 }
 
-function getFirstExpirationFromResponse(data: any): string {
-  const dates = data?.data?.expirations?.date || data?.expirations?.date || data?.dates || [];
+// DTE for a Tradier expiration string. Mirrors getDte in the cron route
+// (market-open-scan) so the manual chain targets the same window.
+function getDteForExpiration(dateStr: string): number {
+  const expTime = new Date(`${dateStr}T16:00:00`).getTime();
+  return Math.ceil((expTime - Date.now()) / (1000 * 60 * 60 * 24));
+}
 
-  if (Array.isArray(dates) && dates.length > 0) {
-    return String(dates[0]);
-  }
+// Pick the Tradier expiration closest to 37 DTE within the 30–45 day target
+// window — identical filter + midpoint sort to the cron auto-scan. Returns ""
+// when no expiration falls inside the window (caller surfaces a message).
+function getTargetExpirationFromResponse(data: any): string {
+  const raw = data?.data?.expirations?.date || data?.expirations?.date || data?.dates || [];
+  const list: string[] = Array.isArray(raw)
+    ? raw.map(String)
+    : typeof raw === "string" && raw
+    ? [raw]
+    : [];
 
-  if (typeof dates === "string") {
-    return dates;
-  }
+  if (list.length === 0) return "";
 
-  return "";
+  const MIN_DTE = 30;
+  const MAX_DTE = 45;
+  const MIDPOINT_DTE = 37;
+
+  const inWindow = list
+    .map((date) => ({ date, dte: getDteForExpiration(date) }))
+    .filter(({ dte }) => dte >= MIN_DTE && dte <= MAX_DTE)
+    .sort((a, b) => Math.abs(a.dte - MIDPOINT_DTE) - Math.abs(b.dte - MIDPOINT_DTE));
+
+  return inWindow.length > 0 ? inWindow[0].date : "";
 }
 
 
@@ -759,10 +777,10 @@ export default function OptionContractSelector({
           return;
         }
 
-        expiration = getFirstExpirationFromResponse(expirationData);
+        expiration = getTargetExpirationFromResponse(expirationData);
 
         if (!expiration) {
-          setStatusMessage("Tradier did not return any expiration dates for this symbol.");
+          setStatusMessage("No Tradier expiration in the 30–45 DTE target window for this symbol.");
           setContracts([]);
           setChainSource("none");
           return;
@@ -1013,7 +1031,7 @@ export default function OptionContractSelector({
           </div>
 
           <p className="font-mono text-[8px] leading-4 text-slate-600">
-            Leave expiration blank to auto-pick the first Tradier expiration. Read-only sandbox data only.
+            Leave expiration blank to auto-pick the Tradier expiration closest to 37 DTE (within the 30–45 day target window). Read-only sandbox data only.
           </p>
         </div>
       </div>
