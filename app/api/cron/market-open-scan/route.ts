@@ -36,8 +36,11 @@ const MIN_DTE = 30;
 const MAX_DTE = 45;
 const MIDPOINT_DTE = 37;
 
+// Morning scan fires ~9:34 ET (not 9:30) so SPY/quote data settles past the
+// opening-bell chaos — SPY quotes were intermittently unavailable in the first
+// minutes of the session. 30–45 DTE strategy doesn't need the literal open.
 const SCAN_TIMES_NY = [
-  { hour: 9, minute: 30 },
+  { hour: 9, minute: 34 },
   { hour: 11, minute: 0 },
   { hour: 14, minute: 0 },
 ];
@@ -47,8 +50,8 @@ const SCAN_TIMES_NY = [
 // it's the expected off-season trigger (not drift). Skip silently.
 // If you change a cron schedule in vercel.json, update this list to match.
 const KNOWN_CRON_UTC_SLOTS = [
-  { hour: 13, minute: 30 }, // 9:30 AM EDT (summer, UTC-4)
-  { hour: 14, minute: 30 }, // 9:30 AM EST (winter, UTC-5)
+  { hour: 13, minute: 34 }, // 9:34 AM EDT (summer, UTC-4)
+  { hour: 14, minute: 34 }, // 9:34 AM EST (winter, UTC-5)
 ];
 
 async function loadWatchlist(): Promise<string[]> {
