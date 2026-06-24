@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "../lib/supabaseClient";
 
@@ -530,6 +530,11 @@ export default function Home() {
   const [openTradesCount, setOpenTradesCount] = useState(0);
   const [openSymbols, setOpenSymbols] = useState<string[]>([]);
   const [dailyTradeCount, setDailyTradeCount] = useState(0);
+  // Save-in-flight guard. The ref is the race-killer: it is set synchronously
+  // (before any await) so rapid multi-clicks can't launch concurrent saves that
+  // all pass the daily-limit count check. isSaving mirrors it to drive the UI.
+  const savingRef = useRef(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [dailyLossCount, setDailyLossCount] = useState(0);
   const [tickerQuotes, setTickerQuotes] = useState<Record<string, QuoteData | null>>({});
   const [autoSelectLoading, setAutoSelectLoading] = useState(false);
@@ -802,6 +807,13 @@ export default function Home() {
   }
 
   async function savePaperTrade() {
+    // Re-entry guard — bail immediately if a save is already in flight. This is
+    // the atomic gate: because it is checked and set synchronously before the
+    // first await, only one save runs at a time, so the daily-limit count check
+    // below always reflects any prior insert (closes the 7-clicks → 7-saves race).
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setIsSaving(true);
     try {
       if (!selectedSetup) {
         setStatusMessage("Paper trade blocked: No scanner setup selected.");
@@ -1039,6 +1051,9 @@ export default function Home() {
     } catch (error) {
       console.error("savePaperTrade error:", error);
       setStatusMessage("Paper trade failed. Check browser console.");
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
     }
   }
 
@@ -1441,6 +1456,7 @@ const sendSelectedContractToApprovalQueue = () => {
                       preTradeWarnings={preTradeCheck.warnings}
                       preTradeBlocks={preTradeCheck.blocks}
                       onSavePaperTrade={savePaperTrade}
+                      isSaving={isSaving}
                       tradeReason={tradeReason}
                       onTradeReasonChange={setTradeReason}
                       dailyTradeCount={dailyTradeCount}

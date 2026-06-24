@@ -86,6 +86,7 @@ type OptionTradeCommandCenterProps = {
   preTradeWarnings?: string[];
   preTradeBlocks?: string[];
   onSavePaperTrade?: () => void;
+  isSaving?: boolean;
   tradeReason?: string;
   onTradeReasonChange?: (value: string) => void;
   dailyTradeCount?: number;
@@ -383,6 +384,7 @@ export default function OptionTradeCommandCenter({
   preTradeWarnings = [],
   preTradeBlocks = [],
   onSavePaperTrade,
+  isSaving = false,
   tradeReason = "",
   onTradeReasonChange,
   dailyTradeCount = 0,
@@ -706,7 +708,7 @@ export default function OptionTradeCommandCenter({
               <button
                 type="button"
                 onClick={onSavePaperTrade}
-                disabled={!canAttemptSave}
+                disabled={!canAttemptSave || isSaving}
                 className={`shrink-0 rounded-lg border px-5 py-3 font-mono text-[10px] font-black uppercase tracking-[0.2em] transition-all disabled:cursor-not-allowed disabled:opacity-40
                   ${testingOverrideEnabled
                     ? "border-orange-500/60 bg-orange-500/15 text-orange-300 hover:bg-orange-500/25"
@@ -717,7 +719,11 @@ export default function OptionTradeCommandCenter({
                     : "border-slate-700/60 bg-slate-800/60 text-slate-500"
                   }`}
               >
-                {testingOverrideEnabled ? "Save Override Trade ›" : "Save Paper Trade ›"}
+                {isSaving
+                  ? "Saving…"
+                  : testingOverrideEnabled
+                  ? "Save Override Trade ›"
+                  : "Save Paper Trade ›"}
               </button>
             </div>
             <div>
