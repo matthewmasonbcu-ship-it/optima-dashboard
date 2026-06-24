@@ -1,13 +1,37 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
 import { tradierRequest } from "@/lib/tradierClient";
-import { sendPhoneAlertSms } from "@/lib/sms/sendPhoneAlertSms";
-import { sendPhoneAlertEmailSms } from "@/lib/sms/sendPhoneAlertEmailSms";
+import { sendTelegramAlert } from "@/lib/notify/sendTelegramAlert";
 
 const ROUTE = "/api/cron/auto-close-check";
 
 const TAKE_PROFIT_FACTOR = 0.5;
 const STOP_LOSS_FACTOR = 2.0;
+
+// Telegram is the active alert channel — matches the scan cron's sendHeartbeat.
+// The old Twilio SMS / email-to-SMS path was retired (carrier 30034 block,
+// T-Mobile gateway filtering). A Telegram failure never breaks the close loop.
+async function sendHeartbeat(text: string): Promise<void> {
+  await sendTelegramAlert(text).catch(() => {});
+}
+
+// Strike from the trailing 8 digits of an OCC option symbol (thousandths).
+function occStrike(optionSymbol: string | null | undefined): string {
+  const match = String(optionSymbol ?? "").match(/(\d{8})$/);
+  return match ? String(Number(match[1]) / 1000) : "?";
+}
+
+// Call/put from the side flag immediately before the 8-digit strike.
+function occRight(optionSymbol: string | null | undefined): string {
+  const match = String(optionSymbol ?? "").match(/([CP])\d{8}$/);
+  return match ? (match[1] === "C" ? "call" : "put") : "";
+}
+
+function spreadLabel(spreadType: string | null | undefined): string {
+  if (spreadType === "bear_call_spread") return "bear call";
+  if (spreadType === "bull_put_spread") return "bull put";
+  return "spread";
+}
 
 type OptionTradeDetail = {
   id: string | number;
@@ -281,15 +305,26 @@ export async function GET(request: Request) {
 
       const sign = optionPnl >= 0 ? "+" : "-";
       const absAmount = Math.abs(optionPnl).toFixed(2);
-      const message =
-        closeReason === "dte_21"
-          ? `OPTIMA 21-DTE CLOSE: ${stockSymbol} closed at ${dte} DTE to avoid gamma risk. P&L: ${sign}$${absAmount}.`
-          : `OPTIMA AUTO-CLOSE: ${stockSymbol} ${result} — P&L: ${sign}$${absAmount}. Position closed automatically.`;
 
-      const smsResult = await sendPhoneAlertSms(message);
-      if (!smsResult.success) {
-        await sendPhoneAlertEmailSms(message);
-      }
+      const contractDesc = isSpread
+        ? `${stockSymbol} ${occStrike(trade.short_leg_option_symbol)}/${occStrike(
+            trade.long_leg_option_symbol
+          )} ${spreadLabel(trade.spread_type)}`
+        : `${stockSymbol} ${occStrike(trade.option_symbol)} ${occRight(
+            trade.option_symbol
+          )}`.trim();
+
+      const reasonText =
+        closeReason === "take_profit"
+          ? "Profit target hit (50%)"
+          : closeReason === "stop_loss"
+          ? "Stop hit (1× credit)"
+          : `21-DTE gamma close (${dte} DTE)`;
+
+      // Telegram — same channel as the scan cron. Replaces the retired SMS path.
+      await sendHeartbeat(
+        `OPTIMA AUTO-CLOSE — ${contractDesc}\n${reasonText} | ${result} | P&L: ${sign}$${absAmount}`
+      );
     }
 
     return NextResponse.json({
