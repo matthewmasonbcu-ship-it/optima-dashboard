@@ -9,6 +9,7 @@ import {
   analyzeSetup,
   sortScanResults,
   type ScanResult,
+  type QuoteData,
 } from "@/lib/scanner";
 import {
   selectBestCreditSpread,
@@ -31,28 +32,18 @@ async function sendHeartbeat(text: string): Promise<void> {
 
 const ROUTE = "/api/cron/market-open-scan";
 const MIN_SETUP_SCORE = 75;
-const SCAN_WINDOW_TOLERANCE_MINUTES = 20; // widened from 5 — Vercel Hobby jitter can exceed 5 min
 const MIN_DTE = 30;
 const MAX_DTE = 45;
 const MIDPOINT_DTE = 37;
 
-// Morning scan fires ~9:34 ET (not 9:30) so SPY/quote data settles past the
-// opening-bell chaos — SPY quotes were intermittently unavailable in the first
-// minutes of the session. 30–45 DTE strategy doesn't need the literal open.
-const SCAN_TIMES_NY = [
-  { hour: 9, minute: 34 },
-  { hour: 11, minute: 0 },
-  { hour: 14, minute: 0 },
-];
-
-// Mirrors the two cron entries in vercel.json — one per DST offset.
-// If the route fires at a known UTC slot but outside the ET scan window,
-// it's the expected off-season trigger (not drift). Skip silently.
-// If you change a cron schedule in vercel.json, update this list to match.
-const KNOWN_CRON_UTC_SLOTS = [
-  { hour: 13, minute: 34 }, // 9:34 AM EDT (summer, UTC-4)
-  { hour: 14, minute: 34 }, // 9:34 AM EST (winter, UTC-5)
-];
+// Morning scan window (ET). The cron is scheduled ~9:34 ET (13:34/14:34 UTC for
+// the two DST offsets in vercel.json), but Vercel jitter can delay the fire by
+// 20–40+ min. We accept ANY fire inside this window, so drift no longer rejects
+// a valid in-session scan. The window is < 60 min so the off-DST cron slot
+// (summer 10:34 ET / winter 8:34 ET) falls outside it and won't double-fire;
+// the once-per-day dedup in the handler backstops any extreme-jitter overlap.
+const MORNING_SCAN_START_MINUTES = 9 * 60 + 30; // 9:30 ET — market open
+const MORNING_SCAN_END_MINUTES = 10 * 60 + 30; // 10:30 ET
 
 async function loadWatchlist(): Promise<string[]> {
   const { data, error } = await supabase
@@ -67,7 +58,7 @@ async function loadWatchlist(): Promise<string[]> {
   return data.map((row) => row.symbol as string);
 }
 
-function isMarketOpenNowInNewYork(): boolean {
+function isMorningScanWindowNewYork(): boolean {
   const now = new Date();
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
@@ -86,12 +77,11 @@ function isMarketOpenNowInNewYork(): boolean {
   const isWeekday = weekday !== "Sat" && weekday !== "Sun";
   const nowMinutes = hour * 60 + minute;
 
-  const isScanTime = SCAN_TIMES_NY.some(({ hour: targetHour, minute: targetMinute }) => {
-    const targetMinutes = targetHour * 60 + targetMinute;
-    return Math.abs(nowMinutes - targetMinutes) <= SCAN_WINDOW_TOLERANCE_MINUTES;
-  });
-
-  return isWeekday && isScanTime;
+  return (
+    isWeekday &&
+    nowMinutes >= MORNING_SCAN_START_MINUTES &&
+    nowMinutes <= MORNING_SCAN_END_MINUTES
+  );
 }
 
 function getNewYorkUtcOffsetHours(date: Date): number {
@@ -135,20 +125,15 @@ export async function GET(request: Request) {
     );
   }
 
-  if (!isMarketOpenNowInNewYork()) {
-    const utcNow = new Date().getUTCHours() * 60 + new Date().getUTCMinutes();
-    const isExpectedDstFire = KNOWN_CRON_UTC_SLOTS.some(
-      ({ hour, minute }) =>
-        Math.abs(utcNow - (hour * 60 + minute)) <= SCAN_WINDOW_TOLERANCE_MINUTES
-    );
-    if (!isExpectedDstFire) {
-      await sendHeartbeat("OPTIMA SCAN — fired outside scan window. Cron timing drift?");
-    }
+  if (!isMorningScanWindowNewYork()) {
+    // Outside 9:30–10:30 ET, or a weekend. This includes the off-DST cron slot
+    // (summer 10:34 ET / winter 8:34 ET), which is expected — skip silently, no
+    // drift alert. Jitter inside the window is now allowed to scan normally.
     return NextResponse.json({
       success: true,
       route: ROUTE,
       skipped: true,
-      message: "Not market open time in America/New_York. Skipping scan.",
+      message: "Outside the morning scan window (9:30–10:30 ET, weekdays). Skipping.",
     });
   }
 
@@ -157,26 +142,56 @@ export async function GET(request: Request) {
     const now = new Date();
     const startOfTodayISO = getStartOfTodayNewYorkISO(now);
 
-    // --- 1. Fetch SPY + VIX ---
-    let [spyQuote, vixQuote] = await Promise.all([
-      fetchQuote("SPY", baseUrl),
-      fetchQuote("^VIX", baseUrl),
-    ]);
+    // --- Once-per-day guard ---
+    // If a scan already queued an AUTO_SCAN_CRON preview today, skip — prevents
+    // the DST off-slot or extreme cron jitter from double-firing the pipeline.
+    // (No-setup days create no preview row and may harmlessly re-scan.)
+    const { data: priorScanToday } = await supabase
+      .from("paper_order_previews")
+      .select("id")
+      .ilike("setup_name", "%AUTO_SCAN_CRON%")
+      .gte("created_at", startOfTodayISO)
+      .limit(1)
+      .maybeSingle();
 
-    // Retry SPY once — it's the critical scan gate; a transient 429 shouldn't silently abort
-    if (!spyQuote) {
-      await new Promise((res) => setTimeout(res, 1000));
+    if (priorScanToday) {
+      return NextResponse.json({
+        success: true,
+        route: ROUTE,
+        skipped: true,
+        duplicatePrevented: true,
+        message: "A scan already queued a preview today. Skipping duplicate run.",
+      });
+    }
+
+    // --- 1. Fetch SPY alone with exponential backoff ---
+    // SPY is the scan gate. Finnhub can return c=0 (which fails the c>0 validity
+    // check) for the first 30s–2min after the bell, so retry SPY on its own with
+    // backoff before aborting. Function timeout is 300s, so ~46s is safe.
+    const SPY_BACKOFF_MS = [0, 2000, 4000, 8000, 16000, 16000];
+    let spyQuote: QuoteData | null = null;
+    for (const delay of SPY_BACKOFF_MS) {
+      if (delay > 0) await new Promise((res) => setTimeout(res, delay));
       spyQuote = await fetchQuote("SPY", baseUrl);
+      if (spyQuote) break;
     }
 
     if (!spyQuote) {
-      await sendHeartbeat("OPTIMA SCAN — could not load SPY quote after retry. Scan aborted.");
+      const budgetSec = Math.round(
+        SPY_BACKOFF_MS.reduce((a, b) => a + b, 0) / 1000
+      );
+      await sendHeartbeat(
+        `OPTIMA SCAN — could not load SPY quote after ${SPY_BACKOFF_MS.length} attempts over ~${budgetSec}s. Scan aborted.`
+      );
       return NextResponse.json({
         success: false,
         route: ROUTE,
         message: "Could not load valid SPY market quote.",
       });
     }
+
+    // VIX fetched separately and gracefully — UNKNOWN on failure, never blocks.
+    const vixQuote = await fetchQuote("^VIX", baseUrl);
 
     const marketCondition = classifyMarketCondition(spyQuote);
     const vixLevel = vixQuote?.c ?? null;
