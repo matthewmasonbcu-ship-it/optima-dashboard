@@ -239,6 +239,8 @@ export default function PaperTradeTracker() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [tradeFilter, setTradeFilter] = useState<TradeFilter>("all");
+  const [closingId, setClosingId] = useState<string | null>(null);
+  const [closePriceInput, setClosePriceInput] = useState<Record<string, string>>({});
 
   // ─── All data loading — untouched ─────────────────────────────────────────
   async function loadTrades() {
@@ -300,6 +302,40 @@ export default function PaperTradeTracker() {
     if (error) { console.error("Close trade error:", error); setMessage(error.message); return; }
     setMessage(`${getTradeSymbol(trade)} stock trade closed as ${result.toUpperCase()}.`);
     await loadTrades();
+  }
+
+  // ─── Option-aware close — routes through /api/close-option-trade so the real
+  //     option P&L is recorded in BOTH tables (mirrors the auto-close cron).
+  //     manualPrice omitted → live Tradier spread price; provided → exact close. ─
+  async function closeOptionTrade(trade: PaperTrade, manualPrice?: number) {
+    setClosingId(trade.id);
+    setMessage("");
+    try {
+      const res = await fetch("/api/close-option-trade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paperTradeId: trade.id,
+          ...(manualPrice !== undefined ? { manualPrice } : {}),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.success) {
+        setMessage(json?.error || "Option close failed.");
+        return;
+      }
+      const sign = json.optionPnl >= 0 ? "+" : "-";
+      setMessage(
+        `${getTradeSymbol(trade)} closed @ $${Number(json.currentSpreadPrice).toFixed(2)} (${json.priceSource}) — ${json.result} ${sign}$${Math.abs(Number(json.optionPnl)).toFixed(2)}.`
+      );
+      setClosePriceInput((prev) => ({ ...prev, [trade.id]: "" }));
+      await loadTrades();
+    } catch (error) {
+      console.error("closeOptionTrade error:", error);
+      setMessage("Option close failed. Check console.");
+    } finally {
+      setClosingId(null);
+    }
   }
 
   // ─── Filter logic — untouched ─────────────────────────────────────────────
@@ -705,29 +741,67 @@ export default function PaperTradeTracker() {
                         )}
                       </div>
 
-                      {/* Close buttons — only on open trades */}
-                      {!isClosed && (
-                        <div className="flex shrink-0 items-center gap-1.5">
-                          <button
-                            onClick={() => closeStockTrade(trade, "win")}
-                            className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-emerald-300 transition hover:bg-emerald-500/20"
-                          >
-                            Win
-                          </button>
-                          <button
-                            onClick={() => closeStockTrade(trade, "loss")}
-                            className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-red-400 transition hover:bg-red-500/20"
-                          >
-                            Loss
-                          </button>
-                          <button
-                            onClick={() => closeStockTrade(trade, "be")}
-                            className="rounded-lg border border-slate-700/60 bg-slate-800/60 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400 transition hover:text-slate-200"
-                          >
-                            BE
-                          </button>
-                        </div>
-                      )}
+                      {/* Close — only on open trades. Option trades close via the
+                          option-aware endpoint (records real P&L in both tables);
+                          stock trades keep Win/Loss/BE. */}
+                      {!isClosed &&
+                        (optionDetail ? (
+                          <div className="flex shrink-0 flex-col items-stretch gap-1.5 sm:items-end">
+                            <button
+                              onClick={() => closeOptionTrade(trade)}
+                              disabled={closingId === trade.id}
+                              className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              {closingId === trade.id ? "Closing…" : "Close @ Live"}
+                            </button>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                value={closePriceInput[trade.id] ?? ""}
+                                onChange={(e) =>
+                                  setClosePriceInput((prev) => ({ ...prev, [trade.id]: e.target.value }))
+                                }
+                                inputMode="decimal"
+                                placeholder="0.32"
+                                className="w-16 rounded-lg border border-slate-700/60 bg-slate-950/80 px-2 py-1.5 font-mono text-[10px] text-white outline-none placeholder:text-slate-600 focus:border-violet-500/60"
+                              />
+                              <button
+                                onClick={() => {
+                                  const price = Number(closePriceInput[trade.id]);
+                                  if (!Number.isFinite(price) || price < 0) {
+                                    setMessage("Enter a valid spread price to close at (e.g. 0.32).");
+                                    return;
+                                  }
+                                  closeOptionTrade(trade, price);
+                                }}
+                                disabled={closingId === trade.id}
+                                className="rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-violet-300 transition hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                Close @ Price
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <button
+                              onClick={() => closeStockTrade(trade, "win")}
+                              className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-emerald-300 transition hover:bg-emerald-500/20"
+                            >
+                              Win
+                            </button>
+                            <button
+                              onClick={() => closeStockTrade(trade, "loss")}
+                              className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-red-400 transition hover:bg-red-500/20"
+                            >
+                              Loss
+                            </button>
+                            <button
+                              onClick={() => closeStockTrade(trade, "be")}
+                              className="rounded-lg border border-slate-700/60 bg-slate-800/60 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400 transition hover:text-slate-200"
+                            >
+                              BE
+                            </button>
+                          </div>
+                        ))}
                     </div>
 
                     {/* ── Override audit strip ─────────────────────────── */}

@@ -100,6 +100,10 @@ export default function AutoPositionMonitor({
   const [openTrades, setOpenTrades] = useState<PaperTrade[]>([]);
   const [monitorEvents, setMonitorEvents] = useState<MonitorEvent[]>([]);
   const [loading, setLoading] = useState(false);
+  // Paper-trade ids that have an open option leg — they must close via the
+  // option-aware endpoint, never the stock-price path below.
+  const [optionTradeIds, setOptionTradeIds] = useState<Set<string>>(new Set());
+  const [closingId, setClosingId] = useState<string | null>(null);
 
   // ─── All logic — untouched ────────────────────────────────────────────────
   function addEvent(
@@ -133,6 +137,7 @@ export default function AutoPositionMonitor({
 
       const trades = (data || []) as PaperTrade[];
       setOpenTrades(trades);
+      await loadOptionTradeIds();
 
       if (trades.length === 0) {
         addEvent("No open paper trades found.", "info");
@@ -181,6 +186,45 @@ export default function AutoPositionMonitor({
     }
   }
 
+  async function loadOptionTradeIds() {
+    const { data } = await supabase
+      .from("option_trade_details")
+      .select("paper_trade_id")
+      .is("option_pnl", null);
+    setOptionTradeIds(new Set((data || []).map((d) => d.paper_trade_id as string)));
+  }
+
+  // Option-aware close — mirrors the auto-close cron and records real option
+  // P&L in both tables. Live spread price (no manual entry here; use the Trade
+  // Journal for an exact target close).
+  async function closeOptionLive(trade: PaperTrade) {
+    setClosingId(trade.id);
+    try {
+      const res = await fetch("/api/close-option-trade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paperTradeId: trade.id }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.success) {
+        addEvent(`Close failed for ${trade.symbol}: ${json?.error || "unknown error"}`, "error");
+        return;
+      }
+      const sign = json.optionPnl >= 0 ? "+" : "-";
+      addEvent(
+        `${trade.symbol} option closed @ $${Number(json.currentSpreadPrice).toFixed(2)} — ${json.result} ${sign}$${Math.abs(Number(json.optionPnl)).toFixed(2)}.`,
+        "success"
+      );
+      window.dispatchEvent(new Event("paper-trades-updated"));
+      await loadOpenTrades();
+    } catch (err) {
+      console.error("closeOptionLive error:", err);
+      addEvent(`Unexpected error closing ${trade.symbol}.`, "error");
+    } finally {
+      setClosingId(null);
+    }
+  }
+
   async function runMonitorNow() {
     setLoading(true);
     try {
@@ -199,6 +243,7 @@ export default function AutoPositionMonitor({
 
       const trades = (data || []) as PaperTrade[];
       setOpenTrades(trades);
+      await loadOptionTradeIds();
 
       if (trades.length === 0) {
         addEvent("Monitor checked: no open paper trades right now.", "info");
@@ -348,39 +393,51 @@ export default function AutoPositionMonitor({
                       </span>
                     </div>
 
-                    {/* TP / SL / BE close buttons */}
-                    <div className="flex items-center gap-1.5">
+                    {/* Close buttons. Option trades use the option-aware
+                        endpoint (real P&L, both tables); stock trades keep the
+                        TP/SL/BE stock-price close. */}
+                    {optionTradeIds.has(trade.id) ? (
                       <button
-                        onClick={() =>
-                          closeTradeAtPrice(
-                            trade,
-                            Number(trade.take_profit || trade.entry_price || 0)
-                          )
-                        }
-                        className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-emerald-300 transition hover:bg-emerald-500/20"
+                        onClick={() => closeOptionLive(trade)}
+                        disabled={closingId === trade.id}
+                        className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        TP
+                        {closingId === trade.id ? "Closing…" : "Close @ Live"}
                       </button>
-                      <button
-                        onClick={() =>
-                          closeTradeAtPrice(
-                            trade,
-                            Number(trade.stop_loss || trade.entry_price || 0)
-                          )
-                        }
-                        className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-red-400 transition hover:bg-red-500/20"
-                      >
-                        SL
-                      </button>
-                      <button
-                        onClick={() =>
-                          closeTradeAtPrice(trade, Number(trade.entry_price || 0))
-                        }
-                        className="rounded-lg border border-slate-700/60 bg-slate-800/60 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400 transition hover:text-slate-200"
-                      >
-                        BE
-                      </button>
-                    </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() =>
+                            closeTradeAtPrice(
+                              trade,
+                              Number(trade.take_profit || trade.entry_price || 0)
+                            )
+                          }
+                          className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-emerald-300 transition hover:bg-emerald-500/20"
+                        >
+                          TP
+                        </button>
+                        <button
+                          onClick={() =>
+                            closeTradeAtPrice(
+                              trade,
+                              Number(trade.stop_loss || trade.entry_price || 0)
+                            )
+                          }
+                          className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-red-400 transition hover:bg-red-500/20"
+                        >
+                          SL
+                        </button>
+                        <button
+                          onClick={() =>
+                            closeTradeAtPrice(trade, Number(trade.entry_price || 0))
+                          }
+                          className="rounded-lg border border-slate-700/60 bg-slate-800/60 px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400 transition hover:text-slate-200"
+                        >
+                          BE
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Row 2: Stats grid */}
