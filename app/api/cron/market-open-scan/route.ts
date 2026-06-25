@@ -125,6 +125,16 @@ export async function GET(request: Request) {
     );
   }
 
+  // Base URL for ALL server-to-server self-fetches (quotes + phone-review).
+  // Use the PUBLIC production domain (VERCEL_PROJECT_PRODUCTION_URL =
+  // optima-dashboard-azm9.vercel.app), NOT new URL(request.url).origin — the
+  // deployment URL is gated by Vercel Deployment Protection (302 → SSO), which
+  // was silently failing every self-fetch (SPY, watchlist quotes, phone-review).
+  // Falls back to the request origin if the system var is somehow unset.
+  const baseUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : new URL(request.url).origin;
+
   if (!isMorningScanWindowNewYork()) {
     // Outside 9:30–10:30 ET, or a weekend. This includes the off-DST cron slot
     // (summer 10:34 ET / winter 8:34 ET), which is expected — skip silently, no
@@ -133,12 +143,12 @@ export async function GET(request: Request) {
       success: true,
       route: ROUTE,
       skipped: true,
+      baseUrl, // exposed for ops verification (endpoint is CRON_SECRET-gated)
       message: "Outside the morning scan window (9:30–10:30 ET, weekdays). Skipping.",
     });
   }
 
   try {
-    const baseUrl = new URL(request.url).origin;
     const now = new Date();
     const startOfTodayISO = getStartOfTodayNewYorkISO(now);
 
