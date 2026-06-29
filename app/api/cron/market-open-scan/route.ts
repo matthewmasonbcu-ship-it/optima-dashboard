@@ -15,8 +15,12 @@ import {
   selectBestCreditSpread,
   getTradierOptionArray,
   normalizeTradierOption,
-  getNumber,
-  getContractValue,
+  getOptionSymbol,
+  getDeltaAbs,
+  getOpenInterest,
+  type GradeParams,
+  type SelectBestCreditSpreadResult,
+  type TradierContract,
 } from "@/lib/contractGrading";
 import {
   runServerSideEnforcementChecks,
@@ -24,17 +28,27 @@ import {
   MAX_RISK_PERCENT,
   MAX_SPREAD_PERCENT,
 } from "@/lib/preTradeChecks";
+import {
+  SCAN_EVAL_BREADTH_N,
+  DAILY_TRADE_CAP,
+  MIN_SETUP_SCORE,
+  MIN_DTE,
+  MAX_DTE,
+  MIDPOINT_DTE,
+} from "@/lib/scanConfig";
+import { fetchNextEarningsDate } from "@/lib/earnings";
+import {
+  persistScanRun,
+  type ScanCandidateRecord,
+  type ScanRunRecord,
+} from "@/lib/scanPersistence";
 import { sendTelegramAlert } from "@/lib/notify/sendTelegramAlert";
 
-async function sendHeartbeat(text: string): Promise<void> {
+async function notify(text: string): Promise<void> {
   await sendTelegramAlert(text).catch(() => {});
 }
 
 const ROUTE = "/api/cron/market-open-scan";
-const MIN_SETUP_SCORE = 75;
-const MIN_DTE = 30;
-const MAX_DTE = 45;
-const MIDPOINT_DTE = 37;
 
 // Morning scan window (ET). The cron is scheduled ~9:34 ET (13:34/14:34 UTC for
 // the two DST offsets in vercel.json), but Vercel jitter can delay the fire by
@@ -115,6 +129,333 @@ function parseExpirationDates(data: unknown): string[] {
   return [];
 }
 
+function formatEtStamp(now: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const m: Record<string, string> = {};
+  for (const part of parts) m[part.type] = part.value;
+  return `${m.year}-${m.month}-${m.day} ${m.hour}:${m.minute} ET`;
+}
+
+function fmtNum(n: number | null): string {
+  return n != null && Number.isFinite(n) ? n.toFixed(2) : "N/A";
+}
+
+// Collapse a long grading/enforcement reason into a compact tag for the run
+// summary and the blocked_reasons histogram.
+function shortBlockReason(reason: string | null): string {
+  const r = (reason ?? "").toLowerCase();
+  if (!r) return "blocked";
+  if (r.includes("earnings")) return "earnings";
+  if (r.includes("score")) return "score<75";
+  if (r.includes("direction")) return "no direction";
+  if (r.includes("dte window") || r.includes("expirations in") || r.includes("dte is"))
+    return "no DTE window";
+  if (r.includes("grade blocked") || r.includes("short leg")) return "short leg blocked";
+  if (r.includes("exceeds allowed risk") || r.includes("max loss") || r.includes("risk cap"))
+    return "maxloss>cap";
+  if (r.includes("delta")) return "delta off-band";
+  if (r.includes("no valid") || r.includes("pricing") || r.includes("net credit"))
+    return "no pricing";
+  if (r.includes("chain") || r.includes("tradier") || r.includes("contracts in chain"))
+    return "chain unavailable";
+  if (r.includes("dedup") || r.includes("already")) return "dedup";
+  if (r.includes("daily") || r.includes("lockout")) return "daily lockout";
+  return r.slice(0, 28);
+}
+
+// One contract-graded symbol. status reflects the GRADING outcome; queued/queueNote
+// reflect whether a PASSED candidate became the day's trade (or why it didn't).
+type GradedCandidate = {
+  symbol: string;
+  setupScore: number;
+  direction: "CALL" | "PUT" | null;
+  status: "PASSED" | "BLOCKED";
+  grade: string | null;
+  reason: string | null; // full grading block reason
+  expiration: string | null;
+  shortStrike: number | null;
+  shortDelta: number | null;
+  openInterest: number | null;
+  bid: number | null;
+  ask: number | null;
+  spreadContract: TradierContract | null;
+  queued: boolean;
+  queueNote: string | null;
+};
+
+// Contract-grade a single ranked symbol. Runs the EXACT existing pipeline
+// (expirations → in-window DTE → adaptive credit spread) plus a HARD earnings
+// pre-filter applied BEFORE grading. Never queues; returns a diagnostic record.
+async function gradeSymbol(
+  result: ScanResult,
+  baseUrl: string,
+  gradeParams: GradeParams
+): Promise<GradedCandidate> {
+  const symbol = result.symbol;
+  const setupScore = result.setupScore ?? 0;
+  const base: GradedCandidate = {
+    symbol,
+    setupScore,
+    direction: null,
+    status: "BLOCKED",
+    grade: null,
+    reason: null,
+    expiration: null,
+    shortStrike: null,
+    shortDelta: null,
+    openInterest: null,
+    bid: null,
+    ask: null,
+    spreadContract: null,
+    queued: false,
+    queueNote: null,
+  };
+
+  // Score gate (no Tradier calls below the threshold).
+  if (setupScore < MIN_SETUP_SCORE) {
+    return { ...base, reason: `setup score ${setupScore} < ${MIN_SETUP_SCORE}` };
+  }
+
+  // Direction gate.
+  const rawDirection = result.direction ?? result.tradeDirection;
+  if (rawDirection !== "CALL" && rawDirection !== "PUT") {
+    return { ...base, reason: `direction ${rawDirection ?? "unknown"} — not CALL/PUT` };
+  }
+  const direction = rawDirection;
+  base.direction = direction;
+
+  // Expirations.
+  const expResult = await tradierRequest({
+    path: `/markets/options/expirations?symbol=${encodeURIComponent(symbol)}&includeAllRoots=true&strikes=false`,
+    method: "GET",
+  });
+  if (!expResult.ok) {
+    return { ...base, reason: `Tradier chain unavailable (${expResult.status})` };
+  }
+
+  const allDates = parseExpirationDates(expResult.data);
+  let inWindow = allDates
+    .map((d) => ({ date: d, dte: getDte(d) }))
+    .filter(({ dte }) => dte >= MIN_DTE && dte <= MAX_DTE)
+    .sort((a, b) => Math.abs(a.dte - MIDPOINT_DTE) - Math.abs(b.dte - MIDPOINT_DTE));
+
+  if (inWindow.length === 0) {
+    return { ...base, reason: `no expirations in ${MIN_DTE}–${MAX_DTE} DTE window` };
+  }
+
+  // HARD earnings pre-filter (BEFORE grading). Drop any expiration held through
+  // the next earnings date. Fails open: a null earnings date skips the filter.
+  const earningsDate = await fetchNextEarningsDate(symbol, baseUrl);
+  if (earningsDate) {
+    const clear = inWindow.filter(({ date }) => date < earningsDate);
+    if (clear.length === 0) {
+      return { ...base, reason: `earnings inside DTE window (${earningsDate})` };
+    }
+    inWindow = clear;
+  }
+
+  const stockPrice =
+    result.price ?? result.entryPrice ?? result.entry_price ?? undefined;
+
+  let selected: SelectBestCreditSpreadResult | null = null;
+  let winningNormalized: TradierContract[] = [];
+  let lastFail = "";
+
+  for (const { date: expiration } of inWindow.slice(0, 3)) {
+    const chainResult = await tradierRequest({
+      path: `/markets/options/chains?symbol=${encodeURIComponent(symbol)}&expiration=${encodeURIComponent(expiration)}&greeks=true`,
+      method: "GET",
+    });
+    if (!chainResult.ok) {
+      lastFail = `Chain fetch failed for ${expiration} (${chainResult.status}).`;
+      continue;
+    }
+    const rawOptions = getTradierOptionArray(chainResult.data);
+    if (rawOptions.length === 0) {
+      lastFail = `No contracts in chain for ${expiration}.`;
+      continue;
+    }
+    const normalized = rawOptions.map(normalizeTradierOption);
+    const r = selectBestCreditSpread(normalized, direction, symbol, {
+      ...gradeParams,
+      stockPrice,
+    });
+    if (r.success) {
+      selected = r;
+      winningNormalized = normalized;
+      break;
+    }
+    lastFail = r.reason;
+  }
+
+  if (!selected || !selected.success) {
+    return { ...base, reason: lastFail || "no suitable spread" };
+  }
+
+  const spread = selected.spread;
+  const grade =
+    (spread.contract_quality ??
+      spread.qualityGrade ??
+      spread.contractQualityGrade ??
+      spread.grade ??
+      null) as string | null;
+
+  // Short-leg diagnostics for persistence — read delta/OI off the winning chain.
+  const shortSym = spread.short_leg?.option_symbol ?? getOptionSymbol(spread);
+  const shortLegRaw = winningNormalized.find((o) => getOptionSymbol(o) === shortSym);
+
+  return {
+    symbol,
+    setupScore,
+    direction,
+    status: "PASSED",
+    grade,
+    reason: null,
+    expiration: spread.expiration_date ?? spread.expirationDate ?? null,
+    shortStrike: spread.short_leg?.strike_price ?? spread.strike_price ?? null,
+    shortDelta: shortLegRaw ? getDeltaAbs(shortLegRaw) : null,
+    openInterest: shortLegRaw ? getOpenInterest(shortLegRaw) : spread.open_interest ?? null,
+    bid: spread.bid_price ?? spread.bid ?? null,
+    ask: spread.ask_price ?? spread.ask ?? null,
+    spreadContract: spread,
+    queued: false,
+    queueNote: null,
+  };
+}
+
+// Insert the approval-queue preview for a PASSED candidate, fire the ACTIONABLE
+// phone-review alert, and write the scanner dedup row. Safety locks unchanged.
+async function queuePreview(
+  cand: GradedCandidate,
+  topResultEntry: ScanResult,
+  baseUrl: string
+): Promise<
+  | { ok: true; previewId: string; netCredit: number | null; maxLoss: number | null; spreadType: string | null }
+  | { ok: false; error: string }
+> {
+  const spread = cand.spreadContract as TradierContract;
+  const symbol = cand.symbol;
+  const direction = cand.direction as "CALL" | "PUT";
+
+  const spreadSymbol = String(spread.stock_symbol ?? spread.stockSymbol ?? symbol);
+  const contractSymbol = String(
+    spread.option_symbol ?? spread.optionSymbol ?? spread.symbol ?? ""
+  );
+  const spreadExpiration = spread.expiration_date ?? spread.expirationDate ?? null;
+  const spreadOptionType = spread.trade_direction ?? spread.tradeDirection ?? direction;
+  const spreadBid = spread.bid ?? spread.bid_price ?? null;
+  const spreadAsk = spread.ask ?? spread.ask_price ?? null;
+  const spreadNetCredit = spread.net_credit ?? spread.mid ?? null;
+  const spreadMaxLoss = spread.max_loss ?? spread.max_risk ?? null;
+  const spreadGrade =
+    spread.contract_quality ??
+    spread.qualityGrade ??
+    spread.contractQualityGrade ??
+    spread.grade ??
+    null;
+
+  const { data: previewRow, error: previewError } = await supabase
+    .from("paper_order_previews")
+    .insert({
+      source_alert_id: null,
+      approval_decision_id: null,
+      phone_alert_event_id: null,
+
+      symbol: spreadSymbol,
+      trade_lane: "OPTIONS_DAY_TRADE",
+      setup_name: `${symbol} ${direction} credit spread — AUTO_SCAN_CRON`,
+
+      contract_symbol: contractSymbol || null,
+      strike: spread.strike_price ?? spread.strikePrice ?? null,
+      expiration: spreadExpiration,
+      option_type: spreadOptionType,
+
+      bid: spreadBid,
+      ask: spreadAsk,
+      mid: spreadNetCredit,
+      estimated_limit_price: spreadNetCredit,
+      quantity: 1,
+      estimated_order_cost: spreadNetCredit !== null ? spreadNetCredit * 100 : null,
+      max_risk_dollars: spreadMaxLoss,
+
+      contract_quality: spreadGrade,
+      risk_guard_status: "APPROVED",
+      risk_guard_reason: "Auto-scan cron enforcement passed all 7 checks.",
+
+      entry_price: topResultEntry.entryPrice ?? topResultEntry.entry_price ?? null,
+      stop_loss: topResultEntry.stopLoss ?? topResultEntry.stop_loss ?? null,
+      take_profit: topResultEntry.takeProfit ?? topResultEntry.take_profit ?? null,
+
+      spread_type: spread.spread_type ?? null,
+      short_leg_option_symbol: spread.short_leg?.option_symbol ?? null,
+      short_leg_strike_price: spread.short_leg?.strike_price ?? null,
+      long_leg_option_symbol: spread.long_leg?.option_symbol ?? null,
+      long_leg_strike_price: spread.long_leg?.strike_price ?? null,
+      net_credit: spreadNetCredit,
+      spread_width: spread.spread_width ?? null,
+      max_loss: spreadMaxLoss,
+      max_profit: spread.max_profit ?? null,
+
+      preview_status: "PREVIEW_ONLY",
+      broker: "TRADIER_SANDBOX",
+      order_side: "BUY_TO_OPEN",
+      order_type: "LIMIT",
+      time_in_force: "DAY",
+
+      // Safety locks — always hardcoded false. This route never unlocks execution.
+      sandbox_preview_validation_status: "PASSED",
+      sandbox_preview_human_review_decision: "WATCH",
+      approved_for_sandbox_order: false,
+      approved_for_live_order: false,
+      submitted_to_broker: false,
+      broker_order_id: null,
+      broker_response: null,
+
+      safety_notes:
+        "Source: AUTO_SCAN_CRON. Preview only. No Tradier sandbox order submitted. No live order submitted.",
+    })
+    .select("id")
+    .single();
+
+  if (previewError || !previewRow) {
+    console.error("Failed to insert paper_order_previews:", previewError);
+    return { ok: false, error: previewError?.message ?? "unknown error" };
+  }
+
+  // ACTIONABLE alert — phone-review generates the token and sends the Telegram
+  // approval message with the review link.
+  await fetch(`${baseUrl}/api/alerts/phone-review`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ previewId: previewRow.id }),
+  }).catch(() => {});
+
+  // Dedup row — suppresses the legacy FYI path if ever re-enabled.
+  await supabase
+    .from("scanner_auto_alerts")
+    .insert({ symbol, direction, alerted_at: new Date().toISOString() })
+    .then(({ error }) => {
+      if (error)
+        console.warn("scanner_auto_alerts dedup insert failed (non-fatal):", error.message);
+    });
+
+  return {
+    ok: true,
+    previewId: previewRow.id as string,
+    netCredit: typeof spreadNetCredit === "number" ? spreadNetCredit : null,
+    maxLoss: typeof spreadMaxLoss === "number" ? spreadMaxLoss : null,
+    spreadType: spread.spread_type ?? null,
+  };
+}
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   const expected = `Bearer ${process.env.CRON_SECRET ?? ""}`;
@@ -125,37 +466,31 @@ export async function GET(request: Request) {
     );
   }
 
-  // Base URL for ALL server-to-server self-fetches (quotes + phone-review).
-  // Use the PUBLIC production domain (VERCEL_PROJECT_PRODUCTION_URL =
-  // optima-dashboard-azm9.vercel.app), NOT new URL(request.url).origin — the
-  // deployment URL is gated by Vercel Deployment Protection (302 → SSO), which
-  // was silently failing every self-fetch (SPY, watchlist quotes, phone-review).
-  // Falls back to the request origin if the system var is somehow unset.
+  // Base URL for ALL server-to-server self-fetches (quotes + earnings + phone-review).
+  // Use the PUBLIC production domain (VERCEL_PROJECT_PRODUCTION_URL), NOT
+  // new URL(request.url).origin — the deployment URL is gated by Vercel Deployment
+  // Protection (302 → SSO), which silently fails self-fetches.
   const baseUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
     ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
     : new URL(request.url).origin;
 
   if (!isMorningScanWindowNewYork()) {
-    // Outside 9:30–10:30 ET, or a weekend. This includes the off-DST cron slot
-    // (summer 10:34 ET / winter 8:34 ET), which is expected — skip silently, no
-    // drift alert. Jitter inside the window is now allowed to scan normally.
     return NextResponse.json({
       success: true,
       route: ROUTE,
       skipped: true,
-      baseUrl, // exposed for ops verification (endpoint is CRON_SECRET-gated)
+      baseUrl,
       message: "Outside the morning scan window (9:30–10:30 ET, weekdays). Skipping.",
     });
   }
 
+  const now = new Date();
+  const stamp = formatEtStamp(now);
+
   try {
-    const now = new Date();
     const startOfTodayISO = getStartOfTodayNewYorkISO(now);
 
-    // --- Once-per-day guard ---
-    // If a scan already queued an AUTO_SCAN_CRON preview today, skip — prevents
-    // the DST off-slot or extreme cron jitter from double-firing the pipeline.
-    // (No-setup days create no preview row and may harmlessly re-scan.)
+    // --- Once-per-day guard (silent) ---
     const { data: priorScanToday } = await supabase
       .from("paper_order_previews")
       .select("id")
@@ -174,10 +509,7 @@ export async function GET(request: Request) {
       });
     }
 
-    // --- 1. Fetch SPY alone with exponential backoff ---
-    // SPY is the scan gate. Finnhub can return c=0 (which fails the c>0 validity
-    // check) for the first 30s–2min after the bell, so retry SPY on its own with
-    // backoff before aborting. Function timeout is 300s, so ~46s is safe.
+    // --- SPY gate with exponential backoff ---
     const SPY_BACKOFF_MS = [0, 2000, 4000, 8000, 16000, 16000];
     let spyQuote: QuoteData | null = null;
     for (const delay of SPY_BACKOFF_MS) {
@@ -187,11 +519,11 @@ export async function GET(request: Request) {
     }
 
     if (!spyQuote) {
-      const budgetSec = Math.round(
-        SPY_BACKOFF_MS.reduce((a, b) => a + b, 0) / 1000
-      );
-      await sendHeartbeat(
-        `OPTIMA SCAN — could not load SPY quote after ${SPY_BACKOFF_MS.length} attempts over ~${budgetSec}s. Scan aborted.`
+      const budgetSec = Math.round(SPY_BACKOFF_MS.reduce((a, b) => a + b, 0) / 1000);
+      await notify(
+        `\u{1F6A8}\u{1F6A8} OPTIMA SCAN FAILURE ${stamp}\n` +
+          `SPY quote unavailable after ${SPY_BACKOFF_MS.length} attempts (~${budgetSec}s).\n` +
+          `Scan aborted — no symbols graded. Check Finnhub + Vercel logs.`
       );
       return NextResponse.json({
         success: false,
@@ -202,82 +534,22 @@ export async function GET(request: Request) {
 
     // VIX fetched separately and gracefully — UNKNOWN on failure, never blocks.
     const vixQuote = await fetchQuote("^VIX", baseUrl);
-
     const marketCondition = classifyMarketCondition(spyQuote);
     const vixLevel = vixQuote?.c ?? null;
     const vixRegime = vixLevel !== null ? classifyVixRegime(vixLevel) : "UNKNOWN";
 
-    // --- 2. Scan watchlist ---
-    const watchlist = await loadWatchlist();
-    const symbolsToScan = watchlist.filter((s) => s !== "SPY");
-    const results: ScanResult[] = [];
-
-    for (const sym of symbolsToScan) {
-      const quote = await fetchQuote(sym, baseUrl);
-      if (!quote) { console.warn("Skipping invalid quote:", sym); continue; }
-      results.push(analyzeSetup(sym, quote, marketCondition));
-    }
-
-    const sorted = sortScanResults(results);
-    const topResult = sorted[0];
-    const scannedCount = results.length;
-
-    // --- 3. Gate: score + direction ---
-    if (!topResult || (topResult.setupScore ?? 0) < MIN_SETUP_SCORE) {
-      const bestDesc = topResult
-        ? `Best: ${topResult.symbol} score ${topResult.setupScore ?? 0} (threshold ${MIN_SETUP_SCORE}).`
-        : "No symbols returned a setup.";
-      await sendHeartbeat(`OPTIMA SCAN — ${scannedCount} symbols. ${bestDesc} No alert.`);
-      return NextResponse.json({
-        success: true, route: ROUTE, skipped: true,
-        message: `No setup passed score threshold (${MIN_SETUP_SCORE}).`,
-        marketCondition, vixLevel, vixRegime,
-      });
-    }
-
-    const rawDirection = topResult.direction ?? topResult.tradeDirection;
-    if (rawDirection !== "CALL" && rawDirection !== "PUT") {
-      await sendHeartbeat(
-        `OPTIMA SCAN — ${scannedCount} symbols. Best: ${topResult.symbol} score ${topResult.setupScore ?? 0}, direction ${rawDirection ?? "unknown"}. Skipped.`
-      );
-      return NextResponse.json({
-        success: true, route: ROUTE, skipped: true,
-        message: `Top setup direction is ${rawDirection ?? "unknown"} — not CALL or PUT. Skipping pipeline.`,
-        symbol: topResult.symbol, marketCondition, vixLevel, vixRegime,
-      });
-    }
-
-    const symbol = topResult.symbol;
-    const direction = rawDirection; // narrowed to "CALL" | "PUT"
-
-    // --- 4. DEDUP — before any expensive API call ---
-    const { data: existingPreview } = await supabase
-      .from("paper_order_previews")
-      .select("id")
-      .eq("symbol", symbol)
-      .gte("created_at", startOfTodayISO)
-      .limit(1)
-      .maybeSingle();
-
-    if (existingPreview) {
-      await sendHeartbeat(`OPTIMA SCAN — ${symbol} already in approval queue today. Dedup blocked.`);
-      return NextResponse.json({
-        success: true, route: ROUTE, skipped: true, duplicatePrevented: true,
-        message: `Approval entry already exists for ${symbol} today. Dedup blocked duplicate.`,
-        symbol, marketCondition, vixLevel, vixRegime,
-      });
-    }
-
-    // --- 5. Auto-select best credit spread ---
-    // Guard on whichever token tradierClient will actually use for the active env —
-    // mirrors tradierClient.ts token selection so this check can never block a
-    // request that would otherwise succeed.
+    // --- Token guard (once, before any Tradier call) ---
     const tradierEnv = (process.env.TRADIER_ENV ?? "sandbox").toLowerCase();
     const tradierToken =
       tradierEnv === "production"
         ? process.env.TRADIER_PRODUCTION_TOKEN
         : process.env.TRADIER_ACCESS_TOKEN;
     if (!tradierToken) {
+      await notify(
+        `\u{1F6A8}\u{1F6A8} OPTIMA SCAN FAILURE ${stamp}\n` +
+          `Tradier ${tradierEnv} token not configured — cannot grade contracts.\n` +
+          `Check Vercel env. No symbols graded.`
+      );
       return NextResponse.json(
         {
           success: false,
@@ -291,280 +563,260 @@ export async function GET(request: Request) {
       );
     }
 
-    const expResult = await tradierRequest({
-      path: `/markets/options/expirations?symbol=${encodeURIComponent(symbol)}&includeAllRoots=true&strikes=false`,
-      method: "GET",
-    });
+    // --- Scan watchlist (setup score in memory) ---
+    const watchlist = await loadWatchlist();
+    const symbolsToScan = watchlist.filter((s) => s !== "SPY");
+    const results: ScanResult[] = [];
 
-    if (!expResult.ok) {
-      console.warn(`Tradier expirations failed for ${symbol}:`, expResult.status);
-      await sendHeartbeat(`OPTIMA SCAN — ${symbol} Tradier chain unavailable (${expResult.status}). Skipped.`);
-      return NextResponse.json({
-        success: true, route: ROUTE, skipped: true,
-        message: `Tradier expirations failed for ${symbol} (${expResult.status}). Skipping pipeline.`,
-        symbol, direction,
-      });
+    for (const sym of symbolsToScan) {
+      const quote = await fetchQuote(sym, baseUrl);
+      if (!quote) {
+        console.warn("Skipping invalid quote:", sym);
+        continue;
+      }
+      results.push(analyzeSetup(sym, quote, marketCondition));
     }
 
-    const allDates = parseExpirationDates(expResult.data);
-    const inWindow = allDates
-      .map((d) => ({ date: d, dte: getDte(d) }))
-      .filter(({ dte }) => dte >= MIN_DTE && dte <= MAX_DTE)
-      .sort((a, b) => Math.abs(a.dte - MIDPOINT_DTE) - Math.abs(b.dte - MIDPOINT_DTE));
+    const watchlistSize = symbolsToScan.length;
+    const scannedCount = results.length;
+    const quoteFailures = symbolsToScan.filter(
+      (s) => !results.some((r) => r.symbol === s)
+    );
+    const completedFully = quoteFailures.length === 0;
 
-    if (inWindow.length === 0) {
-      await sendHeartbeat(`OPTIMA SCAN — ${symbol} no expirations in ${MIN_DTE}–${MAX_DTE} DTE window. Skipped.`);
-      return NextResponse.json({
-        success: true, route: ROUTE, skipped: true,
-        message: `No expirations in ${MIN_DTE}–${MAX_DTE} DTE window for ${symbol}.`,
-        symbol, direction,
-      });
-    }
+    const sorted = sortScanResults(results);
+    const topN = sorted.slice(0, SCAN_EVAL_BREADTH_N);
 
-    const gradeParams = {
+    // --- TOP-N CONTRACT GRADING (the behavioral change) ---
+    // Contract-grade the top N ranked symbols — collect passes AND blocks with
+    // reasons. This only widens what we LOOK AT; queueing discipline is below.
+    const graded: GradedCandidate[] = [];
+    const gradeParams: GradeParams = {
       accountSize: ACCOUNT_SIZE,
       maxRiskPercent: MAX_RISK_PERCENT,
       maxSpreadPercent: MAX_SPREAD_PERCENT,
     };
-    const stockPrice =
-      topResult.price ?? topResult.entryPrice ?? topResult.entry_price ?? undefined;
-
-    let selectedSpread: ReturnType<typeof selectBestCreditSpread> | null = null;
-    let lastAutoSelectFail = "";
-
-    for (const { date: expiration } of inWindow.slice(0, 3)) {
-      const chainResult = await tradierRequest({
-        path: `/markets/options/chains?symbol=${encodeURIComponent(symbol)}&expiration=${encodeURIComponent(expiration)}&greeks=true`,
-        method: "GET",
-      });
-
-      if (!chainResult.ok) {
-        lastAutoSelectFail = `Chain fetch failed for ${expiration} (${chainResult.status}).`;
-        continue;
-      }
-
-      const rawOptions = getTradierOptionArray(chainResult.data);
-      if (rawOptions.length === 0) {
-        lastAutoSelectFail = `No contracts in chain for ${expiration}.`;
-        continue;
-      }
-
-      const result = selectBestCreditSpread(
-        rawOptions.map(normalizeTradierOption),
-        direction,
-        symbol,
-        { ...gradeParams, stockPrice }
-      );
-
-      if (result.success) { selectedSpread = result; break; }
-      lastAutoSelectFail = result.reason;
+    for (const result of topN) {
+      graded.push(await gradeSymbol(result, baseUrl, gradeParams));
     }
 
-    if (!selectedSpread?.success) {
-      console.warn(`Auto-select failed for ${symbol}:`, lastAutoSelectFail);
-      await sendHeartbeat(`OPTIMA SCAN — ${symbol} no suitable spread: ${lastAutoSelectFail} Skipped.`);
-      return NextResponse.json({
-        success: true, route: ROUTE, skipped: true,
-        message: `Auto-select found no suitable spread for ${symbol}: ${lastAutoSelectFail}`,
-        symbol, direction,
-      });
-    }
+    const passers = graded.filter((g) => g.status === "PASSED");
 
-    const spread = selectedSpread.spread;
+    // --- QUEUE AT MOST DAILY_TRADE_CAP (execution discipline unchanged) ---
+    // Iterate passers in rank order; queue the first that clears dedup +
+    // enforcement, then STOP. The cap guard + break guarantee <= DAILY_TRADE_CAP
+    // queued even when several candidates pass grading.
+    let queuedCount = 0;
+    let queuedSymbol: string | null = null;
+    let queuedDirection: "CALL" | "PUT" | null = null;
+    let queuedPreviewId: string | null = null;
+    let queuedGrade: string | null = null;
+    let queuedNetCredit: number | null = null;
+    let queuedMaxLoss: number | null = null;
+    let queuedSpreadType: string | null = null;
+    let dbInsertError: string | null = null;
+    const heldNotes: string[] = [];
 
-    // --- 6. Fetch daily gate data ---
-    const { data: todayTradesData } = await supabase
-      .from("paper_trades")
-      .select("id")
-      .gte("created_at", startOfTodayISO);
-    const tradeCount = todayTradesData?.length ?? 0;
-
-    const { data: closedToday } = await supabase
-      .from("paper_trades")
-      .select("id")
-      .eq("status", "closed")
-      .gte("closed_at", startOfTodayISO);
-    const closedTodayIds = closedToday?.map((r) => r.id) ?? [];
-
-    let lossCount = 0;
-    let totalDailyPnl = 0;
-    if (closedTodayIds.length > 0) {
-      const { data: lossRows } = await supabase
-        .from("option_trade_details")
+    if (passers.length > 0) {
+      // Daily gate data — fetched once, shared across queue attempts.
+      const { data: todayTradesData } = await supabase
+        .from("paper_trades")
         .select("id")
-        .in("paper_trade_id", closedTodayIds)
-        .lt("option_pnl", 0);
-      lossCount = lossRows?.length ?? 0;
+        .gte("created_at", startOfTodayISO);
+      const tradeCount = todayTradesData?.length ?? 0;
 
-      const { data: pnlRows } = await supabase
-        .from("option_trade_details")
-        .select("option_pnl")
-        .in("paper_trade_id", closedTodayIds)
-        .not("option_pnl", "is", null);
-      totalDailyPnl = (pnlRows ?? []).reduce(
-        (acc: number, r: { option_pnl: number }) => acc + r.option_pnl,
-        0
+      const { data: closedToday } = await supabase
+        .from("paper_trades")
+        .select("id")
+        .eq("status", "closed")
+        .gte("closed_at", startOfTodayISO);
+      const closedTodayIds = closedToday?.map((r) => r.id) ?? [];
+
+      let lossCount = 0;
+      let totalDailyPnl = 0;
+      if (closedTodayIds.length > 0) {
+        const { data: lossRows } = await supabase
+          .from("option_trade_details")
+          .select("id")
+          .in("paper_trade_id", closedTodayIds)
+          .lt("option_pnl", 0);
+        lossCount = lossRows?.length ?? 0;
+
+        const { data: pnlRows } = await supabase
+          .from("option_trade_details")
+          .select("option_pnl")
+          .in("paper_trade_id", closedTodayIds)
+          .not("option_pnl", "is", null);
+        totalDailyPnl = (pnlRows ?? []).reduce(
+          (acc: number, r: { option_pnl: number }) => acc + r.option_pnl,
+          0
+        );
+      }
+
+      const topResultBySymbol = new Map(results.map((r) => [r.symbol, r]));
+
+      for (const cand of passers) {
+        if (queuedCount >= DAILY_TRADE_CAP) break; // hard cap — never exceed
+        if (!cand.spreadContract || !cand.direction) continue;
+
+        // Per-symbol dedup.
+        const { data: existingPreview } = await supabase
+          .from("paper_order_previews")
+          .select("id")
+          .eq("symbol", cand.symbol)
+          .gte("created_at", startOfTodayISO)
+          .limit(1)
+          .maybeSingle();
+        if (existingPreview) {
+          cand.queueNote = "already queued today (dedup)";
+          heldNotes.push(`${cand.symbol}(dedup)`);
+          continue;
+        }
+
+        // Enforcement — identical 7-check gate as before.
+        const enforcement = runServerSideEnforcementChecks(cand.spreadContract, {
+          tradeCount,
+          lossCount,
+          totalDailyPnl,
+        });
+        if (!enforcement.passed) {
+          cand.queueNote = enforcement.reason ?? "enforcement blocked";
+          heldNotes.push(`${cand.symbol}(${shortBlockReason(enforcement.reason ?? "")})`);
+          continue;
+        }
+
+        const topEntry = topResultBySymbol.get(cand.symbol) ?? ({ symbol: cand.symbol } as ScanResult);
+        const inserted = await queuePreview(cand, topEntry, baseUrl);
+        if (!inserted.ok) {
+          cand.queueNote = `DB error: ${inserted.error}`;
+          heldNotes.push(`${cand.symbol}(db error)`);
+          dbInsertError = inserted.error;
+          continue;
+        }
+
+        queuedCount += 1;
+        queuedSymbol = cand.symbol;
+        queuedDirection = cand.direction;
+        queuedPreviewId = inserted.previewId;
+        queuedGrade = cand.grade;
+        queuedNetCredit = inserted.netCredit;
+        queuedMaxLoss = inserted.maxLoss;
+        queuedSpreadType = inserted.spreadType;
+        cand.queued = true;
+        break; // <= DAILY_TRADE_CAP guaranteed
+      }
+    }
+
+    // --- PERSIST: one run row + one row per graded candidate (non-fatal) ---
+    const blockedCandidates = graded.filter((g) => g.status === "BLOCKED");
+    const blockedReasonHist: Record<string, number> = {};
+    for (const g of blockedCandidates) {
+      const tag = shortBlockReason(g.reason);
+      blockedReasonHist[tag] = (blockedReasonHist[tag] ?? 0) + 1;
+    }
+
+    const runRecord: ScanRunRecord = {
+      run_at: now.toISOString(),
+      watchlist_size: watchlistSize,
+      symbols_scanned: scannedCount,
+      symbols_graded: graded.length,
+      candidates_passed: passers.length,
+      candidates_blocked: blockedCandidates.length,
+      blocked_reasons: blockedReasonHist,
+      completed_fully: completedFully,
+      market_condition: marketCondition,
+      vix_regime: vixRegime,
+    };
+
+    const candidateRecords: ScanCandidateRecord[] = graded.map((g) => ({
+      symbol: g.symbol,
+      setup_score: g.setupScore,
+      direction: g.direction,
+      expiration: g.expiration,
+      short_strike: g.shortStrike,
+      short_delta: g.shortDelta,
+      open_interest: g.openInterest,
+      bid: g.bid,
+      ask: g.ask,
+      grade: g.grade,
+      status: g.status,
+      queued: g.queued,
+      block_reason: g.status === "BLOCKED" ? g.reason : g.queueNote,
+    }));
+
+    await persistScanRun(runRecord, candidateRecords);
+
+    // --- NOTIFY: exactly one status message (RUN SUMMARY or FAILURE) ---
+    // Healthy run -> ✅ RUN SUMMARY. Real breakage -> 🚨 FAILURE (visibly distinct).
+    // ACTIONABLE was already sent by queuePreview when a trade was queued.
+    const isFailure = !completedFully || !!dbInsertError;
+
+    if (isFailure) {
+      const lines = [`\u{1F6A8}\u{1F6A8} OPTIMA SCAN FAILURE ${stamp}`];
+      if (!completedFully) {
+        lines.push(
+          `Scanned ${scannedCount}/${watchlistSize} — ${quoteFailures.length} symbol${
+            quoteFailures.length === 1 ? "" : "s"
+          } had no quote: ${quoteFailures.join(", ")}`
+        );
+        lines.push("Run degraded — missing names not graded/persisted.");
+      }
+      if (dbInsertError) {
+        lines.push(`Approval-queue DB write failed: ${dbInsertError}`);
+      }
+      if (queuedSymbol) {
+        lines.push(
+          `(A trade DID queue: ${queuedSymbol} ${queuedDirection} — see approval alert.)`
+        );
+      }
+      lines.push("Check Finnhub + Vercel logs.");
+      await notify(lines.join("\n"));
+    } else {
+      const lines = [`OPTIMA SCAN ✅ ${stamp}`];
+      lines.push(
+        `Scanned ${scannedCount}/${watchlistSize} · graded top ${graded.length} · ${queuedCount} queued · ${blockedCandidates.length} blocked`
       );
+      if (queuedSymbol) {
+        lines.push(
+          `Queued: ${queuedSymbol} ${queuedDirection} ${queuedSpreadType ?? "credit spread"} (grade ${
+            queuedGrade ?? "N/A"
+          }, cr $${fmtNum(queuedNetCredit)} / maxloss $${fmtNum(queuedMaxLoss)})`
+        );
+      }
+      if (blockedCandidates.length > 0) {
+        lines.push(
+          `Blocked: ${blockedCandidates
+            .map((g) => `${g.symbol}(${shortBlockReason(g.reason)})`)
+            .join(" · ")}`
+        );
+      }
+      if (heldNotes.length > 0) {
+        lines.push(`Held: ${heldNotes.join(" · ")}`);
+      }
+      if (queuedCount === 0) {
+        lines.push("Clean skip — nothing tradeable today.");
+      }
+      await notify(lines.join("\n"));
     }
-
-    // --- 7. Enforcement checks ---
-    const enforcement = runServerSideEnforcementChecks(spread, {
-      tradeCount,
-      lossCount,
-      totalDailyPnl,
-    });
-
-    if (!enforcement.passed) {
-      console.warn(`Enforcement blocked ${symbol}:`, enforcement.reason);
-      await sendHeartbeat(`OPTIMA SCAN — ${symbol} BLOCKED: ${enforcement.reason}`);
-      return NextResponse.json({
-        success: true, route: ROUTE, skipped: true,
-        message: `Enforcement blocked ${symbol}: ${enforcement.reason}`,
-        symbol, direction, marketCondition, vixLevel, vixRegime,
-      });
-    }
-
-    // --- 8. INSERT paper_order_previews ---
-    const spreadSymbol = String(
-      spread.stock_symbol ?? spread.stockSymbol ?? symbol
-    );
-    const contractSymbol = String(
-      spread.option_symbol ?? spread.optionSymbol ?? spread.symbol ?? ""
-    );
-    const spreadExpiration = spread.expiration_date ?? spread.expirationDate ?? null;
-    const spreadOptionType = spread.trade_direction ?? spread.tradeDirection ?? direction;
-    const spreadBid = spread.bid ?? spread.bid_price ?? null;
-    const spreadAsk = spread.ask ?? spread.ask_price ?? null;
-    const spreadNetCredit = spread.net_credit ?? spread.mid ?? null;
-    const spreadMaxLoss = spread.max_loss ?? spread.max_risk ?? null;
-    const spreadGrade =
-      spread.contract_quality ??
-      spread.qualityGrade ??
-      spread.contractQualityGrade ??
-      spread.grade ??
-      null;
-
-    const { data: previewRow, error: previewError } = await supabase
-      .from("paper_order_previews")
-      .insert({
-        source_alert_id: null,
-        approval_decision_id: null,
-        phone_alert_event_id: null,
-
-        symbol: spreadSymbol,
-        trade_lane: "OPTIONS_DAY_TRADE",
-        setup_name: `${symbol} ${direction} credit spread — AUTO_SCAN_CRON`,
-
-        contract_symbol: contractSymbol || null,
-        strike: spread.strike_price ?? spread.strikePrice ?? null,
-        expiration: spreadExpiration,
-        option_type: spreadOptionType,
-
-        bid: spreadBid,
-        ask: spreadAsk,
-        mid: spreadNetCredit,
-        estimated_limit_price: spreadNetCredit,
-        quantity: 1,
-        estimated_order_cost:
-          spreadNetCredit !== null ? spreadNetCredit * 100 : null,
-        max_risk_dollars: spreadMaxLoss,
-
-        contract_quality: spreadGrade,
-        risk_guard_status: "APPROVED",
-        risk_guard_reason: "Auto-scan cron enforcement passed all 7 checks.",
-
-        entry_price: topResult.entryPrice ?? topResult.entry_price ?? null,
-        stop_loss: topResult.stopLoss ?? topResult.stop_loss ?? null,
-        take_profit: topResult.takeProfit ?? topResult.take_profit ?? null,
-
-        spread_type: spread.spread_type ?? null,
-        short_leg_option_symbol: spread.short_leg?.option_symbol ?? null,
-        short_leg_strike_price: spread.short_leg?.strike_price ?? null,
-        long_leg_option_symbol: spread.long_leg?.option_symbol ?? null,
-        long_leg_strike_price: spread.long_leg?.strike_price ?? null,
-        net_credit: spreadNetCredit,
-        spread_width: spread.spread_width ?? null,
-        max_loss: spreadMaxLoss,
-        max_profit: spread.max_profit ?? null,
-
-        preview_status: "PREVIEW_ONLY",
-        broker: "TRADIER_SANDBOX",
-        order_side: "BUY_TO_OPEN",
-        order_type: "LIMIT",
-        time_in_force: "DAY",
-
-        // Safety locks — always hardcoded false. This route never unlocks execution.
-        sandbox_preview_validation_status: "PASSED",
-        sandbox_preview_human_review_decision: "WATCH",
-        approved_for_sandbox_order: false,
-        approved_for_live_order: false,
-        submitted_to_broker: false,
-        broker_order_id: null,
-        broker_response: null,
-
-        safety_notes:
-          "Source: AUTO_SCAN_CRON. Preview only. No Tradier sandbox order submitted. No live order submitted.",
-      })
-      .select("id")
-      .single();
-
-    if (previewError || !previewRow) {
-      console.error("Failed to insert paper_order_previews:", previewError);
-      await sendHeartbeat(`OPTIMA SCAN — DB error for ${symbol}: ${previewError?.message ?? "unknown error"}.`);
-      return NextResponse.json(
-        {
-          success: false,
-          route: ROUTE,
-          message: `Failed to create approval queue entry for ${symbol}: ${previewError?.message ?? "unknown error"}`,
-        },
-        { status: 500 }
-      );
-    }
-
-    // --- 9. Heartbeat: pipeline complete ---
-    await sendHeartbeat(
-      `OPTIMA SCAN — ${symbol} ${direction} ${spread.spread_type ?? "credit spread"} queued for approval.\n` +
-      `Grade: ${spreadGrade ?? "N/A"} | Net credit: $${spreadNetCredit != null ? spreadNetCredit.toFixed(2) : "N/A"} | Max loss: $${spreadMaxLoss != null ? spreadMaxLoss.toFixed(2) : "N/A"}\n` +
-      `Approval alert with link is sending now separately.`
-    );
-
-    // --- POST phone-review — triggers token generation and Telegram approval alert ---
-    const phoneReviewRes = await fetch(`${baseUrl}/api/alerts/phone-review`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ previewId: previewRow.id }),
-    });
-    const phoneReviewResult = await phoneReviewRes.json().catch(() => null);
-
-    // --- 10. Insert scanner_auto_alerts dedup row ---
-    // Suppresses the old FYI SMS path if it is ever re-enabled.
-    await supabase.from("scanner_auto_alerts").insert({
-      symbol,
-      direction,
-      alerted_at: new Date().toISOString(),
-    }).then(({ error }) => {
-      if (error) console.warn("scanner_auto_alerts dedup insert failed (non-fatal):", error.message);
-    });
 
     return NextResponse.json({
       success: true,
       route: ROUTE,
       pipelineComplete: true,
-      message: `Auto-pipeline complete for ${symbol} ${direction}. Approval entry created and phone review SMS dispatched.`,
-      symbol,
-      direction,
-      previewId: previewRow.id,
+      completedFully,
+      watchlistSize,
+      scannedCount,
+      gradedCount: graded.length,
+      passedCount: passers.length,
+      blockedCount: blockedCandidates.length,
+      queuedCount,
+      queuedSymbol,
+      queuedDirection,
+      previewId: queuedPreviewId,
       marketCondition,
       vixLevel,
       vixRegime,
-      setupScore: topResult.setupScore,
-      spread: {
-        spreadType: spread.spread_type,
-        netCredit: spreadNetCredit,
-        maxLoss: spreadMaxLoss,
-        grade: spreadGrade,
-      },
-      phoneReview: phoneReviewResult,
+      blockedReasons: blockedReasonHist,
     });
   } catch (error) {
     const message =
@@ -572,10 +824,11 @@ export async function GET(request: Request) {
         ? error.message
         : "Unexpected server error during market-open scan.";
     console.error("Market open scan route error:", error);
-    await sendHeartbeat(`OPTIMA SCAN — Unexpected error: ${message}`);
-    return NextResponse.json(
-      { success: false, route: ROUTE, message },
-      { status: 500 }
+    await notify(
+      `\u{1F6A8}\u{1F6A8} OPTIMA SCAN FAILURE ${stamp}\n` +
+        `Unexpected error: ${message}\n` +
+        `Check Vercel logs.`
     );
+    return NextResponse.json({ success: false, route: ROUTE, message }, { status: 500 });
   }
 }
