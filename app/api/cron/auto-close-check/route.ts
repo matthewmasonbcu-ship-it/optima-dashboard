@@ -155,6 +155,55 @@ function isMarketHoursNowInNewYork(now: Date): boolean {
   );
 }
 
+function getNewYorkUtcOffsetHours(date: Date): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    timeZoneName: "short",
+  }).formatToParts(date);
+  const tzName = parts.find((p) => p.type === "timeZoneName")?.value;
+  return tzName === "EDT" ? 4 : 5;
+}
+
+function getStartOfTodayNewYorkISO(now: Date): string {
+  const nyDateStr = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+  }).format(now);
+  const offset = String(getNewYorkUtcOffsetHours(now)).padStart(2, "0");
+  return new Date(`${nyDateStr}T00:00:00.000-${offset}:00`).toISOString();
+}
+
+function formatEtStamp(now: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const m: Record<string, string> = {};
+  for (const p of parts) m[p.type] = p.value;
+  return `${m.year}-${m.month}-${m.day} ${m.hour}:${m.minute} ET`;
+}
+
+// True only for the final in-market-hours run of the day on the */30 schedule
+// (the ~16:00 ET tick). Used to fire exactly ONE end-of-day digest instead of a
+// Telegram on every 30-min run.
+function isFinalMarketRunNewYork(now: Date): boolean {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false,
+  }).formatToParts(now);
+  const m: Record<string, string> = {};
+  for (const p of parts) m[p.type] = p.value;
+  const nowMinutes = Number(m.hour) * 60 + Number(m.minute);
+  const marketCloseMinutes = 16 * 60;
+  return nowMinutes > marketCloseMinutes - 30 && nowMinutes <= marketCloseMinutes;
+}
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   const expected = `Bearer ${process.env.CRON_SECRET ?? ""}`;
@@ -187,6 +236,10 @@ export async function GET(request: Request) {
 
     if (error) {
       console.error("Auto-close check query failed:", error);
+      await sendHeartbeat(
+        `\u{1F6A8}\u{1F6A8} OPTIMA AUTO-CLOSE FAILURE ${formatEtStamp(now)}\n` +
+          `Open-position query failed: ${error.message}\nCheck Supabase + Vercel logs.`
+      );
       return NextResponse.json(
         { success: false, route: ROUTE, message: error.message },
         { status: 500 }
@@ -341,6 +394,46 @@ export async function GET(request: Request) {
       );
     }
 
+    // --- End-of-day digest (once daily, on the final market-hours run) ---
+    // Kills the "ran vs never-ran" blindness without spamming a Telegram on every
+    // 30-min run. Immediate per-close alerts are sent above; this is the wrap-up.
+    if (isFinalMarketRunNewYork(now)) {
+      const startOfTodayISO = getStartOfTodayNewYorkISO(now);
+
+      const { data: closedTodayPT } = await supabase
+        .from("paper_trades")
+        .select("id")
+        .gte("closed_at", startOfTodayISO);
+      const closedIds = (closedTodayPT ?? []).map((r) => r.id);
+      const closedToday = closedIds.length;
+
+      let tp = 0;
+      let sl = 0;
+      let dte = 0;
+      if (closedIds.length > 0) {
+        const { data: legs } = await supabase
+          .from("option_trade_details")
+          .select("net_credit, exit_option_price")
+          .in("paper_trade_id", closedIds)
+          .eq("option_status", "closed");
+        // Recompute the close reason from exit vs credit — mirrors this cron's own
+        // TP/SL precedence exactly. The remainder bucket = DTE (or a non-threshold
+        // manual close).
+        for (const leg of legs ?? []) {
+          const credit = toNumber(leg.net_credit, 0);
+          const exit = toNumber(leg.exit_option_price, 0);
+          if (credit > 0 && exit <= TAKE_PROFIT_FACTOR * credit) tp++;
+          else if (credit > 0 && exit >= STOP_LOSS_FACTOR * credit) sl++;
+          else dte++;
+        }
+      }
+
+      await sendHeartbeat(
+        `OPTIMA AUTO-CLOSE ✅ ${formatEtStamp(now)} — checked ${openTrades.length} open, ` +
+          `closed ${closedToday} today (TP ${tp} / SL ${sl} / DTE ${dte})`
+      );
+    }
+
     return NextResponse.json({
       success: true,
       route: ROUTE,
@@ -355,6 +448,11 @@ export async function GET(request: Request) {
         : "Unexpected server error during auto-close check.";
 
     console.error("Auto-close check route error:", error);
+
+    await sendHeartbeat(
+      `\u{1F6A8}\u{1F6A8} OPTIMA AUTO-CLOSE FAILURE ${formatEtStamp(now)}\n` +
+        `${errorMessage}\nCheck Vercel logs.`
+    );
 
     return NextResponse.json(
       { success: false, route: ROUTE, message: errorMessage },
