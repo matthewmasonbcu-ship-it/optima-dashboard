@@ -30,12 +30,22 @@ function getOptionArray(data: unknown): TradierOption[] {
   return Array.isArray(raw) ? raw : [raw];
 }
 
-function getMid(option: TradierOption | undefined): number | null {
+// Mid from a REAL two-sided quote only — no stale `last` / zero fallback. A
+// missing quote returns null so the caller REFUSES the close. A manual close
+// cannot silently skip like the cron (commit b0d2633); it must fail loudly and
+// never book a fabricated price.
+//   "strict"  (short / single leg): require bid>0 AND ask>0.
+//   "lenient" (long leg): ask>0 is enough — deep-OTM longs legitimately bid=0.
+function getMid(
+  option: TradierOption | undefined,
+  mode: "strict" | "lenient" = "strict"
+): number | null {
   if (!option) return null;
   const bid = toNumber(option.bid, 0);
   const ask = toNumber(option.ask, 0);
   if (bid > 0 && ask > 0) return (bid + ask) / 2;
-  return toNumber(option.last, 0);
+  if (mode === "lenient" && ask > 0) return (bid + ask) / 2;
+  return null;
 }
 
 export async function POST(request: Request) {
@@ -156,35 +166,57 @@ export async function POST(request: Request) {
 
       if (isSpread) {
         const shortMid = getMid(
-          chain.find((o) => o.symbol === detail.short_leg_option_symbol)
+          chain.find((o) => o.symbol === detail.short_leg_option_symbol),
+          "strict"
         );
         const longMid = getMid(
-          chain.find((o) => o.symbol === detail.long_leg_option_symbol)
+          chain.find((o) => o.symbol === detail.long_leg_option_symbol),
+          "lenient"
         );
         if (shortMid === null || longMid === null) {
+          const badLeg = shortMid === null ? "short" : "long";
           return NextResponse.json(
             {
               success: false,
               route: ROUTE,
-              error: "Could not read both legs from the live chain. Enter a price manually.",
+              error: `Cannot close — no reliable live quote for the ${badLeg} leg. Try again in a moment, or close manually in your broker.`,
             },
             { status: 422 }
           );
         }
         current = shortMid - longMid;
       } else {
-        const optionMid = getMid(chain.find((o) => o.symbol === detail.option_symbol));
+        const optionMid = getMid(
+          chain.find((o) => o.symbol === detail.option_symbol),
+          "strict"
+        );
         if (optionMid === null) {
           return NextResponse.json(
             {
               success: false,
               route: ROUTE,
-              error: "Could not read the option from the live chain. Enter a price manually.",
+              error: "Cannot close — no reliable live quote for this option. Try again in a moment, or close manually in your broker.",
             },
             { status: 422 }
           );
         }
         current = optionMid;
+      }
+
+      // Live data integrity: a non-positive spread/option value means a crossed
+      // or incomplete quote, not a real exit. Refuse rather than book a
+      // fabricated max-profit close. The manual-price path is exempt — a user
+      // may legitimately close a worthless spread at $0.
+      if (current !== null && current <= 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            route: ROUTE,
+            error:
+              "Cannot close — live quote looks broken (non-positive value). Try again in a moment, or close manually in your broker.",
+          },
+          { status: 422 }
+        );
       }
     }
 
