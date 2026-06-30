@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
-import { sendPhoneAlertSms } from "@/lib/sms/sendPhoneAlertSms";
-import { sendPhoneAlertEmailSms } from "@/lib/sms/sendPhoneAlertEmailSms";
+import { sendTelegramAlert } from "@/lib/notify/sendTelegramAlert";
 
 const ROUTE = "/api/cron/daily-summary";
 
-const SUMMARY_TIME_NY = { hour: 16, minute: 0 };
-const SUMMARY_TIME_TOLERANCE_MINUTES = 2;
+// Summary fires once daily at 20:00 UTC = 4:00 PM ET (EDT). Accept any weekday
+// fire from 4:00–5:00 PM ET so Vercel cron jitter (can exceed 30 min) doesn't
+// self-skip the run. There is only ONE daily-summary entry in vercel.json, so a
+// wider window CANNOT double-fire — exactly one summary per weekday.
+// (Winter/EST note: 20:00 UTC = 3:00 PM EST, before this window, so the summary
+//  would skip in winter; fixing that needs a 21:00 UTC slot in vercel.json —
+//  out of scope here, flagged separately.)
+const SUMMARY_WINDOW_START_MINUTES = 16 * 60; // 4:00 PM ET
+const SUMMARY_WINDOW_END_MINUTES = 17 * 60; // 5:00 PM ET
 
 type OptionTradeDetail = {
   option_pnl?: number | null;
@@ -98,11 +104,11 @@ function isSummaryTimeNowInNewYork(now: Date): boolean {
 
   const isWeekday = weekday !== "Sat" && weekday !== "Sun";
   const nowMinutes = hour * 60 + minute;
-  const targetMinutes = SUMMARY_TIME_NY.hour * 60 + SUMMARY_TIME_NY.minute;
 
   return (
     isWeekday &&
-    Math.abs(nowMinutes - targetMinutes) <= SUMMARY_TIME_TOLERANCE_MINUTES
+    nowMinutes >= SUMMARY_WINDOW_START_MINUTES &&
+    nowMinutes <= SUMMARY_WINDOW_END_MINUTES
   );
 }
 
@@ -124,7 +130,7 @@ export async function GET(request: Request) {
       success: true,
       route: ROUTE,
       skipped: true,
-      message: "Not the 4:00 PM Eastern summary window. Skipping.",
+      message: "Outside the daily summary window (4:00–5:00 PM ET, weekdays). Skipping.",
     });
   }
 
@@ -193,18 +199,16 @@ export async function GET(request: Request) {
       message = lines.join("\n");
     }
 
-    const smsResult = await sendPhoneAlertSms(message);
-    const emailSmsResult = smsResult.success
-      ? null
-      : await sendPhoneAlertEmailSms(message);
+    // Telegram is the active alert channel (matches the scan and auto-close crons).
+    const telegramResult = await sendTelegramAlert(message);
 
     return NextResponse.json({
       success: true,
       route: ROUTE,
       message,
       delivery: {
-        smsSent: smsResult.success,
-        emailSmsSent: emailSmsResult?.success ?? false,
+        channel: "TELEGRAM",
+        telegramSent: telegramResult.success,
       },
     });
   } catch (error) {
