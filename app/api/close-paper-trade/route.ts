@@ -10,6 +10,9 @@ type ClosePaperTradeBody = {
   exitPrice?: number;
 };
 
+// DEPRECATED / orphaned (no callers): stock-only close that writes paper_trades
+// only. Neutered below — refuses any trade with an open option leg so it can
+// never orphan option_trade_details. Options must close via /api/close-option-trade.
 export async function POST(request: Request) {
   try {
     if (!supabaseUrl || !supabaseAnonKey) {
@@ -30,6 +33,25 @@ export async function POST(request: Request) {
     }
 
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+    // Refuse option trades — a stock-only close here would orphan the option leg.
+    const { data: openLeg } = await supabase
+      .from("option_trade_details")
+      .select("id")
+      .eq("paper_trade_id", id)
+      .is("option_pnl", null)
+      .limit(1)
+      .maybeSingle();
+    if (openLeg) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Trade has an open option leg. Close via /api/close-option-trade so both tables stay in sync.",
+        },
+        { status: 409 }
+      );
+    }
 
     const { data, error } = await supabase
       .from("paper_trades")
