@@ -120,6 +120,20 @@ HTTP-self-fetches `/api/quote` (`lib/scanner.ts:67`). Extract the Finnhub logic
 into a shared lib the cron calls directly — removes the last self-fetch
 dependency for quotes.
 
+### [ ] N6. Database RLS-off / public-anon-key posture (known item; multi-user only)
+The whole app runs on the **public anon key** (`lib/supabaseClient.ts`) and every
+table is **RLS-off** — no migration defines any policy/grant. Fine for a
+single-user personal system (the anon key is already shipped to the browser), but
+it means any table created with RLS *enabled* and no policy silently breaks all
+anon writes (Postgres `42501`, swallowed by non-fatal catches). This exact thing
+hid `scan_runs`/`scan_candidates` writes for the scan-observability feature; fixed
+by `supabase_migrations_scan_tables_disable_rls.sql` (disable RLS to match the
+rest of the schema).
+- **If this ever goes multi-user:** this posture is a hard blocker — flip to
+  proper RLS policies on *every* table and move server/cron writes to a
+  service-role key (kept server-side, never `NEXT_PUBLIC_*`). Until then, any new
+  table must be created **RLS-off** to match, or its anon writes will fail silently.
+
 ### [ ] N5. Minor brittleness
 - `APP_BASE_URL` (`phone-review/route.ts:7-8`) hard-codes
   `optima-dashboard-azm9.vercel.app` as fallback — correct today, brittle if the
