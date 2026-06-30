@@ -286,6 +286,14 @@ export default function PaperTradeTracker() {
 
   // ─── Trade close logic — untouched ───────────────────────────────────────
   async function closeStockTrade(trade: PaperTrade, result: "win" | "loss" | "be") {
+    // Never stock-close an option trade — it would close paper_trades but leave
+    // option_trade_details orphaned (open). Route through the option-aware close,
+    // which writes BOTH tables + closed_at and respects the phantom-quote guard.
+    if (getOptionDetailForTrade(trade.id)) {
+      await closeOptionTrade(trade);
+      return;
+    }
+
     const entry = Number(trade.entry_price || 0);
     const stopLoss = Number(trade.stop_loss || 0);
     const takeProfit = Number(trade.take_profit || 0);

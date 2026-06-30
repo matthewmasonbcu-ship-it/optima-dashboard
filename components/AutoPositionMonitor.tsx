@@ -154,6 +154,14 @@ export default function AutoPositionMonitor({
   }
 
   async function closeTradeAtPrice(trade: PaperTrade, exitPrice: number) {
+    // Never stock-close an option trade — it would close paper_trades but leave
+    // option_trade_details orphaned (open). Route through the option-aware close,
+    // which writes BOTH tables + closed_at and respects the phantom-quote guard.
+    if (optionTradeIds.has(trade.id)) {
+      await closeOptionLive(trade);
+      return;
+    }
+
     if (!trade.id) {
       addEvent("Could not close trade because trade ID is missing.", "error");
       return;
