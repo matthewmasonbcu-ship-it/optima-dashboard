@@ -74,12 +74,23 @@ function getOptionArray(data: any): TradierOption[] {
   return Array.isArray(rawOptions) ? rawOptions : [rawOptions];
 }
 
-function getMid(option: TradierOption | undefined): number | null {
+// Mid from a REAL two-sided quote only. No stale `last` / zero fallback — a
+// missing quote must surface as null so the close loop SKIPS the position rather
+// than acting on a fabricated price (which previously booked phantom TP/SL).
+//   "strict"  (short leg / single leg): require bid>0 AND ask>0. A dead short
+//             quote collapsing to 0 is exactly what fabricates fake take-profits.
+//   "lenient" (long leg): ask>0 is enough — deep-OTM long legs legitimately have
+//             bid=0; mid=(bid+ask)/2 still values them sanely. null only if ask<=0.
+function getMid(
+  option: TradierOption | undefined,
+  mode: "strict" | "lenient" = "strict"
+): number | null {
   if (!option) return null;
   const bid = toNumber(option.bid, 0);
   const ask = toNumber(option.ask, 0);
   if (bid > 0 && ask > 0) return (bid + ask) / 2;
-  return toNumber(option.last, 0);
+  if (mode === "lenient" && ask > 0) return (bid + ask) / 2;
+  return null;
 }
 
 async function fetchChain(
@@ -219,8 +230,8 @@ export async function GET(request: Request) {
           (o) => o.symbol === trade.long_leg_option_symbol
         );
 
-        const shortMid = getMid(shortOption);
-        const longMid = getMid(longOption);
+        const shortMid = getMid(shortOption, "strict");
+        const longMid = getMid(longOption, "lenient");
 
         if (shortMid !== null && longMid !== null) {
           current = shortMid - longMid;
@@ -229,11 +240,14 @@ export async function GET(request: Request) {
         entry = trade.net_credit;
       } else {
         const option = chain.find((o) => o.symbol === trade.option_symbol);
-        current = getMid(option);
+        current = getMid(option, "strict");
         entry = trade.mid_price;
       }
 
-      if (entry === null || current === null || entry <= 0) continue;
+      // Skip on any incomplete/fabricated price. current <= 0 means a leg quote
+      // is broken (non-positive spread value is impossible for a live credit
+      // spread) — never close on it, or we book a phantom max-profit win.
+      if (entry === null || current === null || entry <= 0 || current <= 0) continue;
 
       const takeProfitTriggered = current <= TAKE_PROFIT_FACTOR * entry;
       const stopLossTriggered = current >= STOP_LOSS_FACTOR * entry;
