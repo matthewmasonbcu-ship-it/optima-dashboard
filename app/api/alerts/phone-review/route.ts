@@ -198,7 +198,7 @@ async function savePhoneReviewToken({
   paperOrderPreviewId: string;
   tokenHash: string;
   expiresAt: string;
-}) {
+}): Promise<{ ok: true } | { ok: false; error: string }> {
   const { error } = await supabase.from("phone_review_tokens").insert({
     phone_alert_event_id: phoneAlertEventId,
     paper_order_preview_id: paperOrderPreviewId,
@@ -208,7 +208,9 @@ async function savePhoneReviewToken({
 
   if (error) {
     console.error("Failed to save phone review token:", error);
+    return { ok: false, error: error.message };
   }
+  return { ok: true };
 }
 
 async function linkExistingPhoneAlertToPreview({
@@ -517,12 +519,24 @@ export async function POST(request: Request) {
       return blockedResponse("Phone alert event was not created.", 500);
     }
 
-    await savePhoneReviewToken({
+    const tokenSave = await savePhoneReviewToken({
       phoneAlertEventId: phoneAlertEvent.id,
       paperOrderPreviewId: preview.id,
       tokenHash,
       expiresAt,
     });
+
+    // The approval LINK was already sent above. If the token didn't persist, that
+    // link is DEAD (/respond can't validate it) — fire a loud alert so approvals
+    // can't silently break. This is the failure that hid for weeks behind a
+    // swallowed insert error (phone_review_tokens RLS).
+    if (!tokenSave.ok) {
+      await sendTelegramAlert(
+        `\u{1F6A8}\u{1F6A8} OPTIMA APPROVAL LINK BROKEN — ${preview.symbol ?? "preview"}\n` +
+          `Token save failed: ${tokenSave.error}. The review link just sent will NOT work — ` +
+          `approve in the dashboard instead. (phone_review_tokens write rejected.)`
+      ).catch(() => {});
+    }
 
     const updatedPreview = await linkExistingPhoneAlertToPreview({
       preview,
@@ -542,6 +556,7 @@ export async function POST(request: Request) {
         phoneAlertEvent,
         previewId: preview.id,
         preview: updatedPreview,
+        tokenSaved: tokenSave.ok,
         safetyLocks: SAFETY_LOCKS,
         brokerCall: BROKER_CALL_LOCKS,
         delivery: buildDeliveryStatus(telegramResult, emailResult),
