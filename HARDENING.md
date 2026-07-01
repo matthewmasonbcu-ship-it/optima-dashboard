@@ -120,15 +120,26 @@ HTTP-self-fetches `/api/quote` (`lib/scanner.ts:67`). Extract the Finnhub logic
 into a shared lib the cron calls directly — removes the last self-fetch
 dependency for quotes.
 
-### [ ] N6. Database RLS-off / public-anon-key posture (known item; multi-user only)
+### [ ] N6. Database RLS-off / public-anon-key posture — ROOT CAUSE OF 3 INCIDENTS
 The whole app runs on the **public anon key** (`lib/supabaseClient.ts`) and every
 table is **RLS-off** — no migration defines any policy/grant. Fine for a
 single-user personal system (the anon key is already shipped to the browser), but
-it means any table created with RLS *enabled* and no policy silently breaks all
-anon writes (Postgres `42501`, swallowed by non-fatal catches). This exact thing
-hid `scan_runs`/`scan_candidates` writes for the scan-observability feature; fixed
-by `supabase_migrations_scan_tables_disable_rls.sql` (disable RLS to match the
-rest of the schema).
+any table created with RLS *enabled* and no policy **silently breaks all anon
+writes** (Postgres `42501`, swallowed by non-fatal catches). This has now bitten
+us **three times**:
+- `scan_runs` + `scan_candidates` — scan observability silently empty for ~3 weeks
+  (fixed: `supabase_migrations_scan_tables_disable_rls.sql`).
+- `phone_review_tokens` — approval-link tokens never saved, so tapping the Telegram
+  approval link silently failed for weeks (2026-06-30; fixed:
+  `supabase_migrations_phone_review_tokens_disable_rls.sql`).
+
+> **✅ MIGRATION CHECKLIST — every new `CREATE TABLE` migration MUST:**
+> 1. End with `ALTER TABLE <table> DISABLE ROW LEVEL SECURITY;` (or define explicit
+>    anon policies) — tables created via the Supabase UI default to RLS-**on**.
+> 2. After applying, **verify an anon insert actually succeeds** (not just a SELECT —
+>    RLS-on returns empty SELECTs with no error, hiding the problem).
+> 3. Never rely on a non-fatal catch to surface a write failure — surface/alert it.
+
 - **If this ever goes multi-user:** this posture is a hard blocker — flip to
   proper RLS policies on *every* table and move server/cron writes to a
   service-role key (kept server-side, never `NEXT_PUBLIC_*`). Until then, any new
