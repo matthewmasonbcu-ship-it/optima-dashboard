@@ -744,7 +744,16 @@ export async function GET(request: Request) {
       block_reason: g.status === "BLOCKED" ? g.reason : g.queueNote,
     }));
 
-    await persistScanRun(runRecord, candidateRecords);
+    const { persistError } = await persistScanRun(runRecord, candidateRecords);
+    if (persistError) {
+      // Non-fatal, but LOUD: a silent persistence failure is exactly how the
+      // 3-week RLS bug hid. The scan's normal summary still sends below.
+      await notify(
+        `\u{1F6A8}\u{1F6A8} OPTIMA SCAN — PERSISTENCE FAILURE ${stamp}\n` +
+          `Scan-observability write failed: ${persistError}\n` +
+          `The scan itself completed; run/candidate data may be missing. Check RLS/schema + Vercel logs.`
+      );
+    }
 
     // --- NOTIFY: exactly one status message (RUN SUMMARY or FAILURE) ---
     // Healthy run -> ✅ RUN SUMMARY. Real breakage -> 🚨 FAILURE (visibly distinct).

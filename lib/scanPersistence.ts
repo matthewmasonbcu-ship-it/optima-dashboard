@@ -2,7 +2,9 @@ import { supabase } from "@/lib/supabaseClient";
 
 // Persistence for scan observability. Writes ONE scan_runs summary row plus one
 // scan_candidates row per contract-graded symbol. NON-FATAL by design: any DB
-// error is logged and swallowed so persistence can never abort or fail a scan.
+// error is logged and RETURNED via persistError (so the caller can alert) — it
+// never aborts or fails the scan. Silent persistence failure is the pattern that
+// hid the 3-week RLS bug, so the failure must reach the caller, not be swallowed.
 
 export type ScanCandidateRecord = {
   symbol: string;
@@ -36,7 +38,7 @@ export type ScanRunRecord = {
 export async function persistScanRun(
   run: ScanRunRecord,
   candidates: ScanCandidateRecord[]
-): Promise<{ runId: string | null }> {
+): Promise<{ runId: string | null; persistError: string | null }> {
   try {
     const { data, error } = await supabase
       .from("scan_runs")
@@ -45,8 +47,10 @@ export async function persistScanRun(
       .single();
 
     if (error || !data) {
-      console.warn("persistScanRun: scan_runs insert failed (non-fatal):", error?.message);
-      return { runId: null };
+      const msg = error?.message ?? "no row returned";
+      console.warn("persistScanRun: scan_runs insert failed (non-fatal):", msg);
+      // Total loss: no run row was created, so no candidates either.
+      return { runId: null, persistError: `scan_runs insert failed: ${msg}` };
     }
 
     const runId = data.id as string;
@@ -59,15 +63,18 @@ export async function persistScanRun(
           "persistScanRun: scan_candidates insert failed (non-fatal):",
           candErr.message
         );
+        // Run row saved, but the per-candidate rows are missing.
+        return {
+          runId,
+          persistError: `scan_candidates insert failed (${rows.length} rows): ${candErr.message}`,
+        };
       }
     }
 
-    return { runId };
+    return { runId, persistError: null };
   } catch (err) {
-    console.warn(
-      "persistScanRun: unexpected error (non-fatal):",
-      err instanceof Error ? err.message : err
-    );
-    return { runId: null };
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn("persistScanRun: unexpected error (non-fatal):", msg);
+    return { runId: null, persistError: `unexpected: ${msg}` };
   }
 }
