@@ -257,6 +257,14 @@ export async function GET(request: Request) {
       result: "WIN" | "LOSS";
       optionPnl: number;
     }> = [];
+    // Reverse-desync collector: option leg closed but paper_trades failed to close.
+    // These are NOT successful closes — surfaced via 🚨 + the response JSON.
+    const desyncs: Array<{
+      paperTradeId: string;
+      stockSymbol: string;
+      result: "WIN" | "LOSS";
+      optionPnl: number;
+    }> = [];
 
     for (const trade of openTrades) {
       const stockSymbol = trade.stock_symbol;
@@ -339,6 +347,22 @@ export async function GET(request: Request) {
         continue;
       }
 
+      const sign = optionPnl >= 0 ? "+" : "-";
+      const absAmount = Math.abs(optionPnl).toFixed(2);
+
+      const contractDesc = isSpread
+        ? `${stockSymbol} ${occStrike(trade.short_leg_option_symbol)}/${occStrike(
+            trade.long_leg_option_symbol
+          )} ${spreadLabel(trade.spread_type)}`
+        : `${stockSymbol} ${occStrike(trade.option_symbol)} ${occRight(
+            trade.option_symbol
+          )}`.trim();
+
+      // Second half of the close: bring paper_trades to closed. Track success so a
+      // failure here (lookup error, missing row, OR update error) is treated as a
+      // reverse-desync — never reported as a successful close.
+      let paperClosed = false;
+
       const { data: paperTrade, error: paperTradeError } = await supabase
         .from("paper_trades")
         .select("id, entry_price, stop_loss, take_profit")
@@ -365,21 +389,36 @@ export async function GET(request: Request) {
 
         if (paperUpdateError) {
           console.error("Auto-close paper trade update failed:", paperUpdateError);
+        } else {
+          paperClosed = true;
         }
       }
 
+      if (!paperClosed) {
+        // Reverse desync: the option leg is closed (correct P&L recorded) but
+        // paper_trades did not close. Do NOT count this as a close — fire ONE loud
+        // 🚨 with the exact reconcile action and flag it in the response. No
+        // rollback: the option close is correct data; paper_trades is fixed forward.
+        console.error(
+          "Auto-close reverse desync — paper_trades not closed:",
+          trade.paper_trade_id
+        );
+        await sendHeartbeat(
+          `\u{1F6A8}\u{1F6A8} OPTIMA AUTO-CLOSE DESYNC — ${contractDesc}\n` +
+            `Option leg closed (${result} ${sign}$${absAmount}) but paper_trades did NOT close.\n` +
+            `Reconcile paper_trade ${trade.paper_trade_id}: set status='closed', closed_at. ` +
+            `NOT counted as a close.`
+        );
+        desyncs.push({
+          paperTradeId: trade.paper_trade_id,
+          stockSymbol,
+          result,
+          optionPnl,
+        });
+        continue;
+      }
+
       closedResults.push({ stockSymbol, result, optionPnl });
-
-      const sign = optionPnl >= 0 ? "+" : "-";
-      const absAmount = Math.abs(optionPnl).toFixed(2);
-
-      const contractDesc = isSpread
-        ? `${stockSymbol} ${occStrike(trade.short_leg_option_symbol)}/${occStrike(
-            trade.long_leg_option_symbol
-          )} ${spreadLabel(trade.spread_type)}`
-        : `${stockSymbol} ${occStrike(trade.option_symbol)} ${occRight(
-            trade.option_symbol
-          )}`.trim();
 
       const reasonText =
         closeReason === "take_profit"
@@ -440,6 +479,8 @@ export async function GET(request: Request) {
       checked: openTrades.length,
       closed: closedResults.length,
       results: closedResults,
+      desyncCount: desyncs.length,
+      desyncs,
     });
   } catch (error) {
     const errorMessage =
