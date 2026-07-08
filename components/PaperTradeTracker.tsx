@@ -4,6 +4,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+// Read-only import of the FROZEN exit factors, purely to DISPLAY the real spread
+// exit levels for option trades. Values are never modified here.
+import { STOP_LOSS_FACTOR, PROFIT_EXIT_PCT } from "../lib/scanConfig";
 
 type TradeFilter = "all" | "clean" | "override";
 
@@ -51,6 +54,8 @@ type OptionTradeDetail = {
   exit_option_price?: number | null;
   option_exit_price?: number | null;
   option_pnl?: number | null;
+  net_credit?: number | null;
+  spread_type?: string | null;
 };
 
 type TrackerSummary = {
@@ -732,8 +737,55 @@ export default function PaperTradeTracker() {
                             value={trade.exit_price ? formatMoney(trade.exit_price) : "Open"}
                             valueClass={trade.exit_price ? "text-slate-200" : "text-blue-400"}
                           />
-                          <MiniStat label="Stop" value={formatMoney(trade.stop_loss)} />
-                          <MiniStat label="Target" value={formatMoney(trade.take_profit)} />
+                          {optionDetail ? (
+                            <>
+                              {/* Option credit spread: show the REAL spread-value
+                                  exit rules (what auto-close acts on), not the
+                                  stock stop/target which don't apply. */}
+                              <MiniStat
+                                label="Credit"
+                                value={formatMoney(optionDetail.net_credit)}
+                                valueClass="text-emerald-300"
+                              />
+                              <MiniStat
+                                label="Target"
+                                value={
+                                  optionDetail.net_credit != null
+                                    ? formatMoney(optionDetail.net_credit * (PROFIT_EXIT_PCT / 100))
+                                    : "—"
+                                }
+                                valueClass="text-emerald-300"
+                              />
+                              <MiniStat
+                                label="Stop"
+                                value={
+                                  optionDetail.net_credit != null
+                                    ? formatMoney(optionDetail.net_credit * STOP_LOSS_FACTOR)
+                                    : "—"
+                                }
+                                valueClass="text-red-400"
+                              />
+                              <MiniStat
+                                label="DTE"
+                                value={
+                                  optionDetail.expiration_date
+                                    ? `${Math.ceil(
+                                        (new Date(
+                                          optionDetail.expiration_date + "T16:00:00"
+                                        ).getTime() -
+                                          Date.now()) /
+                                          86400000
+                                      )}d`
+                                    : "—"
+                                }
+                              />
+                            </>
+                          ) : (
+                            <>
+                              <MiniStat label="Stop" value={formatMoney(trade.stop_loss)} />
+                              <MiniStat label="Target" value={formatMoney(trade.take_profit)} />
+                            </>
+                          )}
                         </div>
 
                         {/* Stock P/L */}

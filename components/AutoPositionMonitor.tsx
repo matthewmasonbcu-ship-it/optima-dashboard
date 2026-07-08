@@ -451,16 +451,23 @@ export default function AutoPositionMonitor({
                   {/* Row 2: Stats grid */}
                   <div className="mt-3 grid grid-cols-3 gap-1.5 md:grid-cols-6">
                     <MiniStat label="Entry" value={formatDollar(trade.entry_price)} />
-                    <MiniStat
-                      label="Stop Loss"
-                      value={formatDollar(trade.stop_loss)}
-                      valueClass="text-red-400"
-                    />
-                    <MiniStat
-                      label="Take Profit"
-                      value={formatDollar(trade.take_profit)}
-                      valueClass="text-emerald-300"
-                    />
+                    {/* Stock stop/target don't apply to an option credit spread
+                        (auto-close exits on spread value, not stock price) — hide
+                        them for option trades; genuine stock trades keep them. */}
+                    {!optionTradeIds.has(trade.id) && (
+                      <>
+                        <MiniStat
+                          label="Stop Loss"
+                          value={formatDollar(trade.stop_loss)}
+                          valueClass="text-red-400"
+                        />
+                        <MiniStat
+                          label="Take Profit"
+                          value={formatDollar(trade.take_profit)}
+                          valueClass="text-emerald-300"
+                        />
+                      </>
+                    )}
                     <MiniStat label="Strategy" value={trade.strategy || "—"} />
                     <MiniStat
                       label="Opened"

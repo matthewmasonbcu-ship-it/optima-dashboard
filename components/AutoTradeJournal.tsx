@@ -101,6 +101,9 @@ export default function AutoTradeJournal({
   const [trades, setTrades] = useState<AutoTrade[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  // paper_trade_ids that have an option leg — used to hide the stock stop/target
+  // (which don't apply to an option credit spread) on those rows only.
+  const [optionTradeIds, setOptionTradeIds] = useState<Set<string>>(new Set());
 
   // ─── Supabase load — corrected to use entry_price, shared client ──────────
   async function loadAutoTrades() {
@@ -128,6 +131,21 @@ export default function AutoTradeJournal({
 
   useEffect(() => {
     loadAutoTrades();
+  }, [refreshKey]);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const { data } = await supabase
+        .from("option_trade_details")
+        .select("paper_trade_id");
+      if (active) {
+        setOptionTradeIds(new Set((data || []).map((d) => String(d.paper_trade_id))));
+      }
+    })();
+    return () => {
+      active = false;
+    };
   }, [refreshKey]);
 
   return (
@@ -306,24 +324,30 @@ export default function AutoTradeJournal({
                           : `$${money(trade.entry_price)}`
                       }
                     />
-                    <MiniStat
-                      label="Stop Loss"
-                      value={
-                        money(trade.stop_loss) === "—"
-                          ? "—"
-                          : `$${money(trade.stop_loss)}`
-                      }
-                      valueClass="text-red-400"
-                    />
-                    <MiniStat
-                      label="Take Profit"
-                      value={
-                        money(trade.take_profit) === "—"
-                          ? "—"
-                          : `$${money(trade.take_profit)}`
-                      }
-                      valueClass="text-emerald-300"
-                    />
+                    {/* Stock stop/target don't apply to an option credit spread —
+                        hide them for option rows; genuine stock trades keep them. */}
+                    {!optionTradeIds.has(String(trade.id)) && (
+                      <>
+                        <MiniStat
+                          label="Stop Loss"
+                          value={
+                            money(trade.stop_loss) === "—"
+                              ? "—"
+                              : `$${money(trade.stop_loss)}`
+                          }
+                          valueClass="text-red-400"
+                        />
+                        <MiniStat
+                          label="Take Profit"
+                          value={
+                            money(trade.take_profit) === "—"
+                              ? "—"
+                              : `$${money(trade.take_profit)}`
+                          }
+                          valueClass="text-emerald-300"
+                        />
+                      </>
+                    )}
                     <MiniStat
                       label="Score"
                       value={trade.score ?? "—"}
