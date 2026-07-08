@@ -47,6 +47,7 @@ type OptionTradeDetail = {
   short_leg_option_symbol: string | null;
   long_leg_option_symbol: string | null;
   net_credit: number | null;
+  max_loss: number | null;
 };
 
 type PaperTrade = {
@@ -112,6 +113,20 @@ async function fetchChain(
   const options = result.ok ? getOptionArray(result.data) : [];
   cache.set(key, options);
   return options;
+}
+
+// Current underlying last price via Tradier — used ONLY to add a reference hint
+// to the expired-position alert (win/loss guess). NEVER used to book P&L.
+async function fetchStockLast(symbol: string): Promise<number | null> {
+  const result = await tradierRequest({
+    path: `/markets/quotes?symbols=${encodeURIComponent(symbol)}`,
+    method: "GET",
+  });
+  if (!result.ok) return null;
+  const q = (result.data as { quotes?: { quote?: unknown } })?.quotes?.quote;
+  const one = (Array.isArray(q) ? q[0] : q) as { last?: number; close?: number } | undefined;
+  const last = Number(one?.last ?? one?.close);
+  return Number.isFinite(last) && last > 0 ? last : null;
 }
 
 function getNowDateStringNewYork(now: Date): string {
@@ -230,7 +245,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase
       .from("option_trade_details")
       .select(
-        "id, paper_trade_id, stock_symbol, expiration_date, option_symbol, mid_price, contracts, option_status, option_pnl, spread_type, short_leg_option_symbol, long_leg_option_symbol, net_credit"
+        "id, paper_trade_id, stock_symbol, expiration_date, option_symbol, mid_price, contracts, option_status, option_pnl, spread_type, short_leg_option_symbol, long_leg_option_symbol, net_credit, max_loss"
       )
       .is("option_pnl", null);
 
@@ -265,12 +280,59 @@ export async function GET(request: Request) {
       result: "WIN" | "LOSS";
       optionPnl: number;
     }> = [];
+    // Expired positions (DTE < 0 — contract gone): need MANUAL settlement, never
+    // auto-settled. Unpriceable (no quote this run, not expired): the recurring-
+    // stuck signal. Both surfaced in the response every run; alerted once daily.
+    const expired: Array<{
+      paperTradeId: string;
+      symbol: string;
+      expiration: string;
+      isSpread: boolean;
+      spreadType: string | null;
+      shortStrike: string;
+      longStrike: string;
+      netCredit: number | null;
+      maxLoss: number | null;
+      contracts: number;
+    }> = [];
+    const unpriceable: Array<{ paperTradeId: string; symbol: string; dte: number }> = [];
 
     for (const trade of openTrades) {
       const stockSymbol = trade.stock_symbol;
       const expirationDate = trade.expiration_date;
 
       if (!stockSymbol || !expirationDate) continue;
+
+      // DTE computed once at the top (relocated from below — same value). Reused by
+      // the expiry check here and the live dte<=21 trigger further down, unchanged.
+      const dte = computeDTE(expirationDate, now);
+
+      // Expired (contract gone from the chain): a market close is impossible. Do
+      // NOT auto-settle (risks false P&L) — collect for the once-daily manual-
+      // settlement alert and skip.
+      if (dte < 0) {
+        const spreadFlag = Boolean(
+          trade.spread_type &&
+            trade.spread_type !== "single_leg" &&
+            trade.short_leg_option_symbol &&
+            trade.long_leg_option_symbol
+        );
+        expired.push({
+          paperTradeId: trade.paper_trade_id,
+          symbol: stockSymbol,
+          expiration: expirationDate,
+          isSpread: spreadFlag,
+          spreadType: trade.spread_type ?? null,
+          shortStrike: occStrike(
+            spreadFlag ? trade.short_leg_option_symbol : trade.option_symbol
+          ),
+          longStrike: spreadFlag ? occStrike(trade.long_leg_option_symbol) : "",
+          netCredit: trade.net_credit,
+          maxLoss: trade.max_loss ?? null,
+          contracts: trade.contracts || 1,
+        });
+        continue;
+      }
 
       const chain = await fetchChain(stockSymbol, expirationDate, chainCache);
 
@@ -308,11 +370,22 @@ export async function GET(request: Request) {
       // Skip on any incomplete/fabricated price. current <= 0 means a leg quote
       // is broken (non-positive spread value is impossible for a live credit
       // spread) — never close on it, or we book a phantom max-profit win.
-      if (entry === null || current === null || entry <= 0 || current <= 0) continue;
+      if (entry === null || current === null || entry <= 0 || current <= 0) {
+        // No valid quote this run (not expired — that's handled above). Flag for
+        // the once-daily stuck report; the same symbol recurring across days is
+        // the persistently-stuck signal (no schema/state needed).
+        if (current === null) {
+          unpriceable.push({
+            paperTradeId: trade.paper_trade_id,
+            symbol: stockSymbol,
+            dte,
+          });
+        }
+        continue;
+      }
 
       const takeProfitTriggered = current <= TAKE_PROFIT_FACTOR * entry;
       const stopLossTriggered = current >= STOP_LOSS_FACTOR * entry;
-      const dte = computeDTE(expirationDate, now);
       const dteTriggered = dte <= 21;
 
       if (!takeProfitTriggered && !stopLossTriggered && !dteTriggered) continue;
@@ -471,6 +544,66 @@ export async function GET(request: Request) {
         `OPTIMA AUTO-CLOSE ✅ ${formatEtStamp(now)} — checked ${openTrades.length} open, ` +
           `closed ${closedToday} today (TP ${tp} / SL ${sl} / DTE ${dte})`
       );
+
+      // Once-daily stuck-positions alert. Expired = needs MANUAL settlement (never
+      // auto-settled — booking a wrong settlement corrupts the proof data).
+      // Unpriceable = the recurring-stuck signal. Alert only.
+      if (expired.length > 0 || unpriceable.length > 0) {
+        const lines = [
+          `\u{1F6A8}\u{1F6A8} OPTIMA AUTO-CLOSE — STUCK POSITIONS ${formatEtStamp(now)}`,
+        ];
+
+        if (expired.length > 0) {
+          lines.push("EXPIRED — needs MANUAL settlement:");
+          for (const p of expired) {
+            const legLabel = p.isSpread
+              ? `${p.spreadType === "bull_put_spread" ? "bull put, short put" : "bear call, short call"} $${p.shortStrike}${p.longStrike ? ` / long $${p.longStrike}` : ""}`
+              : `short $${p.shortStrike}`;
+
+            const last = await fetchStockLast(p.symbol);
+            const k = Number(p.shortStrike);
+            let hint: string;
+            if (last == null || Number.isNaN(k)) {
+              hint =
+                "Hint (reference only): stock price unavailable — verify manually before settling.";
+            } else {
+              const worthless =
+                p.spreadType === "bull_put_spread"
+                  ? last > k
+                  : p.spreadType === "bear_call_spread"
+                  ? last < k
+                  : null;
+              const verdict =
+                worthless === true
+                  ? "likely expired WORTHLESS → keep full credit (max profit)"
+                  : worthless === false
+                  ? "likely expired IN-THE-MONEY → loss"
+                  : "compare to short strike";
+              hint = `Hint (reference only, NOT booked): stock $${last.toFixed(2)} vs short $${p.shortStrike} → ${verdict}. VERIFY before settling.`;
+            }
+
+            lines.push(
+              `• ${p.symbol} (exp ${p.expiration}) ${legLabel} — credit $${
+                p.netCredit != null ? p.netCredit.toFixed(2) : "N/A"
+              }, max loss $${p.maxLoss != null ? p.maxLoss.toFixed(2) : "N/A"}`
+            );
+            lines.push(`  ${hint}`);
+            lines.push(
+              `  Settle: dashboard "Close @ Price" (or POST /api/close-option-trade) with price 0 if worthless — books the full credit as max profit — else the real settlement value.`
+            );
+          }
+        }
+
+        if (unpriceable.length > 0) {
+          lines.push(
+            `UNPRICEABLE this run (not expired): ${unpriceable
+              .map((u) => `${u.symbol} (${u.dte} DTE)`)
+              .join(", ")} — if the same name recurs across days, investigate/settle manually.`
+          );
+        }
+
+        await sendHeartbeat(lines.join("\n"));
+      }
     }
 
     return NextResponse.json({
@@ -481,6 +614,10 @@ export async function GET(request: Request) {
       results: closedResults,
       desyncCount: desyncs.length,
       desyncs,
+      expiredCount: expired.length,
+      expired,
+      unpriceableCount: unpriceable.length,
+      unpriceable,
     });
   } catch (error) {
     const errorMessage =
