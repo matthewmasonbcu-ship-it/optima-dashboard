@@ -50,14 +50,15 @@ async function notify(text: string): Promise<void> {
 
 const ROUTE = "/api/cron/market-open-scan";
 
-// Morning scan window (ET). The cron is scheduled ~9:34 ET (13:34/14:34 UTC for
-// the two DST offsets in vercel.json), but Vercel jitter can delay the fire by
-// 20–40+ min. We accept ANY fire inside this window, so drift no longer rejects
-// a valid in-session scan. The window is < 60 min so the off-DST cron slot
-// (summer 10:34 ET / winter 8:34 ET) falls outside it and won't double-fire;
-// the once-per-day dedup in the handler backstops any extreme-jitter overlap.
-const MORNING_SCAN_START_MINUTES = 9 * 60 + 30; // 9:30 ET — market open
-const MORNING_SCAN_END_MINUTES = 10 * 60 + 30; // 10:30 ET
+// Morning scan window (ET). The cron is scheduled ~10:15 ET (14:15/15:15 UTC for
+// the two DST offsets in vercel.json) — moved from the 9:34 open so opening-auction
+// bid/ask spreads can settle (qualified setups were being HELD on artificially wide
+// open spreads). On Pro, crons fire within the minute, so 10:15 lands well inside
+// this window; we still accept ANY fire in the window so a rare delayed delivery
+// scans. The window (9:30–11:00) excludes both off-DST cron slots (summer 11:15 ET
+// / winter 9:15 ET), so they can't double-fire; the once-per-day dedup backstops.
+const MORNING_SCAN_START_MINUTES = 9 * 60 + 30; // 9:30 ET
+const MORNING_SCAN_END_MINUTES = 11 * 60; // 11:00 ET (10:15 fire + margin; off-slots excluded)
 
 async function loadWatchlist(): Promise<string[]> {
   const { data, error } = await supabase
