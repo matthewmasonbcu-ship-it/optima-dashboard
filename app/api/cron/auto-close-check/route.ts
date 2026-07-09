@@ -457,6 +457,13 @@ export async function GET(request: Request) {
             status: "closed",
             exit_price: exitPrice,
             closed_at: now.toISOString(),
+            // Parent row previously left pnl=0 / result=null on option closes,
+            // silently corrupting any analysis over paper_trades.pnl. Write the
+            // SAME optionPnl recorded in option_trade_details.option_pnl above, and
+            // the WIN/LOSS already computed for the alert (uppercase, matching the
+            // existing paper_trades.result convention in close-paper-trade).
+            pnl: optionPnl,
+            result,
           })
           .eq("id", trade.paper_trade_id);
 

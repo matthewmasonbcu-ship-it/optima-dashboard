@@ -249,9 +249,18 @@ export async function POST(request: Request) {
     }
 
     // --- Update paper_trades (the wrapper) ---
+    // Write pnl + result too (same gap as the auto-close cron): the parent row was
+    // leaving pnl=0 / result=null on option closes. pnl is the SAME optionPnl
+    // recorded in option_trade_details.option_pnl above; result is WIN/LOSS
+    // (uppercase, matching the existing paper_trades.result convention).
     const { error: paperUpdateError } = await supabase
       .from("paper_trades")
-      .update({ status: "closed", closed_at: new Date().toISOString() })
+      .update({
+        status: "closed",
+        closed_at: new Date().toISOString(),
+        pnl: optionPnl,
+        result,
+      })
       .eq("id", paperTradeId);
 
     if (paperUpdateError) {
