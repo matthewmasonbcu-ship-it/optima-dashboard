@@ -269,7 +269,7 @@ export async function GET(request: Request) {
     const chainCache = new Map<string, TradierOption[]>();
     const closedResults: Array<{
       stockSymbol: string;
-      result: "WIN" | "LOSS";
+      result: "WIN" | "LOSS" | "BREAKEVEN";
       optionPnl: number;
     }> = [];
     // Reverse-desync collector: option leg closed but paper_trades failed to close.
@@ -277,7 +277,7 @@ export async function GET(request: Request) {
     const desyncs: Array<{
       paperTradeId: string;
       stockSymbol: string;
-      result: "WIN" | "LOSS";
+      result: "WIN" | "LOSS" | "BREAKEVEN";
       optionPnl: number;
     }> = [];
     // Expired positions (DTE < 0 — contract gone): need MANUAL settlement, never
@@ -393,7 +393,7 @@ export async function GET(request: Request) {
       const contracts = trade.contracts || 1;
       const optionPnl = (entry - current) * contracts * 100;
 
-      let result: "WIN" | "LOSS";
+      let result: "WIN" | "LOSS" | "BREAKEVEN";
       let closeReason: "take_profit" | "stop_loss" | "dte_21";
       if (takeProfitTriggered) {
         result = "WIN";
@@ -402,7 +402,9 @@ export async function GET(request: Request) {
         result = "LOSS";
         closeReason = "stop_loss";
       } else {
-        result = optionPnl >= 0 ? "WIN" : "LOSS";
+        // Exactly break-even ($0) must NOT count as a WIN — that would inflate the
+        // win rate. TP/SL can't be $0 (trigger math), so only DTE needs the 3-way.
+        result = optionPnl > 0 ? "WIN" : optionPnl < 0 ? "LOSS" : "BREAKEVEN";
         closeReason = "dte_21";
       }
 

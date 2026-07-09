@@ -229,7 +229,9 @@ export async function POST(request: Request) {
 
     const contracts = toNumber(detail.contracts, 1) || 1;
     const optionPnl = (entry - current) * contracts * 100;
-    const result: "WIN" | "LOSS" = optionPnl >= 0 ? "WIN" : "LOSS";
+    // Exactly break-even ($0) must NOT count as a WIN (would inflate win rate).
+    const result: "WIN" | "LOSS" | "BREAKEVEN" =
+      optionPnl > 0 ? "WIN" : optionPnl < 0 ? "LOSS" : "BREAKEVEN";
 
     // --- Update option_trade_details (the real option P&L record) ---
     const { error: optionUpdateError } = await supabase
