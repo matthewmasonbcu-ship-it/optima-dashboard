@@ -794,11 +794,21 @@ export async function GET(request: Request) {
         );
       }
       if (blockedCandidates.length > 0) {
-        lines.push(
-          `Blocked: ${blockedCandidates
-            .map((g) => `${g.symbol}(${shortBlockReason(g.reason)})`)
-            .join(" · ")}`
+        // Display-only: sub-75 names aren't real grading blocks (they never
+        // reached a Tradier call — see gradeSymbol score gate), and at N=20 they
+        // would swamp the line. Show genuine grading/enforcement blocks inline;
+        // collapse the sub-75 fillers to a trailing count. Persistence above keeps
+        // every candidate + reason (incl. score<75) intact.
+        const realBlocks = blockedCandidates.filter(
+          (g) => shortBlockReason(g.reason) !== "score<75"
         );
+        const subScoreCount = blockedCandidates.length - realBlocks.length;
+        const realText = realBlocks
+          .map((g) => `${g.symbol}(${shortBlockReason(g.reason)})`)
+          .join(" · ");
+        const subText =
+          subScoreCount > 0 ? `${realText ? " · " : ""}+${subScoreCount} sub-75` : "";
+        lines.push(`Blocked: ${realText}${subText}`);
       }
       if (heldNotes.length > 0) {
         lines.push(`Held: ${heldNotes.join(" · ")}`);
