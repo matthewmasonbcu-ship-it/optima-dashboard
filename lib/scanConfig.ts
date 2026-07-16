@@ -6,7 +6,7 @@
 // live eval account (they depend on the static-vs-trailing drawdown decision).
 
 // --- ACTIVE ------------------------------------------------------------------
-export const SCAN_EVAL_BREADTH_N = 5; // contract-grade the top N ranked symbols
+export const SCAN_EVAL_BREADTH_N = 20; // contract-grade the top N ranked symbols
 export const DAILY_TRADE_CAP = 1; // max trades queued per day — DO NOT raise
 
 // Setup-score gate + DTE window. Moved verbatim from market-open-scan/route.ts;
