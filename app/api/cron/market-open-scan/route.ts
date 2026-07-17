@@ -565,11 +565,19 @@ export async function GET(request: Request) {
     }
 
     // --- Scan watchlist (setup score in memory) ---
+    // Finnhub free tier caps at 60 quotes/min. With SPY+VIX already spent this
+    // minute plus up to ~64 watchlist symbols, an unthrottled loop trips the
+    // limit and the tail symbols come back null (positional, not bad symbols).
+    // Space each quote ~1.1s apart so we stay well under 60/min. Worst case is
+    // ~64 * (1.1s sleep + ~0.3s fetch) ≈ 90s — well inside the 300s budget.
+    const QUOTE_THROTTLE_MS = 1100;
     const watchlist = await loadWatchlist();
     const symbolsToScan = watchlist.filter((s) => s !== "SPY");
     const results: ScanResult[] = [];
 
-    for (const sym of symbolsToScan) {
+    for (let i = 0; i < symbolsToScan.length; i++) {
+      if (i > 0) await new Promise((res) => setTimeout(res, QUOTE_THROTTLE_MS));
+      const sym = symbolsToScan[i];
       const quote = await fetchQuote(sym, baseUrl);
       if (!quote) {
         console.warn("Skipping invalid quote:", sym);
