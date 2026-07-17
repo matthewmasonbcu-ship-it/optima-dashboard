@@ -767,7 +767,14 @@ export async function GET(request: Request) {
     // --- NOTIFY: exactly one status message (RUN SUMMARY or FAILURE) ---
     // Healthy run -> ✅ RUN SUMMARY. Real breakage -> 🚨 FAILURE (visibly distinct).
     // ACTIONABLE was already sent by queuePreview when a trade was queued.
-    const isFailure = !completedFully || !!dbInsertError;
+    // A few missing quotes (transient Finnhub hiccups) shouldn't kill the run —
+    // the scan still grades everything that resolved. Only 🚨 FAIL when the miss
+    // rate exceeds 5% of the watchlist (or a DB write failed). Below that, the ✅
+    // summary carries a visible ⚠️ line instead of degrading the whole run.
+    const quoteMissRate =
+      watchlistSize > 0 ? quoteFailures.length / watchlistSize : 0;
+    const quotesDegraded = quoteMissRate > 0.05;
+    const isFailure = quotesDegraded || !!dbInsertError;
 
     if (isFailure) {
       const lines = [`\u{1F6A8}\u{1F6A8} OPTIMA SCAN FAILURE ${stamp}`];
@@ -794,6 +801,13 @@ export async function GET(request: Request) {
       lines.push(
         `Scanned ${scannedCount}/${watchlistSize} · graded top ${graded.length} · ${queuedCount} queued · ${blockedCandidates.length} blocked`
       );
+      if (quoteFailures.length > 0) {
+        lines.push(
+          `\u{26A0}\u{FE0F} ${quoteFailures.length} symbol${
+            quoteFailures.length === 1 ? "" : "s"
+          } missing quotes: ${quoteFailures.join(", ")}`
+        );
+      }
       if (queuedSymbol) {
         lines.push(
           `Queued: ${queuedSymbol} ${queuedDirection} ${queuedSpreadType ?? "credit spread"} (grade ${
