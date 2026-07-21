@@ -737,21 +737,32 @@ export async function GET(request: Request) {
       vix_regime: vixRegime,
     };
 
-    const candidateRecords: ScanCandidateRecord[] = graded.map((g) => ({
-      symbol: g.symbol,
-      setup_score: g.setupScore,
-      direction: g.direction,
-      expiration: g.expiration,
-      short_strike: g.shortStrike,
-      short_delta: g.shortDelta,
-      open_interest: g.openInterest,
-      bid: g.bid,
-      ask: g.ask,
-      grade: g.grade,
-      status: g.status,
-      queued: g.queued,
-      block_reason: g.status === "BLOCKED" ? g.reason : g.queueNote,
-    }));
+    const candidateRecords: ScanCandidateRecord[] = graded.map((g) => {
+      // Spread economics come free off the already-built spread (gradeSymbol ran
+      // selectBestCreditSpread). PASSED candidates carry a spreadContract; BLOCKED
+      // ones don't, so these fields stay null. No extra Tradier calls.
+      const sc = g.spreadContract;
+      return {
+        symbol: g.symbol,
+        setup_score: g.setupScore,
+        direction: g.direction,
+        expiration: g.expiration,
+        short_strike: g.shortStrike,
+        short_delta: g.shortDelta,
+        open_interest: g.openInterest,
+        bid: g.bid,
+        ask: g.ask,
+        grade: g.grade,
+        status: g.status,
+        queued: g.queued,
+        block_reason: g.status === "BLOCKED" ? g.reason : g.queueNote,
+        long_strike: sc?.long_leg?.strike_price ?? null,
+        net_credit: sc?.net_credit ?? null,
+        spread_width: sc?.spread_width ?? null,
+        max_loss: sc?.max_loss ?? null,
+        max_profit: sc?.max_profit ?? null,
+      };
+    });
 
     const { persistError } = await persistScanRun(runRecord, candidateRecords);
     if (persistError) {

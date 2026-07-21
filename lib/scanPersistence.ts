@@ -20,6 +20,14 @@ export type ScanCandidateRecord = {
   status: "PASSED" | "BLOCKED";
   queued: boolean;
   block_reason: string | null;
+  // Selected-spread economics — populated for PASSED candidates only (BLOCKED
+  // rows never build a spread, so these stay null). Additive; see
+  // supabase_migrations_scan_candidates_spread_columns.sql.
+  long_strike: number | null;
+  net_credit: number | null;
+  spread_width: number | null;
+  max_loss: number | null;
+  max_profit: number | null;
 };
 
 export type ScanRunRecord = {
