@@ -269,6 +269,9 @@ async function gradeSymbol(
   let selected: SelectBestCreditSpreadResult | null = null;
   let winningNormalized: TradierContract[] = [];
   let lastFail = "";
+  // If every expiration's spread is rejected by the gate, keep the last spread
+  // that was actually built so a BLOCKED row can still log its economics.
+  let lastAttemptSpread: TradierContract | null = null;
 
   for (const { date: expiration } of inWindow.slice(0, 3)) {
     const chainResult = await tradierRequest({
@@ -295,10 +298,19 @@ async function gradeSymbol(
       break;
     }
     lastFail = r.reason;
+    if (r.attemptedSpread) lastAttemptSpread = r.attemptedSpread;
   }
 
   if (!selected || !selected.success) {
-    return { ...base, reason: lastFail || "no suitable spread" };
+    // BLOCKED outcome. If a spread WAS built before the gate rejected it (risk-cap
+    // or grade block), attach it so short/long strikes + economics still persist.
+    // The block decision is unchanged — this only captures the rejected numbers.
+    return {
+      ...base,
+      reason: lastFail || "no suitable spread",
+      shortStrike: lastAttemptSpread?.short_leg?.strike_price ?? null,
+      spreadContract: lastAttemptSpread,
+    };
   }
 
   const spread = selected.spread;

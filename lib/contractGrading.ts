@@ -608,7 +608,11 @@ export function getTradierOptionArray(data: unknown): TradierRawOption[] {
 
 export type SelectBestCreditSpreadResult =
   | { success: true; spread: TradierContract; usedFallback: boolean; fallbackReason?: string }
-  | { success: false; reason: string };
+  // attemptedSpread: the last candidate spread that was actually BUILT before the
+  // grade/risk-cap gate rejected it (null when we never got far enough to build one
+  // — e.g. no valid short leg). Observability only: it does NOT change the block
+  // decision; it lets the caller log the rejected spread's economics.
+  | { success: false; reason: string; attemptedSpread?: TradierContract | null };
 
 export function selectBestCreditSpread(
   rawContracts: TradierContract[],
@@ -738,6 +742,10 @@ export function selectBestCreditSpread(
 
   let spreadContract: TradierContract | null = null;
   let lastSpreadFail = "";
+  // The most recent candidate that was actually built (economics computed). Kept
+  // regardless of whether the gate later accepts or rejects it, so a blocked
+  // outcome can still surface real net_credit/spread_width/max_loss for logging.
+  let lastBuiltCandidate: TradierContract | null = null;
 
   for (const longLeg of byDistance) {
     const candidate = buildCreditSpreadContract({
@@ -747,6 +755,7 @@ export function selectBestCreditSpread(
       stockSymbol,
       contracts: 1,
     });
+    lastBuiltCandidate = candidate;
 
     const candidateGrade = getGrade(candidate);
     if (candidateGrade === "BLOCKED" || candidateGrade === "C" || candidateGrade === "UNKNOWN") {
@@ -771,6 +780,7 @@ export function selectBestCreditSpread(
       reason: lastSpreadFail
         ? `No spread within risk cap — ${lastSpreadFail}. Try a different expiration or symbol.`
         : "Could not construct a spread within the risk cap for this expiration.",
+      attemptedSpread: lastBuiltCandidate,
     };
   }
 
