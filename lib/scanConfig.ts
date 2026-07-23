@@ -16,6 +16,14 @@ export const MIN_DTE = 30;
 export const MAX_DTE = 45;
 export const MIDPOINT_DTE = 37;
 
+// Minimum net-credit-to-width ratio a built spread must clear to be tradeable —
+// a spread that collects too little credit for its width is degenerate risk.
+// Baseline from 2026-07-21 logged data: all 8 spread-built rows landed 12.6%–
+// 21.6%, so 0.10 passes every current spread (incl. NVDA at 11.4%) while blocking
+// genuinely thin sub-10% ones. 0.15 would reject 2 of 8, 0.20 would reject 7 of 8.
+// Retune upward as more data accumulates.
+export const MIN_CREDIT_TO_WIDTH_RATIO = 0.1;
+
 // --- PENDING (null until live eval; not needed for paper) --------------------
 export const PER_TRADE_RISK_PCT: number | null = null; // static-vs-trailing DD
 export const MAX_TAIL_LOSS_PCT: number | null = null;

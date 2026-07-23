@@ -3,6 +3,7 @@
 // OptionContractSelector.tsx imports from here — do not add local copies there.
 
 import type { SpreadType, OptionLeg } from "./dashboardTypes";
+import { MIN_CREDIT_TO_WIDTH_RATIO } from "./scanConfig";
 
 // --- Shared types ------------------------------------------------------------
 
@@ -704,12 +705,12 @@ export function selectBestCreditSpread(
     };
   }
 
-  // --- Long leg — ADAPTIVE width ------------------------------------------
-  // Build the TIGHTEST spread (smallest width) whose max loss fits the account
-  // risk cap, instead of a hardcoded 5-strike width. Candidate long legs are
-  // walked from nearest (narrowest, lowest max loss) outward; the first that
-  // clears both the grade gate and the cap wins. Wider spreads only raise max
-  // loss, so once the cap is exceeded there is nothing tighter left to find.
+  // --- Long leg — MAX CREDIT under cap ------------------------------------
+  // Walk ALL long-leg candidates for this expiration and keep the spread with
+  // the HIGHEST net credit that (a) grades clean, (b) fits the account risk cap,
+  // and (c) clears the credit-to-width floor. Unlike the earlier narrowest-first
+  // rule, every candidate is independently cap-checked — a wider spread can carry
+  // both more credit AND more max loss — so we cannot stop at the first fit.
   const shortStrike = getStrike(shortLeg);
   const shortExpiration = getExpiration(shortLeg);
   const shortSymbol = getOptionSymbol(shortLeg);
@@ -741,7 +742,13 @@ export function selectBestCreditSpread(
   const allowedRisk = params.accountSize * (params.maxRiskPercent / 100);
 
   let spreadContract: TradierContract | null = null;
-  let lastSpreadFail = "";
+  let bestCredit = -Infinity;
+  // Block reasons kept separately so the failure message can name the gate the
+  // best-progressed candidate stopped at: ratio (passed grade + cap) is more
+  // informative than cap (passed grade), which is more informative than grade.
+  let gradeFail = "";
+  let capFail = "";
+  let ratioFail = "";
   // The most recent candidate that was actually built (economics computed). Kept
   // regardless of whether the gate later accepts or rejects it, so a blocked
   // outcome can still surface real net_credit/spread_width/max_loss for logging.
@@ -759,26 +766,41 @@ export function selectBestCreditSpread(
 
     const candidateGrade = getGrade(candidate);
     if (candidateGrade === "BLOCKED" || candidateGrade === "C" || candidateGrade === "UNKNOWN") {
-      lastSpreadFail = `width $${(candidate.spread_width ?? 0).toFixed(2)} graded ${candidateGrade} (short ${shortGrade}, long ${getGrade(longLeg)})`;
+      gradeFail = `grade-block: width $${(candidate.spread_width ?? 0).toFixed(2)} graded ${candidateGrade} (short ${shortGrade}, long ${getGrade(longLeg)})`;
       continue;
     }
 
     const candidateMaxLoss = candidate.max_loss ?? Infinity;
     if (candidateMaxLoss > allowedRisk) {
-      // Tightest grade-clean spread already busts the cap; wider ones are worse.
-      lastSpreadFail = `tightest grade-clean spread max loss $${candidateMaxLoss.toFixed(2)} exceeds allowed risk $${allowedRisk.toFixed(2)} (${params.maxRiskPercent}% of $${params.accountSize.toFixed(0)})`;
-      break;
+      // Independently cap-check each candidate: a wider spread can carry more
+      // credit, so we can't stop at the first bust — skip it and keep scanning.
+      capFail = `cap-block: width $${(candidate.spread_width ?? 0).toFixed(2)} max loss $${candidateMaxLoss.toFixed(2)} exceeds allowed risk $${allowedRisk.toFixed(2)} (${params.maxRiskPercent}% of $${params.accountSize.toFixed(0)})`;
+      continue;
     }
 
-    spreadContract = candidate;
-    break;
+    const candidateCredit = candidate.net_credit ?? 0;
+    const candidateWidth = candidate.spread_width ?? 0;
+    const creditToWidth = candidateWidth > 0 ? candidateCredit / candidateWidth : 0;
+    if (creditToWidth < MIN_CREDIT_TO_WIDTH_RATIO) {
+      ratioFail = `ratio-block: width $${candidateWidth.toFixed(2)} credit-to-width ${(creditToWidth * 100).toFixed(1)}% below ${(MIN_CREDIT_TO_WIDTH_RATIO * 100).toFixed(0)}% floor (credit $${candidateCredit.toFixed(2)})`;
+      continue;
+    }
+
+    // Richest qualifying spread wins. Strict > keeps the first (tighter, lower
+    // max-loss) candidate on a credit tie, since byDistance is nearest-first.
+    if (candidateCredit > bestCredit) {
+      bestCredit = candidateCredit;
+      spreadContract = candidate;
+    }
   }
 
   if (!spreadContract) {
+    // Surface the gate closest to passing: ratio > cap > grade.
+    const failDetail = ratioFail || capFail || gradeFail;
     return {
       success: false,
-      reason: lastSpreadFail
-        ? `No spread within risk cap — ${lastSpreadFail}. Try a different expiration or symbol.`
+      reason: failDetail
+        ? `No qualifying spread — ${failDetail}. Try a different expiration or symbol.`
         : "Could not construct a spread within the risk cap for this expiration.",
       attemptedSpread: lastBuiltCandidate,
     };
