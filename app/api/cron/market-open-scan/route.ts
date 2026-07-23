@@ -166,6 +166,7 @@ function shortBlockReason(reason: string | null): string {
   // summary shows WHICH gate rejected — grade vs risk cap vs credit-to-width floor.
   if (r.includes("ratio-block") || r.includes("credit-to-width")) return "credit<floor";
   if (r.includes("grade-block")) return "spread grade-block";
+  if (r.includes("open interest") || r.includes("illiquid")) return "low OI";
   if (r.includes("delta")) return "delta off-band";
   if (r.includes("no valid") || r.includes("pricing") || r.includes("net credit"))
     return "no pricing";

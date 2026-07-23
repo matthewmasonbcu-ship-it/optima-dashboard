@@ -3,7 +3,7 @@
 // OptionContractSelector.tsx imports from here — do not add local copies there.
 
 import type { SpreadType, OptionLeg } from "./dashboardTypes";
-import { MIN_CREDIT_TO_WIDTH_RATIO } from "./scanConfig";
+import { MIN_CREDIT_TO_WIDTH_RATIO, MIN_SHORT_LEG_OPEN_INTEREST } from "./scanConfig";
 
 // --- Shared types ------------------------------------------------------------
 
@@ -702,6 +702,18 @@ export function selectBestCreditSpread(
     return {
       success: false,
       reason: `Best short leg ${getOptionSymbol(shortLeg)} has grade ${shortGrade}. No tradeable candidate near 0.20–0.25 delta target.`,
+    };
+  }
+
+  // Short-leg liquidity floor. Reject before building any spread so an
+  // untradeable strike is never selected (rather than selected then blocked
+  // downstream). Applies to the SHORT leg only — the long leg is defined-risk
+  // protection that can be held to expiry, so its OI is not gated here.
+  const shortOpenInterest = getOpenInterest(shortLeg);
+  if (shortOpenInterest < MIN_SHORT_LEG_OPEN_INTEREST) {
+    return {
+      success: false,
+      reason: `Short-leg open interest ${shortOpenInterest} on ${getOptionSymbol(shortLeg)} is below the ${MIN_SHORT_LEG_OPEN_INTEREST} minimum — too illiquid to trade.`,
     };
   }
 

@@ -24,6 +24,16 @@ export const MIDPOINT_DTE = 37;
 // Retune upward as more data accumulates.
 export const MIN_CREDIT_TO_WIDTH_RATIO = 0.1;
 
+// Minimum open interest on the SHORT leg for a spread to be selectable. The
+// bid/ask denominator fix removed an accidental liquidity screen (thin credit no
+// longer inflates the spread% gate), so a real floor is needed or untradeable
+// strikes queue. Baseline 2026-07-21 short-leg OI: 3, 32, 95, 152, 278, 344, 436,
+// 1169 — 100 is the standard options-liquidity floor and sits in the 95→152 gap,
+// blocking the thin trio (FDX 3, GLD 32, SLV 95) while keeping the liquid five.
+// OI (resting liquidity), not volume: the 10:15 ET scan runs before daily volume
+// accrues, so a volume floor would false-block liquid names.
+export const MIN_SHORT_LEG_OPEN_INTEREST = 100;
+
 // --- PENDING (null until live eval; not needed for paper) --------------------
 export const PER_TRADE_RISK_PCT: number | null = null; // static-vs-trailing DD
 export const MAX_TAIL_LOSS_PCT: number | null = null;

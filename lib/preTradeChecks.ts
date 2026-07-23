@@ -356,26 +356,23 @@ export function runServerSideEnforcementChecks(
     };
   }
 
-  // 5. Net credit > 0 and bid/ask spread ≤ MAX_SPREAD_PERCENT
-  // Mirrors calculateRiskGuard exactly so the cron and dashboard enforce the
-  // identical rule. net_credit is the mid-equivalent on a credit spread contract.
-  const cBid = getNumber(
-    getContractValue(contract, ["bid_price", "bidPrice", "bid"]),
-    0
-  );
-  const cAsk = getNumber(
-    getContractValue(contract, ["ask_price", "askPrice", "ask"]),
-    0
-  );
-  const cMid = getNumber(
+  // 5. Net credit > 0 and bid/ask spread ≤ MAX_SPREAD_PERCENT.
+  // Read the grade-computed spread_percent field (short-leg mid denominator) —
+  // the SAME value getPreTradeEnforcementStatus (line ~201) and grading already
+  // use — instead of recomputing against net_credit. The old net_credit
+  // denominator inflated the ratio 3–5× and blocked liquid names (GS, JPM) for a
+  // false reason; short-leg liquidity is now gated at selection time instead.
+  const netCredit = getNumber(
     getContractValue(contract, ["net_credit", "mid_price", "midPrice", "mid"]),
-    cBid > 0 && cAsk > 0 ? (cBid + cAsk) / 2 : 0
+    0
   );
-  if (cMid <= 0) {
+  if (netCredit <= 0) {
     return { passed: false, reason: "Net credit is zero or negative — not a valid credit spread." };
   }
-  const cSpreadPct =
-    cBid > 0 && cAsk > 0 ? ((cAsk - cBid) / cMid) * 100 : 999;
+  const cSpreadPct = getNumber(
+    getContractValue(contract, ["spreadPercent", "spread_percent", "bidAskSpreadPercent"]),
+    999
+  );
   if (cSpreadPct > MAX_SPREAD_PERCENT) {
     return {
       passed: false,
