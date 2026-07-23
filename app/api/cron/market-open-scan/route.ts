@@ -162,6 +162,10 @@ function shortBlockReason(reason: string | null): string {
   if (r.includes("grade blocked") || r.includes("short leg")) return "short leg blocked";
   if (r.includes("exceeds allowed risk") || r.includes("max loss") || r.includes("risk cap"))
     return "maxloss>cap";
+  // Long-leg loop gates (selectBestCreditSpread): keep each distinct so the daily
+  // summary shows WHICH gate rejected — grade vs risk cap vs credit-to-width floor.
+  if (r.includes("ratio-block") || r.includes("credit-to-width")) return "credit<floor";
+  if (r.includes("grade-block")) return "spread grade-block";
   if (r.includes("delta")) return "delta off-band";
   if (r.includes("no valid") || r.includes("pricing") || r.includes("net credit"))
     return "no pricing";
