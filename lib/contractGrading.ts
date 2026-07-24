@@ -3,7 +3,7 @@
 // OptionContractSelector.tsx imports from here — do not add local copies there.
 
 import type { SpreadType, OptionLeg } from "./dashboardTypes";
-import { MIN_CREDIT_TO_WIDTH_RATIO, MIN_SHORT_LEG_OPEN_INTEREST } from "./scanConfig";
+import { MIN_CREDIT_TO_WIDTH_RATIO, MIN_SHORT_LEG_OPEN_INTEREST, DELTA_BAND } from "./scanConfig";
 
 // --- Shared types ------------------------------------------------------------
 
@@ -484,6 +484,10 @@ export function buildCreditSpreadContract(params: {
     bid_price: shortBid, bidPrice: shortBid, bid: shortBid,
     ask_price: shortAsk, askPrice: shortAsk, ask: shortAsk,
     mid_price: netCredit, midPrice: netCredit, mid: netCredit,
+    // Short-leg delta surfaced at top level so the [0.20,0.25] band checks in
+    // preTradeChecks (which read the "delta" key) actually run instead of
+    // skipping on null. null only when the ATM fallback path had no greeks.
+    delta: getDelta(shortLeg),
     contracts,
     estimated_cost: 0, estimatedCost: 0,
     max_risk: maxLoss, maxRisk: maxLoss,
@@ -664,8 +668,23 @@ export function selectBestCreditSpread(
 
   if (hasGreeks) {
     const targetDelta = 0.225;
-    const withDelta = valid.filter((c) => getDelta(c) !== null);
-    shortLeg = withDelta.reduce<TradierContract | null>((best, c) => {
+    const [bandLo, bandHi] = DELTA_BAND;
+    // Hard-bound the short leg to the delta band BEFORE nearest-selection.
+    // Unbounded nearest could pick a deep 0.44 leg once the OTM strikes are
+    // stripped by the valid-pricing filter. Nearest-to-target among in-band
+    // candidates is the best in-band strike; if none are in band, the unbounded
+    // nearest would have been out of band too — so reject rather than widen.
+    const inBand = valid.filter((c) => {
+      const d = getDeltaAbs(c);
+      return d !== null && d >= bandLo && d <= bandHi;
+    });
+    if (inBand.length === 0) {
+      return {
+        success: false,
+        reason: `No strike within the ${bandLo}–${bandHi} short-leg delta band for this expiration.`,
+      };
+    }
+    shortLeg = inBand.reduce<TradierContract | null>((best, c) => {
       if (!best) return c;
       const dBest = Math.abs((getDeltaAbs(best) ?? 999) - targetDelta);
       const dCurr = Math.abs((getDeltaAbs(c) ?? 999) - targetDelta);

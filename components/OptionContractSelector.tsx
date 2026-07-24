@@ -310,6 +310,10 @@ function buildCreditSpreadContract(params: {
     bid_price: shortBid, bidPrice: shortBid, bid: shortBid,
     ask_price: shortAsk, askPrice: shortAsk, ask: shortAsk,
     mid_price: netCredit, midPrice: netCredit, mid: netCredit,
+    // Short-leg delta surfaced at top level so the dashboard [0.20,0.25] band
+    // check (preTradeChecks, reads the "delta" key) runs instead of skipping on
+    // null. Twin of the lib/contractGrading builder — keep both in parity.
+    delta: getDelta(shortLeg),
     contracts,
     estimated_cost: 0,
     estimatedCost: 0,
