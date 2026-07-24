@@ -246,12 +246,16 @@ export function getSpreadTypeLabel(spreadType: SpreadType): string {
 export function getDeltaFitScore(contract: TradierContract): number {
   const deltaAbs = getDeltaAbs(contract);
   if (deltaAbs === null) return 50;
-  if (deltaAbs >= 0.30 && deltaAbs <= 0.55) return 100;
-  if (deltaAbs >= 0.25 && deltaAbs < 0.30) return 85;
-  if (deltaAbs > 0.55 && deltaAbs <= 0.70) return 75;
-  if (deltaAbs >= 0.18 && deltaAbs < 0.25) return 60;
-  if (deltaAbs > 0.70 && deltaAbs <= 0.85) return 45;
-  return 20;
+  // Re-pointed at the credit-spread short-leg target band [0.20, 0.25]. The old
+  // curve peaked at 0.30–0.55 (a directional-strategy shape) and scored the
+  // actual target only 60. Scores for |δ| < 0.20 are preserved exactly so
+  // deep-OTM long-leg grades — and therefore the (c) selection — do not move
+  // (dry-run confirmed: identical selected widths, promote-only grades).
+  if (deltaAbs >= 0.20 && deltaAbs <= 0.25) return 100; // target band
+  if (deltaAbs > 0.25 && deltaAbs <= 0.30) return 70;
+  if (deltaAbs >= 0.18 && deltaAbs < 0.20) return 60; // preserved
+  if (deltaAbs > 0.30 && deltaAbs <= 0.40) return 40;
+  return 20; // |δ| < 0.18 (preserved) and |δ| > 0.40
 }
 
 export function getTradierExpirationDays(contract: TradierContract): number | null {
