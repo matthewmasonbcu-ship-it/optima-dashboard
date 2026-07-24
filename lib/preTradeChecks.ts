@@ -95,8 +95,26 @@ export function calculateRiskGuard(params: {
   );
 
   const allowedRisk = accountSize * (maxRiskPercent / 100);
-  const spreadPercent =
-    bid > 0 && ask > 0 && mid > 0 ? ((ask - bid) / mid) * 100 : 999;
+  // Prefer the grade-computed spread_percent field. On a spread contract mid IS
+  // net_credit (buildCreditSpreadContract sets mid_price = netCredit), so the old
+  // (ask-bid)/mid recompute inflated the ratio 3-5x — the same net_credit bug the
+  // cron gate had. The stored field is short-leg mid for spreads and a real mid
+  // for singles (normalizeTradierOption). Fall back to the recompute (NOT 999)
+  // only when the field is absent, so single legs without the field stay correct.
+  // getContractValue returns null when the field is absent; guard explicitly so
+  // an absent field falls through to the recompute. (getNumber(null, NaN) would
+  // coerce to 0 and make the guard read a false 0% spread — fail-open.)
+  const rawSpreadPercent = getContractValue(selectedContract, [
+    "spreadPercent",
+    "spread_percent",
+    "bidAskSpreadPercent",
+  ]);
+  const storedSpreadPercent = rawSpreadPercent === null ? NaN : Number(rawSpreadPercent);
+  const spreadPercent = Number.isFinite(storedSpreadPercent)
+    ? storedSpreadPercent
+    : bid > 0 && ask > 0 && mid > 0
+      ? ((ask - bid) / mid) * 100
+      : 999;
 
   if (mid <= 0) {
     return { status: "BLOCKED", reason: "Contract mid price is missing." };
