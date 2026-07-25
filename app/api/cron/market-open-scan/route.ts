@@ -350,6 +350,24 @@ async function gradeSymbol(
   };
 }
 
+// VIX from Tradier — Finnhub's free tier can't serve the index ("Market data
+// subscription required for CFD indices"), and "^VIX" isn't a Tradier symbol.
+// Live-verified: symbol "VIX" (type=index) carries the value in `last`;
+// open/high/low/close/bid/ask are all null for an index. Uses tradierRequest, so
+// it hits whatever TRADIER_ENV points at (production on the deployed cron).
+// Returns null on any failure/unmatched -> caller logs loudly + regime UNKNOWN.
+async function fetchVixLevel(): Promise<number | null> {
+  try {
+    const res = await tradierRequest({ path: "/markets/quotes?symbols=VIX" });
+    if (!res.ok) return null;
+    const q = (res.data as { quotes?: { quote?: { last?: unknown } } })?.quotes?.quote;
+    const last = typeof q?.last === "number" ? q.last : null;
+    return last !== null && last > 0 ? last : null;
+  } catch {
+    return null;
+  }
+}
+
 // Insert the approval-queue preview for a PASSED candidate, fire the ACTIONABLE
 // phone-review alert, and write the scanner dedup row. Safety locks unchanged.
 async function queuePreview(
@@ -551,11 +569,21 @@ export async function GET(request: Request) {
       });
     }
 
-    // VIX fetched separately and gracefully — UNKNOWN on failure, never blocks.
-    const vixQuote = await fetchQuote("^VIX", baseUrl);
     const marketCondition = classifyMarketCondition(spyQuote);
-    const vixLevel = vixQuote?.c ?? null;
-    const vixRegime = vixLevel !== null ? classifyVixRegime(vixLevel) : "UNKNOWN";
+
+    // VIX from Tradier (respects TRADIER_ENV). Graceful: null -> UNKNOWN, never
+    // blocks. But NOT silent — a null that matters announces itself (loud log
+    // here + a ⚠️ line in the run summary), so a future VIX breakage is visible.
+    const vixLevel = await fetchVixLevel();
+    const vixRegime = classifyVixRegime(vixLevel);
+    const vixUnavailable = vixLevel === null;
+    if (vixUnavailable) {
+      console.warn(
+        `\u{1F6A8} VIX UNAVAILABLE ${stamp} — Tradier "VIX" quote returned ` +
+          `null/0/unmatched (env=${process.env.TRADIER_ENV ?? "sandbox"}); ` +
+          `regime defaulted to UNKNOWN. Check Tradier market-data access.`
+      );
+    }
 
     // --- Token guard (once, before any Tradier call) ---
     const tradierEnv = (process.env.TRADIER_ENV ?? "sandbox").toLowerCase();
@@ -865,6 +893,11 @@ export async function GET(request: Request) {
           `\u{26A0}\u{FE0F} ${quoteFailures.length} symbol${
             quoteFailures.length === 1 ? "" : "s"
           } missing quotes: ${quoteFailures.join(", ")}`
+        );
+      }
+      if (vixUnavailable) {
+        lines.push(
+          `\u{26A0}\u{FE0F} VIX unavailable \u{2192} regime=UNKNOWN (Tradier VIX quote null/unmatched)`
         );
       }
       if (queuedSymbol) {

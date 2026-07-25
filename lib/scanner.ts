@@ -89,8 +89,8 @@ export async function fetchQuote(
   }
 }
 
-// Thresholds calibrated for VIXY (ProShares VIX Short-Term Futures ETF),
-// used as a free-tier proxy for the VIX index.
+// Real CBOE VIX index levels. VIX is sourced from Tradier
+// (/markets/quotes?symbols=VIX, field `last`); thresholds unchanged.
 export function classifyVixRegime(vixPrice: number | null): VixRegime {
   if (vixPrice === null || vixPrice <= 0) return "UNKNOWN";
   if (vixPrice < 22) return "CALM";
