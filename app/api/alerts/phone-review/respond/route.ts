@@ -35,6 +35,7 @@ type PhoneReviewTokenRow = {
 
 type PaperOrderPreviewRow = {
   id: string;
+  scan_candidate_id: string | null;
   symbol: string | null;
   contract_symbol: string | null;
   strike: number | null;
@@ -204,6 +205,59 @@ async function autoSavePaperTrade(
     };
   }
 
+  // --- PROVENANCE SNAPSHOT (Step 3) ---
+  // Follow the FK from the preview to the EXACT scan_candidate (+ its scan_run)
+  // and COPY the scan-moment context onto the trade. Every value is read straight
+  // from the persisted scan rows — nothing is recomputed, re-graded, or re-quoted
+  // at approve time. Non-fatal: only set when a real link resolves; otherwise the
+  // snap_* columns stay null and the trade still saves.
+  let provenanceSnapshot: Record<string, unknown> = {};
+  if (preview.scan_candidate_id) {
+    const { data: cand, error: candErr } = await supabase
+      .from("scan_candidates")
+      .select("setup_score, grade, short_delta, net_credit, spread_width, run_id")
+      .eq("id", preview.scan_candidate_id)
+      .maybeSingle();
+
+    if (candErr) {
+      console.warn(
+        "Provenance snapshot: scan_candidates read failed (non-fatal):",
+        candErr.message
+      );
+    } else if (cand) {
+      const { data: run, error: runErr } = await supabase
+        .from("scan_runs")
+        .select("vix_regime, market_condition")
+        .eq("id", cand.run_id)
+        .maybeSingle();
+      if (runErr) {
+        console.warn(
+          "Provenance snapshot: scan_runs read failed (non-fatal):",
+          runErr.message
+        );
+      }
+
+      provenanceSnapshot = {
+        scan_candidate_id: preview.scan_candidate_id,
+        snap_vix_regime: run?.vix_regime ?? null,
+        snap_market_condition: run?.market_condition ?? null,
+        snap_setup_score: cand.setup_score,
+        snap_grade: cand.grade,
+        snap_short_delta: cand.short_delta,
+        snap_net_credit: cand.net_credit,
+        snap_spread_width: cand.spread_width,
+        // Ratio of the candidate's OWN scan-moment net_credit / spread_width — a
+        // copy expressed as a ratio (both operands are also stored above), not a
+        // fresh computation from live data.
+        snap_credit_to_width:
+          cand.net_credit != null && cand.spread_width
+            ? cand.net_credit / cand.spread_width
+            : null,
+        snap_context_source: "linked",
+      };
+    }
+  }
+
   const { data: paperTradeData, error: paperTradeError } = await supabase
     .from("paper_trades")
     .insert({
@@ -213,6 +267,7 @@ async function autoSavePaperTrade(
       take_profit: preview.take_profit,
       status: "open",
       strategy: "phone_approved",
+      ...provenanceSnapshot,
     })
     .select("id")
     .single();
@@ -341,6 +396,7 @@ export async function POST(request: Request) {
       .select(
         [
           "id",
+          "scan_candidate_id",
           "symbol",
           "contract_symbol",
           "strike",
