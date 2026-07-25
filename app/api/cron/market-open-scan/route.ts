@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { supabase } from "@/lib/supabaseClient";
 import { tradierRequest } from "@/lib/tradierClient";
 import {
@@ -641,6 +642,10 @@ export async function GET(request: Request) {
     let queuedMaxLoss: number | null = null;
     let queuedSpreadType: string | null = null;
     let dbInsertError: string | null = null;
+    // The id of the scan_candidates row that produced today's queued preview.
+    // Captured from the SAME candidate object the queue loop marked (not re-matched),
+    // then stamped onto the preview after the candidate row is persisted.
+    let queuedCandidateId: string | null = null;
     const heldNotes: string[] = [];
 
     if (passers.length > 0) {
@@ -759,7 +764,14 @@ export async function GET(request: Request) {
       // selectBestCreditSpread). PASSED candidates carry a spreadContract; BLOCKED
       // ones don't, so these fields stay null. No extra Tradier calls.
       const sc = g.spreadContract;
+      // Assign the row's id here (not via DB default) so the queued candidate's
+      // id is known and can be linked to its preview. g.queued was set on THIS
+      // exact object by the queue loop above, so this is the actual producing
+      // candidate — no symbol/strike re-matching.
+      const id = randomUUID();
+      if (g.queued) queuedCandidateId = id;
       return {
+        id,
         symbol: g.symbol,
         setup_score: g.setupScore,
         direction: g.direction,
@@ -790,6 +802,25 @@ export async function GET(request: Request) {
           `Scan-observability write failed: ${persistError}\n` +
           `The scan itself completed; run/candidate data may be missing. Check RLS/schema + Vercel logs.`
       );
+    }
+
+    // --- PROVENANCE LINK: born at scan time, stamped once its target exists ---
+    // The candidate row is persisted just above (after the preview was minted),
+    // so the preview's FK can only be satisfied now. Stamp the exact producing
+    // candidate id onto today's queued preview. FK-safe + non-fatal: if candidate
+    // persistence failed, or nothing queued, we skip and scan_candidate_id stays
+    // null — this never blocks a trade and touches no scoring/gate/selection logic.
+    if (!persistError && queuedPreviewId && queuedCandidateId) {
+      const { error: linkError } = await supabase
+        .from("paper_order_previews")
+        .update({ scan_candidate_id: queuedCandidateId })
+        .eq("id", queuedPreviewId);
+      if (linkError) {
+        console.warn(
+          "paper_order_previews scan_candidate_id link update failed (non-fatal):",
+          linkError.message
+        );
+      }
     }
 
     // --- NOTIFY: exactly one status message (RUN SUMMARY or FAILURE) ---

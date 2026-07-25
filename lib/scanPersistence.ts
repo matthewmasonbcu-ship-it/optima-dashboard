@@ -7,6 +7,10 @@ import { supabase } from "@/lib/supabaseClient";
 // hid the 3-week RLS bug, so the failure must reach the caller, not be swallowed.
 
 export type ScanCandidateRecord = {
+  // Pre-generated in the caller so the exact row can be referenced (FK) by the
+  // preview it produces — see market-open-scan provenance link. Passed explicitly
+  // instead of relying on the DB default so the id is known BEFORE the insert.
+  id: string;
   symbol: string;
   setup_score: number | null;
   direction: string | null;
