@@ -196,6 +196,10 @@ type GradedCandidate = {
   spreadContract: TradierContract | null;
   queued: boolean;
   queueNote: string | null;
+  // True only when the earnings lookup FAILED (proxy/API error) — the symbol was
+  // skipped fail-closed because earnings status could not be verified. Distinct
+  // from a genuine "no earnings in window" (which proceeds silently).
+  earningsFetchFailed?: boolean;
 };
 
 // Contract-grade a single ranked symbol. Runs the EXACT existing pipeline
@@ -259,9 +263,27 @@ async function gradeSymbol(
   }
 
   // HARD earnings pre-filter (BEFORE grading). Drop any expiration held through
-  // the next earnings date. Fails open: a null earnings date skips the filter.
-  const earningsDate = await fetchNextEarningsDate(symbol, baseUrl);
-  if (earningsDate) {
+  // the next earnings date.
+  //
+  // Fail-CLOSED + LOUD on a lookup ERROR: if the earnings proxy failed we cannot
+  // verify the symbol is clear of earnings, so we skip it (never queue a name
+  // whose earnings status is unknown) and announce it — a systemic proxy outage
+  // is then visible in the run summary instead of silently disabling the gate.
+  // A genuine "no earnings in window" (status ok, null date) proceeds SILENTLY.
+  const earnings = await fetchNextEarningsDate(symbol, baseUrl);
+  if (earnings.status === "error") {
+    console.warn(
+      `\u{1F6A8} EARNINGS UNVERIFIED ${symbol} — ${earnings.reason} ` +
+        `(env=${process.env.TRADIER_ENV ?? "sandbox"}); symbol skipped (fail-closed).`
+    );
+    return {
+      ...base,
+      reason: `earnings unverified (${earnings.reason})`,
+      earningsFetchFailed: true,
+    };
+  }
+  if (earnings.nextEarningsDate) {
+    const earningsDate = earnings.nextEarningsDate;
     const clear = inWindow.filter(({ date }) => date < earningsDate);
     if (clear.length === 0) {
       return { ...base, reason: `earnings inside DTE window (${earningsDate})` };
@@ -898,6 +920,16 @@ export async function GET(request: Request) {
       if (vixUnavailable) {
         lines.push(
           `\u{26A0}\u{FE0F} VIX unavailable \u{2192} regime=UNKNOWN (Tradier VIX quote null/unmatched)`
+        );
+      }
+      const earningsFailures = graded
+        .filter((g) => g.earningsFetchFailed)
+        .map((g) => g.symbol);
+      if (earningsFailures.length > 0) {
+        lines.push(
+          `\u{26A0}\u{FE0F} ${earningsFailures.length} symbol${
+            earningsFailures.length === 1 ? "" : "s"
+          } earnings unverified \u{2192} skipped (fail-closed): ${earningsFailures.join(", ")}`
         );
       }
       if (queuedSymbol) {
