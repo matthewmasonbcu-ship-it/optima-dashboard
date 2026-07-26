@@ -2,11 +2,15 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabaseClient";
 import { tradierRequest } from "@/lib/tradierClient";
 import { sendTelegramAlert } from "@/lib/notify/sendTelegramAlert";
+import { STOP_LOSS_FACTOR, PROFIT_EXIT_PCT } from "@/lib/scanConfig";
 
 const ROUTE = "/api/cron/auto-close-check";
 
-const TAKE_PROFIT_FACTOR = 0.5;
-const STOP_LOSS_FACTOR = 2.0;
+// Exit levels sourced from scanConfig (single frozen source). PROFIT_EXIT_PCT is a
+// percent (50); the close math below uses a price factor, so convert once here
+// (50 / 100 = 0.5 — identical to the previous local literal). STOP_LOSS_FACTOR is a
+// factor in both, imported directly.
+const TAKE_PROFIT_FACTOR = PROFIT_EXIT_PCT / 100;
 
 // Telegram is the active alert channel — matches the scan cron's sendHeartbeat.
 // The old Twilio SMS / email-to-SMS path was retired (carrier 30034 block,

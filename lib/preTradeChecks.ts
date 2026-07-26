@@ -15,6 +15,7 @@ import {
   normalizeGradeValue,
   type TradierContract,
 } from "./contractGrading";
+import { DELTA_BAND, MIN_DTE, MAX_DTE } from "./scanConfig";
 
 // --- Shared types ------------------------------------------------------------
 
@@ -257,9 +258,9 @@ export function getPreTradeEnforcementStatus(params: {
         return d.getTime();
       })();
       const dte = Math.ceil((expMs - todayMs) / 86_400_000);
-      if (dte < 30 || dte > 45) {
+      if (dte < MIN_DTE || dte > MAX_DTE) {
         blocks.push(
-          `DTE is ${dte} day${dte === 1 ? "" : "s"} — must be 30–45. Select a contract within the target expiration window.`
+          `DTE is ${dte} day${dte === 1 ? "" : "s"} — must be ${MIN_DTE}–${MAX_DTE}. Select a contract within the target expiration window.`
         );
       }
     }
@@ -268,9 +269,9 @@ export function getPreTradeEnforcementStatus(params: {
     const deltaRaw = getContractValue(selectedContract, ["delta"], null);
     if (deltaRaw !== null && Number.isFinite(Number(deltaRaw))) {
       const deltaAbs = Math.abs(Number(deltaRaw));
-      if (deltaAbs < 0.20 || deltaAbs > 0.25) {
+      if (deltaAbs < DELTA_BAND[0] || deltaAbs > DELTA_BAND[1]) {
         blocks.push(
-          `Short leg delta ${deltaAbs.toFixed(2)} is outside target range 0.20–0.25.`
+          `Short leg delta ${deltaAbs.toFixed(2)} is outside target range ${DELTA_BAND[0].toFixed(2)}–${DELTA_BAND[1].toFixed(2)}.`
         );
       }
     }
@@ -344,18 +345,18 @@ export function runServerSideEnforcementChecks(
     return d.getTime();
   })();
   const dte = Math.ceil((expMs - todayMs) / 86_400_000);
-  if (dte < 30 || dte > 45) {
-    return { passed: false, reason: `DTE is ${dte} — must be 30–45.` };
+  if (dte < MIN_DTE || dte > MAX_DTE) {
+    return { passed: false, reason: `DTE is ${dte} — must be ${MIN_DTE}–${MAX_DTE}.` };
   }
 
   // 3. Delta — short leg must be 0.20–0.25 absolute (skip when null/non-finite)
   const deltaRaw = getContractValue(contract, ["delta"], null);
   if (deltaRaw !== null && Number.isFinite(Number(deltaRaw))) {
     const deltaAbs = Math.abs(Number(deltaRaw));
-    if (deltaAbs < 0.20 || deltaAbs > 0.25) {
+    if (deltaAbs < DELTA_BAND[0] || deltaAbs > DELTA_BAND[1]) {
       return {
         passed: false,
-        reason: `Short leg delta ${deltaAbs.toFixed(2)} is outside target range 0.20–0.25.`,
+        reason: `Short leg delta ${deltaAbs.toFixed(2)} is outside target range ${DELTA_BAND[0].toFixed(2)}–${DELTA_BAND[1].toFixed(2)}.`,
       };
     }
   }
