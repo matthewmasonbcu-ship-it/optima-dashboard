@@ -74,6 +74,9 @@ export type GradeParams = {
   accountSize: number;
   maxRiskPercent: number;
   maxSpreadPercent: number;
+  // Optional "as-of" moment (epoch ms) for DTE math. Omitted → live (Date.now()).
+  // The backtest injects the simulated day so grades compute as of history, not now.
+  asOf?: number;
 };
 
 // --- Value extraction helpers ------------------------------------------------
@@ -258,16 +261,23 @@ export function getDeltaFitScore(contract: TradierContract): number {
   return 20; // |δ| < 0.18 (preserved) and |δ| > 0.40
 }
 
-export function getTradierExpirationDays(contract: TradierContract): number | null {
+export function getTradierExpirationDays(
+  contract: TradierContract,
+  asOf?: number
+): number | null {
   const expiration = String(getContractValue(contract, ["expiration_date", "expirationDate"], ""));
   if (!expiration) return null;
   const expirationTime = new Date(`${expiration}T16:00:00`).getTime();
   if (!Number.isFinite(expirationTime)) return null;
-  return Math.ceil((expirationTime - Date.now()) / (1000 * 60 * 60 * 24));
+  const now = asOf ?? Date.now();
+  return Math.ceil((expirationTime - now) / (1000 * 60 * 60 * 24));
 }
 
-export function getExpirationFitScore(contract: TradierContract): number {
-  const days = getTradierExpirationDays(contract);
+export function getExpirationFitScore(
+  contract: TradierContract,
+  asOf?: number
+): number {
+  const days = getTradierExpirationDays(contract, asOf);
   if (days === null) return 50;
   if (days >= 7 && days <= 45) return 100;
   if (days >= 3 && days < 7) return 75;
@@ -301,7 +311,7 @@ export function getTradierQualityGrade(
   const allowedRisk = params.accountSize * (params.maxRiskPercent / 100);
   const liquidityScore = getTradierLiquidityScore(contract);
   const deltaFitScore = getDeltaFitScore(contract);
-  const expirationFitScore = getExpirationFitScore(contract);
+  const expirationFitScore = getExpirationFitScore(contract, params.asOf);
   const volume = getVolume(contract);
   const openInterest = getOpenInterest(contract);
 
@@ -348,7 +358,7 @@ export function getTradierRecommendationScore(
   const spread = getSpreadPercent(contract);
   const liquidityScore = getTradierLiquidityScore(contract);
   const deltaFitScore = getDeltaFitScore(contract);
-  const expirationFitScore = getExpirationFitScore(contract);
+  const expirationFitScore = getExpirationFitScore(contract, params.asOf);
   const maxRisk = getMaxRisk(contract);
   const allowedRisk = params.accountSize * (params.maxRiskPercent / 100);
   const mid = getMid(contract);
@@ -391,7 +401,7 @@ export function enrichTradierContract(
   const recommendationScore = getTradierRecommendationScore(contract, params);
   const qualityGrade = getTradierQualityGrade(contract, params);
   const deltaAbs = getDeltaAbs(contract);
-  const expirationDays = getTradierExpirationDays(contract);
+  const expirationDays = getTradierExpirationDays(contract, params.asOf);
 
   return {
     ...contract,
@@ -643,6 +653,7 @@ export function selectBestCreditSpread(
     accountSize: params.accountSize,
     maxRiskPercent: Math.max(params.maxRiskPercent * 5, 5),
     maxSpreadPercent: params.maxSpreadPercent,
+    asOf: params.asOf,
   };
 
   // Filter to correct option type and enrich

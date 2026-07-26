@@ -161,6 +161,8 @@ export function getPreTradeEnforcementStatus(params: {
   selectedSymbol?: string | null;
   tradeDirection?: TradeDirection | string | null;
   marketCondition?: MarketCondition | string | null;
+  // Optional "as-of" moment (epoch ms) for the DTE block. Omitted → live (new Date()).
+  asOf?: number;
 }) {
   const {
     selectedContract,
@@ -168,6 +170,7 @@ export function getPreTradeEnforcementStatus(params: {
     selectedSymbol,
     tradeDirection,
     marketCondition,
+    asOf,
   } = params;
 
   const warnings: string[] = [];
@@ -253,7 +256,7 @@ export function getPreTradeEnforcementStatus(params: {
     } else {
       const expMs = new Date(expDateRaw).getTime();
       const todayMs = (() => {
-        const d = new Date();
+        const d = asOf != null ? new Date(asOf) : new Date();
         d.setHours(0, 0, 0, 0);
         return d.getTime();
       })();
@@ -323,7 +326,8 @@ export type EnforcementResult = {
 
 export function runServerSideEnforcementChecks(
   contract: TradierContract,
-  dailyGates: DailyGateData
+  dailyGates: DailyGateData,
+  asOf?: number
 ): EnforcementResult {
   // 1. Grade must be A+, A, or B
   const grade = getGrade(contract);
@@ -340,7 +344,7 @@ export function runServerSideEnforcementChecks(
   }
   const expMs = new Date(expDateRaw).getTime();
   const todayMs = (() => {
-    const d = new Date();
+    const d = asOf != null ? new Date(asOf) : new Date();
     d.setHours(0, 0, 0, 0);
     return d.getTime();
   })();
