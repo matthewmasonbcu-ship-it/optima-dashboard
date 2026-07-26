@@ -366,11 +366,14 @@ export function runServerSideEnforcementChecks(
     return { passed: false, reason: "Contract is single-leg. Must be a credit spread." };
   }
 
-  // 4. Max loss within Risk Guard limit
-  const maxLoss = getNumber(
-    getContractValue(contract, ["max_loss", "max_risk", "maxRisk"]),
-    0
-  );
+  // 4. Max loss within Risk Guard limit.
+  // Fail-CLOSED null-guard (mirrors calculateRiskGuard:117): getContractValue
+  // returns null when absent, and getNumber(null, 0) would coerce to 0 — passing
+  // this "must be below cap" gate. Resolve absent/non-numeric to Infinity so a
+  // fieldless contract blocks instead of slipping through.
+  const rawMaxLoss = getContractValue(contract, ["max_loss", "max_risk", "maxRisk"]);
+  const parsedMaxLoss = rawMaxLoss === null ? NaN : Number(rawMaxLoss);
+  const maxLoss = Number.isFinite(parsedMaxLoss) ? parsedMaxLoss : Infinity;
   const allowedRisk = ACCOUNT_SIZE * (MAX_RISK_PERCENT / 100);
   if (maxLoss > allowedRisk) {
     return {
@@ -392,10 +395,12 @@ export function runServerSideEnforcementChecks(
   if (netCredit <= 0) {
     return { passed: false, reason: "Net credit is zero or negative — not a valid credit spread." };
   }
-  const cSpreadPct = getNumber(
-    getContractValue(contract, ["spreadPercent", "spread_percent", "bidAskSpreadPercent"]),
-    999
-  );
+  // Fail-CLOSED null-guard (mirrors calculateRiskGuard:117): getNumber(null, 999)
+  // would coerce an absent field to 0 and pass this gate; resolve absent/non-numeric
+  // to 999 so it blocks.
+  const rawSpreadPct = getContractValue(contract, ["spreadPercent", "spread_percent", "bidAskSpreadPercent"]);
+  const parsedSpreadPct = rawSpreadPct === null ? NaN : Number(rawSpreadPct);
+  const cSpreadPct = Number.isFinite(parsedSpreadPct) ? parsedSpreadPct : 999;
   if (cSpreadPct > MAX_SPREAD_PERCENT) {
     return {
       passed: false,
