@@ -200,6 +200,15 @@ export default function SandboxPreviewPhoneReviewQueue({
     setActionError(null);
 
     try {
+      // Recency bound (client-side DISPLAY filter only; deletes nothing). Only
+      // surface WATCH setups created within the window so stale/older previews drop
+      // off the render. created_at is always set on insert, so a fresh preview
+      // always falls inside the window and appears immediately.
+      const QUEUE_RECENCY_DAYS = 14;
+      const recentCutoffIso = new Date(
+        Date.now() - QUEUE_RECENCY_DAYS * 24 * 60 * 60 * 1000
+      ).toISOString();
+
       const { data, error } = await supabase
         .from("paper_order_previews")
         .select("*")
@@ -208,6 +217,7 @@ export default function SandboxPreviewPhoneReviewQueue({
         .eq("approved_for_sandbox_order", false)
         .eq("approved_for_live_order", false)
         .eq("submitted_to_broker", false)
+        .gte("created_at", recentCutoffIso)
         .order("sandbox_preview_human_reviewed_at", {
           ascending: false,
           nullsFirst: false,

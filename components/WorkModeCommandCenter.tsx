@@ -138,6 +138,13 @@ export default function WorkModeCommandCenter() {
     setLoading(true);
 
     try {
+      // Recency bound (client-side DISPLAY filter only; deletes nothing) for the
+      // WATCH count + top-ready list below. A fresh preview always shows.
+      const QUEUE_RECENCY_DAYS = 14;
+      const recentCutoffIso = new Date(
+        Date.now() - QUEUE_RECENCY_DAYS * 24 * 60 * 60 * 1000
+      ).toISOString();
+
       const [
         phoneQueueResult,
         latestPhoneAlertResult,
@@ -153,7 +160,8 @@ export default function WorkModeCommandCenter() {
           .eq("sandbox_preview_human_review_decision", "WATCH")
           .eq("approved_for_sandbox_order", false)
           .eq("approved_for_live_order", false)
-          .eq("submitted_to_broker", false),
+          .eq("submitted_to_broker", false)
+          .gte("created_at", recentCutoffIso),
         supabase
           .from("phone_alert_events")
           .select("id, created_at, symbol, delivery_status")
@@ -183,6 +191,7 @@ export default function WorkModeCommandCenter() {
           .eq("approved_for_sandbox_order", false)
           .eq("approved_for_live_order", false)
           .eq("submitted_to_broker", false)
+          .gte("created_at", recentCutoffIso)
           .order("sandbox_preview_human_reviewed_at", {
             ascending: false,
             nullsFirst: false,

@@ -810,6 +810,13 @@ export default function CommandCenterPanel({
       const startOfDay = new Date();
       startOfDay.setHours(0, 0, 0, 0);
 
+      // Recency bound (client-side DISPLAY filter only; deletes nothing) for the
+      // pending-approval WATCH queue below. A fresh preview always shows.
+      const QUEUE_RECENCY_DAYS = 14;
+      const recentCutoffIso = new Date(
+        Date.now() - QUEUE_RECENCY_DAYS * 24 * 60 * 60 * 1000
+      ).toISOString();
+
       const [
         sandboxResult,
         submittedResult,
@@ -841,6 +848,7 @@ export default function CommandCenterPanel({
           .eq("approved_for_sandbox_order", false)
           .eq("approved_for_live_order", false)
           .eq("submitted_to_broker", false)
+          .gte("created_at", recentCutoffIso)
           .order("sandbox_preview_human_reviewed_at", { ascending: false, nullsFirst: false })
           .limit(5),
         supabase
