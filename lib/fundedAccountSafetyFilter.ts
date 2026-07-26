@@ -1,3 +1,5 @@
+import { MAX_RISK_PER_TRADE_DOLLARS } from "./preTradeChecks";
+
 export type FundedAccountSafetyInput = {
   symbol: string | null;
   setup_name: string | null;
@@ -25,7 +27,10 @@ export type FundedAccountSafetyResult = {
 };
 
 const ALLOWED_CONTRACT_QUALITIES = new Set(["A+", "A", "B"]);
-const MAX_RISK_DOLLARS = 100;
+// Advisory only — annotates safety_notes; does NOT block preview creation
+// (useTradeApprovalAlerts.ts inserts the preview regardless). Read the canonical
+// pipeline cap so the funded badge/reason reflects the real $500, not a stale $100.
+const MAX_RISK_DOLLARS = MAX_RISK_PER_TRADE_DOLLARS;
 const MAX_SPREAD_PERCENT = 18;
 
 function isMissingText(value: string | null | undefined) {

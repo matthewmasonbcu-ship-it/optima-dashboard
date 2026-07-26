@@ -34,6 +34,11 @@ export type PreTradeEnforcementStatus = "READY" | "CAUTION" | "BLOCKED";
 // once a win rate is established over 20–30 trades.
 export const ACCOUNT_SIZE = 50000;
 export const MAX_RISK_PERCENT = 1;
+// Canonical per-trade max-loss cap the live pipeline enforces (spread selection in
+// contractGrading.ts + runServerSideEnforcementChecks below). Dashboard displays and
+// advisory filters must read THIS — never a separate hard-coded literal — so the
+// number can't drift out of sync again. Equals $500.
+export const MAX_RISK_PER_TRADE_DOLLARS = ACCOUNT_SIZE * (MAX_RISK_PERCENT / 100);
 export const MAX_SPREAD_PERCENT = 20;
 export const PERSONAL_DAILY_LOSS_STOP = 2000; // 80% of Black Eagle's $2,500 (5%) daily limit
 

@@ -1,5 +1,9 @@
+import { MAX_RISK_PER_TRADE_DOLLARS } from "../lib/preTradeChecks";
+
 export const DEFAULT_RISK_LIMITS = {
-  maxRiskPerTradeDollars: 100,
+  // Manual approval-queue gate (useTradeApprovalAlerts.ts). Read the canonical
+  // pipeline cap so the dashboard gate matches what selection + cron enforce ($500).
+  maxRiskPerTradeDollars: MAX_RISK_PER_TRADE_DOLLARS,
   maxOpenTrades: 3,
   maxAutoTradesPerDay: 3,
   allowLiveTrading: false,
