@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { runOrderSafetyGates } from "@/lib/tradierOrderSafety";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -35,8 +36,6 @@ type PaperOrderPreviewRow = {
   risk_guard_status: string | null;
   contract_quality: string | null;
 };
-
-const ALLOWED_CONTRACT_QUALITIES = new Set(["A+", "A", "B"]);
 
 function block(reason: string, row?: PaperOrderPreviewRow | null) {
   return NextResponse.json(
@@ -92,80 +91,18 @@ export async function POST(request: Request) {
 
     const preview = data as PaperOrderPreviewRow;
 
-    if (preview.preview_status !== "REVIEWED_ONLY") {
-      return block(
-        "Preview must be REVIEWED_ONLY before sandbox preview validation.",
-        preview
-      );
-    }
-
-    if (preview.ready_for_sandbox_preview !== true) {
-      return block(
-        "Preview must be marked ready_for_sandbox_preview before validation.",
-        preview
-      );
-    }
-
-    if (preview.approved_for_order === true) {
-      return block("approved_for_order must remain false.", preview);
-    }
-
-    if (preview.approved_for_sandbox_order === true) {
-      return block("approved_for_sandbox_order must remain false.", preview);
-    }
-
-    if (preview.approved_for_live_order === true) {
-      return block("approved_for_live_order must remain false.", preview);
-    }
-
-    if (preview.submitted_to_broker === true) {
-      return block("submitted_to_broker must remain false.", preview);
-    }
-
-    const normalizedBroker = (preview.broker ?? "").toLowerCase();
-
-if (normalizedBroker !== "tradier" && normalizedBroker !== "tradier_sandbox") {
-  return block("Broker must be Tradier sandbox.", preview);
-}
-
-    if (!preview.contract_symbol) {
-      return block("Missing contract_symbol.", preview);
-    }
-
-    if (!preview.order_side) {
-      return block("Missing order_side.", preview);
-    }
-
-    if (!preview.order_type) {
-      return block("Missing order_type.", preview);
-    }
-
-    if (!preview.time_in_force) {
-      return block("Missing time_in_force.", preview);
-    }
-
-    if (!preview.quantity || preview.quantity <= 0) {
-      return block("Quantity must be greater than 0.", preview);
-    }
-
-    if (!preview.estimated_limit_price || preview.estimated_limit_price <= 0) {
-      return block("estimated_limit_price must be greater than 0.", preview);
-    }
-
-    if (preview.risk_guard_status !== "APPROVED") {
-      return block("Risk Guard must be APPROVED.", preview);
-    }
-
-    if (!ALLOWED_CONTRACT_QUALITIES.has(preview.contract_quality ?? "")) {
-      return block("Contract quality must be A+, A, or B.", preview);
-    }
-
-    if (
-      preview.max_risk_dollars === null ||
-      preview.max_risk_dollars === undefined ||
-      preview.max_risk_dollars > 100
-    ) {
-      return block("max_risk_dollars must be less than or equal to 100.", preview);
+    const gate = runOrderSafetyGates(preview, {
+      allowedBrokers: ["tradier", "tradier_sandbox"],
+      reasons: {
+        notReviewedOnly:
+          "Preview must be REVIEWED_ONLY before sandbox preview validation.",
+        notReady:
+          "Preview must be marked ready_for_sandbox_preview before validation.",
+        brokerInvalid: "Broker must be Tradier sandbox.",
+      },
+    });
+    if (!gate.ok) {
+      return block(gate.reason, preview);
     }
 
     const tradierStylePreviewPayload = {

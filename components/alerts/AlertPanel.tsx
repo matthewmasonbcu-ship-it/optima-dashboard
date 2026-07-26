@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { TradeApprovalAlert } from "@/types/alerts";
+import { MAX_RISK_PER_TRADE_DOLLARS } from "@/lib/preTradeChecks";
 import TradeApprovalCard from "./TradeApprovalCard";
 import ApprovalHistoryPanel from "./ApprovalHistoryPanel";
 import PhoneAlertHistoryPanel from "./PhoneAlertHistoryPanel";
@@ -96,7 +97,7 @@ export default function AlertPanel({
 
             <span className="inline-flex items-center gap-1.5 rounded-full border border-yellow-500/25 bg-yellow-500/[0.08] px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-yellow-300">
               <span className="h-1 w-1 rounded-full bg-yellow-400 shadow-[0_0_5px_rgba(250,204,21,0.9)]" />
-              Max Risk ≤ $100
+              {`Max Risk ≤ $${MAX_RISK_PER_TRADE_DOLLARS}`}
             </span>
 
             <span className="inline-flex items-center gap-1.5 rounded-full border border-purple-500/25 bg-purple-500/[0.08] px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-purple-300">
