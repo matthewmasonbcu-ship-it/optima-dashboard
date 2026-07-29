@@ -287,13 +287,50 @@ type GradedCandidate = {
   inputChainWindow: SnapshotContract[] | null;
 };
 
+// --- Tradier throttle resilience --------------------------------------------
+// The grading burst fires many Tradier GETs back-to-back with no spacing; the tail of
+// that burst (and a concurrent cron sharing the same per-minute quota) can trip
+// Tradier's rate limit, returning 429/5xx or an ok-but-empty body. That is the SHARED
+// root cause of both the intermittent VIX UNAVAILABLE and the ADBE/CRM/MDT
+// "chain unavailable" blocks. tradierGetWithRetry retries ONLY that transient class:
+// HTTP 429 / 5xx, or an HTTP-ok body the caller deems unusable (isUsable=false). It
+// does NOT retry a genuine non-throttle 4xx (e.g. 404 unknown symbol) — that never
+// changes on retry. 3 attempts total; a deadline guard stops retrying before the
+// function budget is at risk, so a fully-throttled morning degrades (regime UNKNOWN,
+// symbols blocked — the loud guards still fire) instead of timing out. Fetch-resilience
+// ONLY: it returns the same data the pipeline already read — no scoring/selection/gate/
+// FROZEN-param behavior changes.
+const TRADIER_RETRY_BACKOFF_MS = [1500, 4000]; // waits before retry attempts 2 and 3
+// Stop retrying this many ms into the run so retry time can't approach the 300s
+// function budget (the ~70s Finnhub loop + grading already precede most retries).
+const SCAN_RETRY_DEADLINE_MS = 260_000;
+
+async function tradierGetWithRetry(
+  path: string,
+  isUsable: (data: unknown) => boolean,
+  deadlineMs: number
+): Promise<{ ok: boolean; status: number; data: unknown }> {
+  let res = await tradierRequest({ path, method: "GET" });
+  for (const delay of TRADIER_RETRY_BACKOFF_MS) {
+    if (res.ok && isUsable(res.data)) return res; // usable payload → done
+    const throttled =
+      res.status === 429 || res.status >= 500 || (res.ok && !isUsable(res.data));
+    if (!throttled) return res; // real 4xx (e.g. 404 not-found) → do not retry
+    if (Date.now() + delay > deadlineMs) return res; // budget guard → give up (loud)
+    await new Promise((r) => setTimeout(r, delay));
+    res = await tradierRequest({ path, method: "GET" });
+  }
+  return res;
+}
+
 // Contract-grade a single ranked symbol. Runs the EXACT existing pipeline
 // (expirations → in-window DTE → adaptive credit spread) plus a HARD earnings
 // pre-filter applied BEFORE grading. Never queues; returns a diagnostic record.
 async function gradeSymbol(
   result: ScanResult,
   baseUrl: string,
-  gradeParams: GradeParams
+  gradeParams: GradeParams,
+  deadlineMs: number
 ): Promise<GradedCandidate> {
   const symbol = result.symbol;
   const setupScore = result.setupScore ?? 0;
@@ -336,11 +373,13 @@ async function gradeSymbol(
   const optionType: "CALL" | "PUT" = direction === "CALL" ? "PUT" : "CALL";
   base.inputOptionSide = optionType;
 
-  // Expirations.
-  const expResult = await tradierRequest({
-    path: `/markets/options/expirations?symbol=${encodeURIComponent(symbol)}&includeAllRoots=true&strikes=false`,
-    method: "GET",
-  });
+  // Expirations. Retry on throttle (429/5xx) only — an HTTP-ok empty list is a
+  // legitimate "no options for this symbol", not a transient, so it isn't retried.
+  const expResult = await tradierGetWithRetry(
+    `/markets/options/expirations?symbol=${encodeURIComponent(symbol)}&includeAllRoots=true&strikes=false`,
+    () => true,
+    deadlineMs
+  );
   if (!expResult.ok) {
     return { ...base, reason: `Tradier chain unavailable (${expResult.status})` };
   }
@@ -403,10 +442,14 @@ async function gradeSymbol(
   let lastTriedExpiration: string | null = null;
 
   for (const { date: expiration } of inWindow.slice(0, 3)) {
-    const chainResult = await tradierRequest({
-      path: `/markets/options/chains?symbol=${encodeURIComponent(symbol)}&expiration=${encodeURIComponent(expiration)}&greeks=true`,
-      method: "GET",
-    });
+    // Retry on throttle (429/5xx) AND on an ok-but-empty chain — a 30-45 DTE chain for
+    // a scanned liquid name is effectively never legitimately empty, so empty here is
+    // the throttle-returns-nothing case the ADBE/CRM/MDT blocks were hitting.
+    const chainResult = await tradierGetWithRetry(
+      `/markets/options/chains?symbol=${encodeURIComponent(symbol)}&expiration=${encodeURIComponent(expiration)}&greeks=true`,
+      (data) => getTradierOptionArray(data).length > 0,
+      deadlineMs
+    );
     if (!chainResult.ok) {
       lastFail = `Chain fetch failed for ${expiration} (${chainResult.status}).`;
       continue;
@@ -498,13 +541,23 @@ async function gradeSymbol(
 // open/high/low/close/bid/ask are all null for an index. Uses tradierRequest, so
 // it hits whatever TRADIER_ENV points at (production on the deployed cron).
 // Returns null on any failure/unmatched -> caller logs loudly + regime UNKNOWN.
-async function fetchVixLevel(): Promise<number | null> {
+async function fetchVixLevel(deadlineMs: number): Promise<number | null> {
+  const hasValidLast = (data: unknown): boolean => {
+    const q = (data as { quotes?: { quote?: { last?: unknown } } })?.quotes?.quote;
+    return typeof q?.last === "number" && q.last > 0;
+  };
   try {
-    const res = await tradierRequest({ path: "/markets/quotes?symbols=VIX" });
+    // Retry on throttle (429/5xx) AND on an ok-but-null `last` — an index feed hiccup
+    // returns a quote whose last is momentarily null, which a re-query usually fills.
+    const res = await tradierGetWithRetry(
+      "/markets/quotes?symbols=VIX",
+      hasValidLast,
+      deadlineMs
+    );
     if (!res.ok) return null;
     const q = (res.data as { quotes?: { quote?: { last?: unknown } } })?.quotes?.quote;
     const last = typeof q?.last === "number" ? q.last : null;
-    return last !== null && last > 0 ? last : null;
+    return last !== null && last > 0 ? last : null; // still null on ultimate failure → loud guard fires
   } catch {
     return null;
   }
@@ -665,6 +718,9 @@ export async function GET(request: Request) {
 
   const now = new Date();
   const stamp = formatEtStamp(now);
+  // Wall-clock cutoff for Tradier retry backoff — bounds total retry time so a
+  // fully-throttled morning degrades instead of approaching the 300s function budget.
+  const scanDeadline = now.getTime() + SCAN_RETRY_DEADLINE_MS;
 
   try {
     const startOfTodayISO = getStartOfTodayNewYorkISO(now);
@@ -716,7 +772,7 @@ export async function GET(request: Request) {
     // VIX from Tradier (respects TRADIER_ENV). Graceful: null -> UNKNOWN, never
     // blocks. But NOT silent — a null that matters announces itself (loud log
     // here + a ⚠️ line in the run summary), so a future VIX breakage is visible.
-    const vixLevel = await fetchVixLevel();
+    const vixLevel = await fetchVixLevel(scanDeadline);
     const vixRegime = classifyVixRegime(vixLevel);
     const vixUnavailable = vixLevel === null;
     if (vixUnavailable) {
@@ -798,7 +854,7 @@ export async function GET(request: Request) {
       maxSpreadPercent: MAX_SPREAD_PERCENT,
     };
     for (const result of topN) {
-      graded.push(await gradeSymbol(result, baseUrl, gradeParams));
+      graded.push(await gradeSymbol(result, baseUrl, gradeParams, scanDeadline));
     }
 
     const passers = graded.filter((g) => g.status === "PASSED");
