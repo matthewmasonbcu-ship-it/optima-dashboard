@@ -19,6 +19,12 @@ import {
   getOptionSymbol,
   getDeltaAbs,
   getOpenInterest,
+  getStrike,
+  getBid,
+  getAsk,
+  getVolume,
+  getDelta,
+  getExpiration,
   type GradeParams,
   type SelectBestCreditSpreadResult,
   type TradierContract,
@@ -40,8 +46,10 @@ import {
 import { fetchNextEarningsDate } from "@/lib/earnings";
 import {
   persistScanRun,
+  persistScanInputSnapshots,
   type ScanCandidateRecord,
   type ScanRunRecord,
+  type ScanInputSnapshotRecord,
 } from "@/lib/scanPersistence";
 import { sendTelegramAlert } from "@/lib/notify/sendTelegramAlert";
 
@@ -178,6 +186,75 @@ function shortBlockReason(reason: string | null): string {
   return r.slice(0, 28);
 }
 
+// --- Input-snapshot capture (logging only — see scan_input_snapshots) --------
+// Half-width of the strike window captured per graded symbol: this many strikes on
+// EACH side of the short leg (~15-strike window). Provably covers every candidate the
+// selection could pick — in-band 0.20-0.25 short strikes cluster within ~3 strikes of
+// the 0.225 target, and the long leg sits a few strikes further OTM within the max-loss
+// cap. Bounds storage without losing replay fidelity.
+const CHAIN_SNAPSHOT_HALF_WIDTH = 7;
+
+// A single normalized contract, trimmed to the fields selectBestCreditSpread reads, so
+// a captured window replays through selection verbatim. Deliberately excludes `mid`:
+// selection filters to bid>0 && ask>0 before use, so mid is always (bid+ask)/2 on any
+// contract that survives — no need to store it.
+type SnapshotContract = {
+  option_symbol: string;
+  option_type: string;
+  expiration_date: string;
+  strike_price: number;
+  bid: number;
+  ask: number;
+  volume: number;
+  open_interest: number;
+  delta: number | null;
+};
+
+// Trim a full normalized chain to the ~15-strike window on the direction's option side,
+// centered on the short leg (or, for blocks with no pick, on `centerStrike` — pass the
+// ATM/stock price). Pure + side-effect-free: touches no scan/scoring/selection state.
+function captureChainWindow(
+  normalized: TradierContract[],
+  optionType: "CALL" | "PUT",
+  centerStrike: number | null
+): SnapshotContract[] {
+  const side = normalized.filter((c) => {
+    const t = String(
+      c.option_type || c.optionType || c.trade_direction || c.tradeDirection || ""
+    ).toUpperCase();
+    return t === optionType;
+  });
+  if (side.length === 0) return [];
+
+  const sorted = [...side].sort((a, b) => getStrike(a) - getStrike(b));
+  const center = centerStrike ?? getStrike(sorted[Math.floor(sorted.length / 2)]);
+
+  let centerIdx = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < sorted.length; i++) {
+    const d = Math.abs(getStrike(sorted[i]) - center);
+    if (d < bestDist) {
+      bestDist = d;
+      centerIdx = i;
+    }
+  }
+
+  const lo = Math.max(0, centerIdx - CHAIN_SNAPSHOT_HALF_WIDTH);
+  const hi = Math.min(sorted.length, centerIdx + CHAIN_SNAPSHOT_HALF_WIDTH + 1);
+
+  return sorted.slice(lo, hi).map((c) => ({
+    option_symbol: getOptionSymbol(c),
+    option_type: String(c.option_type || c.optionType || "").toUpperCase(),
+    expiration_date: getExpiration(c),
+    strike_price: getStrike(c),
+    bid: getBid(c),
+    ask: getAsk(c),
+    volume: getVolume(c),
+    open_interest: getOpenInterest(c),
+    delta: getDelta(c),
+  }));
+}
+
 // One contract-graded symbol. status reflects the GRADING outcome; queued/queueNote
 // reflect whether a PASSED candidate became the day's trade (or why it didn't).
 type GradedCandidate = {
@@ -200,6 +277,14 @@ type GradedCandidate = {
   // skipped fail-closed because earnings status could not be verified. Distinct
   // from a genuine "no earnings in window" (which proceeds silently).
   earningsFetchFailed?: boolean;
+  // --- Captured replay inputs (logging only) ---
+  // Populated once a symbol reaches the expirations fetch. A snapshot row is written
+  // only when inputExpirationDates is non-empty; inputChainWindow is null for symbols
+  // that never fetched a chain (e.g. no in-window DTE, earnings block).
+  inputOptionSide: "CALL" | "PUT" | null;
+  inputEvaluatedExpiration: string | null;
+  inputExpirationDates: string[];
+  inputChainWindow: SnapshotContract[] | null;
 };
 
 // Contract-grade a single ranked symbol. Runs the EXACT existing pipeline
@@ -228,6 +313,10 @@ async function gradeSymbol(
     spreadContract: null,
     queued: false,
     queueNote: null,
+    inputOptionSide: null,
+    inputEvaluatedExpiration: null,
+    inputExpirationDates: [],
+    inputChainWindow: null,
   };
 
   // Score gate (no Tradier calls below the threshold).
@@ -242,6 +331,10 @@ async function gradeSymbol(
   }
   const direction = rawDirection;
   base.direction = direction;
+  // Option side selection will walk (mirrors selectBestCreditSpread): CALL -> bull put
+  // (PUTs), PUT -> bear call (CALLs). Captured so the snapshot stores the right side.
+  const optionType: "CALL" | "PUT" = direction === "CALL" ? "PUT" : "CALL";
+  base.inputOptionSide = optionType;
 
   // Expirations.
   const expResult = await tradierRequest({
@@ -253,6 +346,10 @@ async function gradeSymbol(
   }
 
   const allDates = parseExpirationDates(expResult.data);
+  // Capture the full expiration list now (on base, so every subsequent return inherits
+  // it). A snapshot row is written for any symbol that got this far — enough to replay
+  // the DTE-window pick even when no chain is fetched.
+  base.inputExpirationDates = allDates;
   let inWindow = allDates
     .map((d) => ({ date: d, dte: getDte(d) }))
     .filter(({ dte }) => dte >= MIN_DTE && dte <= MAX_DTE)
@@ -300,6 +397,10 @@ async function gradeSymbol(
   // If every expiration's spread is rejected by the gate, keep the last spread
   // that was actually built so a BLOCKED row can still log its economics.
   let lastAttemptSpread: TradierContract | null = null;
+  // Last chain actually fetched — captured so a BLOCKED symbol still snapshots the
+  // strikes selection walked (so its block is replayable), not just the winner's.
+  let lastNormalized: TradierContract[] = [];
+  let lastTriedExpiration: string | null = null;
 
   for (const { date: expiration } of inWindow.slice(0, 3)) {
     const chainResult = await tradierRequest({
@@ -316,6 +417,8 @@ async function gradeSymbol(
       continue;
     }
     const normalized = rawOptions.map(normalizeTradierOption);
+    lastNormalized = normalized;
+    lastTriedExpiration = expiration;
     const r = selectBestCreditSpread(normalized, direction, symbol, {
       ...gradeParams,
       stockPrice,
@@ -338,6 +441,15 @@ async function gradeSymbol(
       reason: lastFail || "no suitable spread",
       shortStrike: lastAttemptSpread?.short_leg?.strike_price ?? null,
       spreadContract: lastAttemptSpread,
+      inputEvaluatedExpiration: lastTriedExpiration,
+      inputChainWindow:
+        lastNormalized.length > 0
+          ? captureChainWindow(
+              lastNormalized,
+              optionType,
+              lastAttemptSpread?.short_leg?.strike_price ?? stockPrice ?? null
+            )
+          : null,
     };
   }
 
@@ -369,6 +481,14 @@ async function gradeSymbol(
     spreadContract: spread,
     queued: false,
     queueNote: null,
+    inputOptionSide: optionType,
+    inputEvaluatedExpiration: spread.expiration_date ?? spread.expirationDate ?? null,
+    inputExpirationDates: allDates,
+    inputChainWindow: captureChainWindow(
+      winningNormalized,
+      optionType,
+      spread.short_leg?.strike_price ?? spread.strike_price ?? null
+    ),
   };
 }
 
@@ -642,6 +762,9 @@ export async function GET(request: Request) {
     const watchlist = await loadWatchlist();
     const symbolsToScan = watchlist.filter((s) => s !== "SPY");
     const results: ScanResult[] = [];
+    // Raw quotes retained for replay capture (logging only) — SPY sets the market
+    // condition, each symbol's quote drives its score/direction. Not read by any gate.
+    const scannedQuotes: Record<string, QuoteData> = { SPY: spyQuote };
 
     for (let i = 0; i < symbolsToScan.length; i++) {
       if (i > 0) await new Promise((res) => setTimeout(res, QUOTE_THROTTLE_MS));
@@ -651,6 +774,7 @@ export async function GET(request: Request) {
         console.warn("Skipping invalid quote:", sym);
         continue;
       }
+      scannedQuotes[sym] = quote;
       results.push(analyzeSetup(sym, quote, marketCondition));
     }
 
@@ -807,6 +931,10 @@ export async function GET(request: Request) {
       completed_fully: completedFully,
       market_condition: marketCondition,
       vix_regime: vixRegime,
+      // Replay inputs (logging only) — SPY quote, VIX level, and every scanned quote.
+      spy_quote: spyQuote,
+      vix_level: vixLevel,
+      quotes: scannedQuotes,
     };
 
     const candidateRecords: ScanCandidateRecord[] = graded.map((g) => {
@@ -843,7 +971,27 @@ export async function GET(request: Request) {
       };
     });
 
-    const { persistError } = await persistScanRun(runRecord, candidateRecords);
+    // Input snapshots for every symbol that reached the expirations fetch. Built from
+    // the SAME graded[] objects (same order/length as candidateRecords) so each snapshot
+    // carries its producing candidate's pre-generated id as a soft link. Chain window is
+    // captured only when a chain was actually fetched; otherwise the quote + expiration
+    // list still make the DTE-window decision replayable.
+    const snapshotRecords: ScanInputSnapshotRecord[] = [];
+    graded.forEach((g, i) => {
+      if (g.inputExpirationDates.length === 0) return;
+      snapshotRecords.push({
+        scan_candidate_id: candidateRecords[i]?.id ?? null,
+        symbol: g.symbol,
+        direction: g.direction,
+        option_side: g.inputOptionSide,
+        evaluated_expiration: g.inputEvaluatedExpiration,
+        expiration_dates: g.inputExpirationDates,
+        underlying_quote: scannedQuotes[g.symbol] ?? null,
+        chain_window: g.inputChainWindow,
+      });
+    });
+
+    const { runId, persistError } = await persistScanRun(runRecord, candidateRecords);
     if (persistError) {
       // Non-fatal, but LOUD: a silent persistence failure is exactly how the
       // 3-week RLS bug hid. The scan's normal summary still sends below.
@@ -869,6 +1017,21 @@ export async function GET(request: Request) {
         console.warn(
           "paper_order_previews scan_candidate_id link update failed (non-fatal):",
           linkError.message
+        );
+      }
+    }
+
+    // --- PERSIST INPUT SNAPSHOTS (non-fatal, logging only) ---
+    // Written only when the run row exists (runId present). Same non-fatal contract as
+    // persistScanRun — a failure is logged and never aborts the scan. Decoupled from the
+    // candidate insert: scan_candidate_id is a soft link, so snapshots persist even if
+    // the candidate write above failed.
+    if (runId && snapshotRecords.length > 0) {
+      const { snapshotError } = await persistScanInputSnapshots(runId, snapshotRecords);
+      if (snapshotError) {
+        console.warn(
+          "scan_input_snapshots write failed (non-fatal):",
+          snapshotError
         );
       }
     }

@@ -45,6 +45,27 @@ export type ScanRunRecord = {
   completed_fully: boolean;
   market_condition: string | null;
   vix_regime: string | null;
+  // Raw scan inputs captured for deterministic replay (additive/nullable; see
+  // supabase_migrations_scan_input_snapshots.sql). Run-level globals only —
+  // per-symbol chains live in scan_input_snapshots.
+  spy_quote?: unknown;
+  vix_level?: number | null;
+  quotes?: unknown;
+};
+
+// One captured input snapshot per graded symbol that reached the chain fetch. Holds
+// enough to REPLAY that symbol's selection deterministically: its raw underlying quote,
+// the full expiration list, and a bounded ~15-strike window of the option side the
+// direction used. Write-only observability — never read back into selection.
+export type ScanInputSnapshotRecord = {
+  scan_candidate_id: string | null; // soft link to the producing scan_candidates row
+  symbol: string;
+  direction: string | null;
+  option_side: string | null; // PUT | CALL
+  evaluated_expiration: string | null;
+  expiration_dates: string[];
+  underlying_quote: unknown;
+  chain_window: unknown;
 };
 
 export async function persistScanRun(
@@ -88,5 +109,33 @@ export async function persistScanRun(
     const msg = err instanceof Error ? err.message : String(err);
     console.warn("persistScanRun: unexpected error (non-fatal):", msg);
     return { runId: null, persistError: `unexpected: ${msg}` };
+  }
+}
+
+// Writes the per-symbol input snapshots for a run. Same NON-FATAL contract as
+// persistScanRun: any DB error is logged and RETURNED, never thrown — the scan has
+// already completed by the time this runs. Keyed to run_id (a real FK to scan_runs).
+export async function persistScanInputSnapshots(
+  runId: string,
+  snapshots: ScanInputSnapshotRecord[]
+): Promise<{ snapshotError: string | null }> {
+  if (snapshots.length === 0) return { snapshotError: null };
+  try {
+    const rows = snapshots.map((s) => ({ ...s, run_id: runId }));
+    const { error } = await supabase.from("scan_input_snapshots").insert(rows);
+    if (error) {
+      console.warn(
+        "persistScanInputSnapshots: insert failed (non-fatal):",
+        error.message
+      );
+      return {
+        snapshotError: `scan_input_snapshots insert failed (${rows.length} rows): ${error.message}`,
+      };
+    }
+    return { snapshotError: null };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn("persistScanInputSnapshots: unexpected error (non-fatal):", msg);
+    return { snapshotError: `unexpected: ${msg}` };
   }
 }
